@@ -7,6 +7,10 @@
 #include <zlib.h>
 #include <physfs.h>
 
+extern "C" {
+#	include "lua.h"
+}
+
 typedef std::stringstream strs;
 typedef std::function<std::string (strs &, strs &)> vfunc;
 
@@ -40,9 +44,21 @@ int main(int argc, const char **argv)
 		return "PhysicsFS";
 	};
 
+	vfunc lua = [](strs &c, strs &l)
+	{
+		std::string compiled = LUA_RELEASE;
+
+		compiled = compiled.substr(4);
+
+		c << compiled;
+		l << "N/A";
+		return "Lua";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
+	funcs.push_back(lua);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
