@@ -6,6 +6,10 @@
 #ifndef JAS_CONFIG_H
 #define JAS_CONFIG_H
 
+#if !defined(JAS_WIN_MSVC_BUILD) && defined(WIN32)
+#	define JAS_WIN_MSVC_BUILD
+#endif
+
 /* This preprocessor symbol identifies the version of JasPer. */
 #define	JAS_VERSION "1.900.1"
 /* If configure is being used, this symbol will be defined automatically
