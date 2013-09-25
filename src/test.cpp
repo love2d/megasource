@@ -19,6 +19,7 @@
 #include <AL/alext.h>
 #include <tiff.h>
 #include <tiffio.h>
+#include <IL/il.h>
 
 #ifdef WIN32
 #define JAS_WIN_MSVC_BUILD
@@ -169,6 +170,14 @@ int main(int argc, char **argv)
 		return "tiff";
 	};
 
+	vfunc DevIL = [](strs &c, strs &l)
+	{
+		ilInit();
+		c << IL_VERSION;
+		l << "N/A";
+		return "DevIL";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
@@ -184,6 +193,7 @@ int main(int argc, char **argv)
 	funcs.push_back(OpenAL);
 	funcs.push_back(jasper);
 	funcs.push_back(tiff);
+	funcs.push_back(DevIL);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
