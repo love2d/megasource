@@ -11,6 +11,7 @@
 #include <ogg/ogg.h>
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
+#include "mpg123.h"
 
 extern "C" {
 #	include "lua.h"
@@ -95,6 +96,13 @@ int main(int argc, const char **argv)
 		return "vorbisfile";
 	};
 
+	vfunc mpg123 = [](strs &c, strs &l)
+	{
+		mpg123_init();
+		c << "N/A";
+		l << "N/A";
+		return "mpg123";
+	};
 
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
@@ -105,6 +113,7 @@ int main(int argc, const char **argv)
 	funcs.push_back(ogg);
 	funcs.push_back(vorbis);
 	funcs.push_back(vorbisfile);
+	funcs.push_back(mpg123);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
