@@ -8,6 +8,9 @@
 #include <physfs.h>
 #include <png.h>
 #include <jpeglib.h>
+#include <ogg/ogg.h>
+#include <vorbis/codec.h>
+#include <vorbis/vorbisfile.h>
 
 extern "C" {
 #	include "lua.h"
@@ -71,12 +74,37 @@ int main(int argc, const char **argv)
 		return "jpeg";
 	};
 
+	vfunc ogg = [](strs &c, strs &l)
+	{
+		c << "N/A";
+		l << "N/A";
+		return "ogg";
+	};
+
+	vfunc vorbis = [](strs &c, strs &l)
+	{
+		c << "N/A";
+		l << "N/A";
+		return "vorbis";
+	};
+
+	vfunc vorbisfile = [](strs &c, strs &l)
+	{
+		c << "N/A";
+		l << "N/A";
+		return "vorbisfile";
+	};
+
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
 	funcs.push_back(lua);
 	funcs.push_back(png);
 	funcs.push_back(jpeg);
+	funcs.push_back(ogg);
+	funcs.push_back(vorbis);
+	funcs.push_back(vorbisfile);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
