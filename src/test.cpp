@@ -15,6 +15,8 @@
 #include <freetype/config/ftconfig.h>
 #include <freetype/freetype.h>
 #include <SDL.h>
+#include <AL/al.h>
+#include <AL/alext.h>
 
 extern "C" {
 #	include "lua.h"
@@ -131,6 +133,16 @@ int main(int argc, char **argv)
 		return "SDL2";
 	};
 
+	vfunc OpenAL = [](strs &c, strs &l)
+	{
+		alIsEnabled(AL_SOURCE_DISTANCE_MODEL);
+
+		c << "N/A";
+		l << "N/A";
+		return "OpenAL";
+	};
+
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
@@ -143,6 +155,7 @@ int main(int argc, char **argv)
 	funcs.push_back(mpg123);
 	funcs.push_back(freetype);
 	funcs.push_back(SDL2);
+	funcs.push_back(OpenAL);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
