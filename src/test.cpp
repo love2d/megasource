@@ -7,6 +7,7 @@
 #include <zlib.h>
 #include <physfs.h>
 #include <png.h>
+#include <jpeglib.h>
 
 extern "C" {
 #	include "lua.h"
@@ -63,11 +64,19 @@ int main(int argc, const char **argv)
 		return "libpng";
 	};
 
+	vfunc jpeg = [](strs &c, strs &l)
+	{
+		c << (int)JPEG_LIB_VERSION;
+		l << "N/A";
+		return "jpeg";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
 	funcs.push_back(lua);
 	funcs.push_back(png);
+	funcs.push_back(jpeg);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{

@@ -11,6 +11,7 @@ set(DEP_ZLIB_VER "1.2.8")
 set(DEP_PHYSFS_VER "2.0.3")
 set(DEP_LUA51_VER "5.1.5")
 set(DEP_LIBPNG_VER "166")
+set(DEP_JPEG_VER "9")
 
 set(SKIP_INSTALL_ALL TRUE)
 
@@ -22,6 +23,13 @@ add_subdirectory("libs/zlib-${DEP_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
 add_subdirectory("libs/physfs-${DEP_PHYSFS_VER}" ${CMAKE_BINARY_DIR}/physfs)
 add_subdirectory("libs/lua-${DEP_LUA51_VER}" ${CMAKE_BINARY_DIR}/lua51)
 add_subdirectory("libs/lpng${DEP_LIBPNG_VER}" ${CMAKE_BINARY_DIR}/lpng)
+add_subdirectory("libs/jpeg-${DEP_JPEG_VER}" ${CMAKE_BINARY_DIR}/jpeg)
 
 add_executable(ldeptest src/test.cpp)
-target_link_libraries(ldeptest zlibstatic physfs-static lua51-static ${PNG_LIB_NAME_STATIC})
+target_link_libraries(ldeptest
+	zlibstatic
+	physfs-static
+	lua51-static
+	${PNG_LIB_NAME_STATIC}
+	jpeg-static
+)
