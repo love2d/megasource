@@ -14,6 +14,7 @@
 #include "mpg123.h"
 #include <freetype/config/ftconfig.h>
 #include <freetype/freetype.h>
+#include <SDL.h>
 
 extern "C" {
 #	include "lua.h"
@@ -30,7 +31,7 @@ std::string pad(std::string s, size_t size = 16)
 	return s;
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char **argv)
 {
 	vfunc zlib = [](strs &c, strs &l)
 	{
@@ -117,6 +118,19 @@ int main(int argc, const char **argv)
 		return "freetype";
 	};
 
+	vfunc SDL2 = [](strs &c, strs &l)
+	{
+		SDL_version compiled;
+		SDL_version linked;
+
+		SDL_VERSION(&compiled);
+		SDL_GetVersion(&linked);
+
+		c << (int)compiled.major << "." << (int)compiled.minor << "." << (int)compiled.patch;
+		l << (int)linked.major << "." << (int)linked.minor << "." << (int)linked.patch;
+		return "SDL2";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
@@ -128,6 +142,7 @@ int main(int argc, const char **argv)
 	funcs.push_back(vorbisfile);
 	funcs.push_back(mpg123);
 	funcs.push_back(freetype);
+	funcs.push_back(SDL2);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{

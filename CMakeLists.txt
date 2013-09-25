@@ -16,6 +16,7 @@ set(DEP_LIBOGG_VER "1.3.1")
 set(DEP_LIBVORBIS_VER "1.3.3")
 set(DEP_MPG123_VER "1.15.3")
 set(DEP_FREETYPE_VER "2.5.0.1")
+set(DEP_SDL2_VER "2.0.0")
 
 set(SKIP_INSTALL_ALL TRUE)
 
@@ -34,7 +35,9 @@ add_subdirectory("libs/libogg-${DEP_LIBOGG_VER}" ${CMAKE_BINARY_DIR}/libogg)
 add_subdirectory("libs/libvorbis-${DEP_LIBVORBIS_VER}" ${CMAKE_BINARY_DIR}/libvorbis)
 add_subdirectory("libs/mpg123-${DEP_MPG123_VER}" ${CMAKE_BINARY_DIR}/mpg123)
 add_subdirectory("libs/freetype-${DEP_FREETYPE_VER}" ${CMAKE_BINARY_DIR}/freetype)
+add_subdirectory("libs/SDL2-${DEP_SDL2_VER}" ${CMAKE_BINARY_DIR}/SDL2)
 
+link_directories(${SDL_LINK_DIR})
 add_executable(ldeptest src/test.cpp)
 target_link_libraries(ldeptest
 	zlibstatic
@@ -47,9 +50,16 @@ target_link_libraries(ldeptest
 	vorbisfile-static
 	mpg123
 	freetype-static
+	SDL2
+	SDL2main
 )
 
 add_custom_command(TARGET ldeptest POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy
 	$<TARGET_FILE:mpg123>
 	${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:mpg123>)
+
+add_custom_command(TARGET ldeptest POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy
+	$<TARGET_FILE:SDL2>
+	${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:SDL2>)
