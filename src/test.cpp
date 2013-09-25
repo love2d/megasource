@@ -6,6 +6,7 @@
 
 #include <zlib.h>
 #include <physfs.h>
+#include <png.h>
 
 extern "C" {
 #	include "lua.h"
@@ -55,10 +56,18 @@ int main(int argc, const char **argv)
 		return "Lua";
 	};
 
+	vfunc png = [](strs &c, strs &l)
+	{
+		c << PNG_LIBPNG_VER_STRING;
+		l << png_libpng_ver;
+		return "libpng";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
 	funcs.push_back(lua);
+	funcs.push_back(png);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
