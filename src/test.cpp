@@ -20,6 +20,7 @@
 #include <tiff.h>
 #include <tiffio.h>
 #include <IL/il.h>
+#include <modplug.h>
 
 #ifdef WIN32
 #define JAS_WIN_MSVC_BUILD
@@ -178,6 +179,15 @@ int main(int argc, char **argv)
 		return "DevIL";
 	};
 
+	vfunc modplug = [](strs &c, strs &l)
+	{
+		ModPlug_Settings settings;
+		ModPlug_GetSettings(&settings);
+		c << "N/A";
+		l << "N/A";
+		return "modplug";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
@@ -194,6 +204,7 @@ int main(int argc, char **argv)
 	funcs.push_back(jasper);
 	funcs.push_back(tiff);
 	funcs.push_back(DevIL);
+	funcs.push_back(modplug);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{

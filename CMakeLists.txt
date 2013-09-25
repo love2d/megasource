@@ -21,6 +21,7 @@ set(DEP_OPENAL_VER "1.15.1")
 set(DEP_JASPER_VER "1.900.1")
 set(DEP_TIFF_VER "4.0.3")
 set(DEP_DEVIL_VER "1.7.8")
+set(DEP_MODPLUG_VER "0.8.8.4")
 
 set(SKIP_INSTALL_ALL TRUE)
 
@@ -44,6 +45,7 @@ add_subdirectory("libs/openal-soft-${DEP_OPENAL_VER}" ${CMAKE_BINARY_DIR}/openal
 add_subdirectory("libs/jasper-${DEP_JASPER_VER}" ${CMAKE_BINARY_DIR}/jasper)
 add_subdirectory("libs/tiff-${DEP_TIFF_VER}" ${CMAKE_BINARY_DIR}/tiff)
 add_subdirectory("libs/DevIL-${DEP_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
+add_subdirectory("libs/libmodplug-${DEP_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
 
 link_directories(${SDL_LINK_DIR})
 add_executable(ldeptest src/test.cpp)
@@ -64,6 +66,7 @@ target_link_libraries(ldeptest
 	jasper-static
 	tiff-static
 	DevIL
+	modplug-static
 )
 
 function(add_move_dll ARG_TARGET)
