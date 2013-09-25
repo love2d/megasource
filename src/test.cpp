@@ -12,6 +12,8 @@
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
 #include "mpg123.h"
+#include <freetype/config/ftconfig.h>
+#include <freetype/freetype.h>
 
 extern "C" {
 #	include "lua.h"
@@ -104,6 +106,17 @@ int main(int argc, const char **argv)
 		return "mpg123";
 	};
 
+	vfunc freetype = [](strs &c, strs &l)
+	{
+		FT_Library lib;
+		FT_Init_FreeType(&lib);
+		FT_Int major, minor, patch;
+		FT_Library_Version(lib, &major, &minor, &patch);
+		c << "N/A";
+		l << major << "." << minor << "." << patch;
+		return "freetype";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
@@ -114,6 +127,7 @@ int main(int argc, const char **argv)
 	funcs.push_back(vorbis);
 	funcs.push_back(vorbisfile);
 	funcs.push_back(mpg123);
+	funcs.push_back(freetype);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
