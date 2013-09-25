@@ -39,6 +39,7 @@
 #endif
 #ifndef PATH_MAX
 #define PATH_MAX 256
+static bool isblank(char c) { return c == ' ' || c == '\t'; }
 #endif
 
 #ifdef NEWMIKMOD
