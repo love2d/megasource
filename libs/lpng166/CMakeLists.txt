@@ -21,7 +21,7 @@ set(PNGLIB_NAME libpng${PNGLIB_MAJOR}${PNGLIB_MINOR})
 set(PNGLIB_VERSION ${PNGLIB_MAJOR}.${PNGLIB_MINOR}.${PNGLIB_RELEASE})
 
 # needed packages
-find_package(ZLIB REQUIRED)
+#find_package(ZLIB REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIR})
 
 if(NOT WIN32)
@@ -131,6 +131,8 @@ if(PNG_SHARED)
     set_target_properties(${PNG_LIB_NAME} PROPERTIES IMPORT_PREFIX "lib")
   endif()
   target_link_libraries(${PNG_LIB_NAME} ${ZLIB_LIBRARY} ${M_LIBRARY})
+  set(PNG_LIB_NAME ${PNG_LIB_NAME} PARENT_SCOPE)
+  target_include_directories(${PNG_LIB_NAME} PUBLIC . ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 if(PNG_STATIC)
@@ -143,6 +145,8 @@ if(PNG_STATIC)
     set_target_properties(${PNG_LIB_NAME_STATIC} PROPERTIES PREFIX "lib")
   endif()
   target_link_libraries(${PNG_LIB_NAME_STATIC} ${ZLIB_LIBRARY} ${M_LIBRARY})
+  set(PNG_LIB_NAME_STATIC ${PNG_LIB_NAME_STATIC} PARENT_SCOPE)
+  target_include_directories(${PNG_LIB_NAME_STATIC} PUBLIC . ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 if(NOT PNG_LIB_TARGETS)
