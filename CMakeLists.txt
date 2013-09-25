@@ -19,6 +19,7 @@ set(DEP_FREETYPE_VER "2.5.0.1")
 set(DEP_SDL2_VER "2.0.0")
 set(DEP_OPENAL_VER "1.15.1")
 set(DEP_JASPER_VER "1.900.1")
+set(DEP_TIFF_VER "4.0.3")
 
 set(SKIP_INSTALL_ALL TRUE)
 
@@ -39,7 +40,8 @@ add_subdirectory("libs/mpg123-${DEP_MPG123_VER}" ${CMAKE_BINARY_DIR}/mpg123)
 add_subdirectory("libs/freetype-${DEP_FREETYPE_VER}" ${CMAKE_BINARY_DIR}/freetype)
 add_subdirectory("libs/SDL2-${DEP_SDL2_VER}" ${CMAKE_BINARY_DIR}/SDL2)
 add_subdirectory("libs/openal-soft-${DEP_OPENAL_VER}" ${CMAKE_BINARY_DIR}/openal-soft)
-add_subdirectory("libs/JASPER-${DEP_JASPER_VER}" ${CMAKE_BINARY_DIR}/JASPER)
+add_subdirectory("libs/jasper-${DEP_JASPER_VER}" ${CMAKE_BINARY_DIR}/jasper)
+add_subdirectory("libs/tiff-${DEP_TIFF_VER}" ${CMAKE_BINARY_DIR}/tiff)
 
 link_directories(${SDL_LINK_DIR})
 add_executable(ldeptest src/test.cpp)
@@ -58,6 +60,7 @@ target_link_libraries(ldeptest
 	SDL2main
 	${OPENAL_LIB_NAME}
 	jasper-static
+	tiff-static
 )
 
 function(add_move_dll ARG_TARGET)

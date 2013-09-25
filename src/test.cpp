@@ -17,6 +17,8 @@
 #include <SDL.h>
 #include <AL/al.h>
 #include <AL/alext.h>
+#include <tiff.h>
+#include <tiffio.h>
 
 #ifdef WIN32
 #define JAS_WIN_MSVC_BUILD
@@ -159,6 +161,14 @@ int main(int argc, char **argv)
 		return "jasper";
 	};
 
+	vfunc tiff = [](strs &c, strs &l)
+	{
+		const char *unused = TIFFGetVersion(); // Output is too ugly.
+		c << TIFF_VERSION_BIG;
+		l << "N/A";
+		return "tiff";
+	};
+
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
@@ -173,6 +183,7 @@ int main(int argc, char **argv)
 	funcs.push_back(SDL2);
 	funcs.push_back(OpenAL);
 	funcs.push_back(jasper);
+	funcs.push_back(tiff);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
