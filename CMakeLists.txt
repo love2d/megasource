@@ -57,17 +57,13 @@ target_link_libraries(ldeptest
 	${OPENAL_LIB_NAME}
 )
 
-add_custom_command(TARGET ldeptest POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy
-	$<TARGET_FILE:mpg123>
-	${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:mpg123>)
+function(add_move_dll ARG_TARGET)
+	add_custom_command(TARGET ldeptest POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+		$<TARGET_FILE:${ARG_TARGET}>
+		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${ARG_TARGET}>)
+endfunction()
 
-add_custom_command(TARGET ldeptest POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy
-	$<TARGET_FILE:SDL2>
-	${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:SDL2>)
-
-add_custom_command(TARGET ldeptest POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy
-	$<TARGET_FILE:${OPENAL_LIB_NAME}>
-	${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${OPENAL_LIB_NAME}>)
+add_move_dll(mpg123)
+add_move_dll(SDL2)
+add_move_dll(${OPENAL_LIB_NAME})
