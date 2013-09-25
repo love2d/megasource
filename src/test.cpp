@@ -18,6 +18,16 @@
 #include <AL/al.h>
 #include <AL/alext.h>
 
+#ifdef WIN32
+#define JAS_WIN_MSVC_BUILD
+#endif
+
+namespace jasper
+{
+	#include <jasper/jasper.h>
+}
+
+
 extern "C" {
 #	include "lua.h"
 }
@@ -142,6 +152,12 @@ int main(int argc, char **argv)
 		return "OpenAL";
 	};
 
+	vfunc jasper = [](strs &c, strs &l)
+	{
+		c << JAS_VERSION;
+		l << jasper::jas_getversion();
+		return "jasper";
+	};
 
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
@@ -156,6 +172,7 @@ int main(int argc, char **argv)
 	funcs.push_back(freetype);
 	funcs.push_back(SDL2);
 	funcs.push_back(OpenAL);
+	funcs.push_back(jasper);
 
 	for (size_t i = 0; i < funcs.size(); ++i)
 	{
