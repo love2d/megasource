@@ -5,7 +5,7 @@ endif()
 
 cmake_minimum_required(VERSION 2.8)
 
-project(ldep)
+project(megasource)
 
 set(DEP_ZLIB_VER "1.2.8")
 set(DEP_PHYSFS_VER "2.0.3")
@@ -48,8 +48,8 @@ add_subdirectory("libs/DevIL-${DEP_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
 add_subdirectory("libs/libmodplug-${DEP_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
 
 link_directories(${SDL_LINK_DIR})
-add_executable(ldeptest src/test.cpp)
-target_link_libraries(ldeptest
+add_executable(megatest src/test.cpp)
+target_link_libraries(megatest
 	zlibstatic
 	physfs-static
 	lua51-static
@@ -70,7 +70,7 @@ target_link_libraries(ldeptest
 )
 
 function(add_move_dll ARG_TARGET)
-	add_custom_command(TARGET ldeptest POST_BUILD
+	add_custom_command(TARGET megatest POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy
 		$<TARGET_FILE:${ARG_TARGET}>
 		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${ARG_TARGET}>)
