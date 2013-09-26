@@ -7,6 +7,10 @@ cmake_minimum_required(VERSION 2.8)
 
 project(megasource)
 
+if(MSVC)
+	set(CMAKE_SUPPRESS_REGENERATION TRUE)
+endif()
+
 function(add_move_dll ARG_POST_TARGET ARG_TARGET)
 	add_custom_command(TARGET ${ARG_POST_TARGET} POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy
