@@ -7,6 +7,13 @@ cmake_minimum_required(VERSION 2.8)
 
 project(megasource)
 
+function(add_move_dll ARG_POST_TARGET ARG_TARGET)
+	add_custom_command(TARGET ${ARG_POST_TARGET} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+		$<TARGET_FILE:${ARG_TARGET}>
+		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${ARG_TARGET}>)
+endfunction()
+
 set(DEP_ZLIB_VER "1.2.8")
 set(DEP_PHYSFS_VER "2.0.3")
 set(DEP_LUA51_VER "5.1.5")
@@ -76,14 +83,7 @@ target_link_libraries(megatest
 	modplug-static
 )
 
-function(add_move_dll ARG_TARGET)
-	add_custom_command(TARGET megatest POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy
-		$<TARGET_FILE:${ARG_TARGET}>
-		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${ARG_TARGET}>)
-endfunction()
-
-add_move_dll(mpg123)
-add_move_dll(SDL2)
-add_move_dll(${OPENAL_LIB_NAME})
-add_move_dll(DevIL)
+add_move_dll(megatest mpg123)
+add_move_dll(megatest SDL2)
+add_move_dll(megatest ${OPENAL_LIB_NAME})
+add_move_dll(megatest DevIL)
