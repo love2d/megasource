@@ -47,6 +47,13 @@ add_subdirectory("libs/tiff-${DEP_TIFF_VER}" ${CMAKE_BINARY_DIR}/tiff)
 add_subdirectory("libs/DevIL-${DEP_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
 add_subdirectory("libs/libmodplug-${DEP_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
 
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/love/CMakeLists.txt)
+	message(STATUS "Making LOVE")
+	add_subdirectory("libs/love" ${CMAKE_BINARY_DIR}/love)
+else()
+	message(STATUS "LOVE was not found")
+endif()
+
 link_directories(${SDL_LINK_DIR})
 add_executable(megatest src/test.cpp)
 target_link_libraries(megatest
