@@ -42,12 +42,14 @@ set(MODPLUG_SRC
 	src/sndmix.cpp
 )
 
-if (MODPLUG_BUILD_STATIC)
+file(COPY src/modplug.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/libmodplug)
+
+if(MODPLUG_BUILD_STATIC)
 	add_library(modplug-static STATIC ${MODPLUG_SRC})
-	target_include_directories(modplug-static PUBLIC src src/libmodplug)
+	target_include_directories(modplug-static PUBLIC src src/libmodplug ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
-if (MODPLUG_BUILD_SHARED)
+if(MODPLUG_BUILD_SHARED)
 	add_library(modplug SHARED ${MODPLUG_SRC})
-	target_include_directories(modplug PUBLIC src src/libmodplug)
+	target_include_directories(modplug PUBLIC src src/libmodplug ${CMAKE_CURRENT_BINARY_DIR})
 endif()
