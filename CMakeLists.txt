@@ -43,20 +43,51 @@ set(ZLIB_INCLUDE_DIR .)
 set(OGG_LIBRARY ogg-static)
 
 add_subdirectory("libs/zlib-${MEGA_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
+set(MEGA_ZLIB zlibstatic)
+
 add_subdirectory("libs/physfs-${MEGA_PHYSFS_VER}" ${CMAKE_BINARY_DIR}/physfs)
+set(MEGA_PHYSFS physfs-static)
+
 add_subdirectory("libs/lua-${MEGA_LUA51_VER}" ${CMAKE_BINARY_DIR}/lua51)
+set(MEGA_LUA51 lua51)
+
 add_subdirectory("libs/lpng${MEGA_LIBPNG_VER}" ${CMAKE_BINARY_DIR}/lpng)
+set(MEGA_LIBPNG ${PNG_LIB_NAME_STATIC})
+
 add_subdirectory("libs/jpeg-${MEGA_JPEG_VER}" ${CMAKE_BINARY_DIR}/jpeg)
+set(MEGA_JPEG jpeg-static)
+
 add_subdirectory("libs/libogg-${MEGA_LIBOGG_VER}" ${CMAKE_BINARY_DIR}/libogg)
+set(MEGA_LIBOGG ogg-static)
+
 add_subdirectory("libs/libvorbis-${MEGA_LIBVORBIS_VER}" ${CMAKE_BINARY_DIR}/libvorbis)
+set(MEGA_LIBVORBIS vorbis-static)
+set(MEGA_LIBVORBISFILE vorbisfile-static)
+
 add_subdirectory("libs/mpg123-${MEGA_MPG123_VER}" ${CMAKE_BINARY_DIR}/mpg123)
+set(MEGA_MPEG123 mpg123)
+
 add_subdirectory("libs/freetype-${MEGA_FREETYPE_VER}" ${CMAKE_BINARY_DIR}/freetype)
+set(MEGA_FREETYPE freetype-static)
+
 add_subdirectory("libs/SDL2-${MEGA_SDL2_VER}" ${CMAKE_BINARY_DIR}/SDL2)
+set(MEGA_SDL2 SDL2)
+set(MEGA_SDL2MAIN SDL2main)
+
 add_subdirectory("libs/openal-soft-${MEGA_OPENAL_VER}" ${CMAKE_BINARY_DIR}/openal-soft)
+set(MEGA_OPENAL ${OPENAL_LIB_NAME})
+
 add_subdirectory("libs/jasper-${MEGA_JASPER_VER}" ${CMAKE_BINARY_DIR}/jasper)
+set(MEGA_JASPER jasper-static)
+
 add_subdirectory("libs/tiff-${MEGA_TIFF_VER}" ${CMAKE_BINARY_DIR}/tiff)
+set(MEGA_TIFF tiff-static)
+
 add_subdirectory("libs/DevIL-${MEGA_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
+set(MEGA_DEVIL DevIL)
+
 add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
+set(MEGA_MODPLUG modplug-static)
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/love/CMakeLists.txt)
 	message(STATUS "Making LOVE")
@@ -68,23 +99,23 @@ endif()
 link_directories(${SDL_LINK_DIR})
 add_executable(megatest src/test.cpp)
 target_link_libraries(megatest
-	zlibstatic
-	physfs-static
-	lua51
-	${PNG_LIB_NAME_STATIC}
-	jpeg-static
-	ogg-static
-	vorbis-static
-	vorbisfile-static
-	mpg123
-	freetype-static
-	SDL2
-	SDL2main
-	${OPENAL_LIB_NAME}
-	jasper-static
-	tiff-static
-	DevIL
-	modplug-static
+	${MEGA_ZLIB}
+	${MEGA_PHYSFS}
+	${MEGA_LUA51}
+	${MEGA_LIBPNG}
+	${MEGA_JPEG}
+	${MEGA_LIBOGG}
+	${MEGA_LIBVORBIS}
+	${MEGA_LIBVORBISFILE}
+	${MEGA_MPEG123}
+	${MEGA_FREETYPE}
+	${MEGA_SDL2}
+	${MEGA_SDL2MAIN}
+	${MEGA_OPENAL}
+	${MEGA_JASPER}
+	${MEGA_TIFF}
+	${MEGA_DEVIL}
+	${MEGA_MODPLUG}
 )
 
 add_move_dll(megatest mpg123)
