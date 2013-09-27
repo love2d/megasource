@@ -70,7 +70,7 @@ add_executable(megatest src/test.cpp)
 target_link_libraries(megatest
 	zlibstatic
 	physfs-static
-	lua51-static
+	lua51
 	${PNG_LIB_NAME_STATIC}
 	jpeg-static
 	ogg-static
@@ -91,3 +91,4 @@ add_move_dll(megatest mpg123)
 add_move_dll(megatest SDL2)
 add_move_dll(megatest ${OPENAL_LIB_NAME})
 add_move_dll(megatest DevIL)
+add_move_dll(megatest lua51)
