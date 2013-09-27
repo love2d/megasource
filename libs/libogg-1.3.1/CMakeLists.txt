@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 project(ogg)
 
-option(OGG_BUILD_SHARED "Build shared library" ON)
+option(OGG_BUILD_SHARED "Build shared library" OFF)
 option(OGG_BUILD_STATIC "Build static library" ON)
 
 set(OGG_SRC

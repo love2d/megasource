@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 2.8)
 
 project(vorbis)
 
-option(VORBIS_BUILD_SHARED "Build shared libvorbis" ON)
+option(VORBIS_BUILD_SHARED "Build shared libvorbis" OFF)
 option(VORBIS_BUILD_STATIC "Build static libvorbis" ON)
-option(VORBISFILE_BUILD_SHARED "Build shared libvorbisfile" ON)
+option(VORBISFILE_BUILD_SHARED "Build shared libvorbisfile" OFF)
 option(VORBISFILE_BUILD_STATIC "Build static libvorbisfile" ON)
 
 set(VORBIS_SRC

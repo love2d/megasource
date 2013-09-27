@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(DevIL)
 
 option(DEVIL_BUILD_SHARED "Build shared library" ON)
-option(DEVIL_BUILD_STATIC "Build static library" ON)
+option(DEVIL_BUILD_STATIC "Build static library" OFF)
 
 set(DEVIL_SRC
 	src-IL/src/altivec_common.c

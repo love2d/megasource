@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 project(tiff)
 
-option(TIFF_BUILD_SHARED "Build shared library" ON)
+option(TIFF_BUILD_SHARED "Build shared library" OFF)
 option(TIFF_BUILD_STATIC "Build static library" ON)
 
 set(TIFF_SRC

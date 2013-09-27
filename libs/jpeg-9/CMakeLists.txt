@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 project(jpeg)
 
-option(JPEG_BUILD_SHARED "Build shared library" ON)
+option(JPEG_BUILD_SHARED "Build shared library" OFF)
 option(JPEG_BUILD_STATIC "Build static library" ON)
 
 set(JPEG_SRC
