@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(jpeg)
 
-OPTION(JPEG_BUILD_SHARED "Build shared library" TRUE)
-OPTION(JPEG_BUILD_STATIC "Build static library" TRUE)
+option(JPEG_BUILD_SHARED "Build shared library" ON)
+option(JPEG_BUILD_STATIC "Build static library" ON)
 
 set(JPEG_SRC
 	jaricom.c

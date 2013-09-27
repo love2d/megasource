@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(mpg123)
 
-OPTION(MPG123_BUILD_SHARED "Build shared library" TRUE)
-OPTION(MPG123_BUILD_STATIC "Build static library" TRUE)
+option(MPG123_BUILD_SHARED "Build shared library" ON)
+option(MPG123_BUILD_STATIC "Build static library" ON)
 
 set(MPG123_SRC
 	src/libmpg123/compat.c

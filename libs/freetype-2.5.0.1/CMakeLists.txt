@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(freetype)
 
-OPTION(FREETYPE_BUILD_SHARED "Build shared library" TRUE)
-OPTION(FREETYPE_BUILD_STATIC "Build static library" TRUE)
+option(FREETYPE_BUILD_SHARED "Build shared library" ON)
+option(FREETYPE_BUILD_STATIC "Build static library" ON)
 
 set(FREETYPE_SRC
 	src/autofit/autofit.c

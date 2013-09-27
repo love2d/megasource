@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(lua51)
 
-OPTION(LUA_BUILD_SHARED "Build shared library" TRUE)
-OPTION(LUA_BUILD_STATIC "Build static library" TRUE)
+option(LUA_BUILD_SHARED "Build shared library" ON)
+option(LUA_BUILD_STATIC "Build static library" ON)
 
 set(LUA_SRC
 	src/lapi.c

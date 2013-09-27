@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 
 project(vorbis)
 
-OPTION(VORBIS_BUILD_SHARED "Build shared libvorbis" TRUE)
-OPTION(VORBIS_BUILD_STATIC "Build static libvorbis" TRUE)
-OPTION(VORBISFILE_BUILD_SHARED "Build shared libvorbisfile" TRUE)
-OPTION(VORBISFILE_BUILD_STATIC "Build static libvorbisfile" TRUE)
+option(VORBIS_BUILD_SHARED "Build shared libvorbis" ON)
+option(VORBIS_BUILD_STATIC "Build static libvorbis" ON)
+option(VORBISFILE_BUILD_SHARED "Build shared libvorbisfile" ON)
+option(VORBISFILE_BUILD_STATIC "Build static libvorbisfile" ON)
 
 set(VORBIS_SRC
 	lib/analysis.c

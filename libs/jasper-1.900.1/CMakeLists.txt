@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(jasper)
 
-OPTION(JASPER_BUILD_SHARED "Build shared library" TRUE)
-OPTION(JASPER_BUILD_STATIC "Build static library" TRUE)
+option(JASPER_BUILD_SHARED "Build shared library" ON)
+option(JASPER_BUILD_STATIC "Build static library" ON)
 
 set(JASPER_SRC
 	src/libjasper/base/jas_cm.c

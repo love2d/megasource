@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(tiff)
 
-OPTION(TIFF_BUILD_SHARED "Build shared library" TRUE)
-OPTION(TIFF_BUILD_STATIC "Build static library" TRUE)
+option(TIFF_BUILD_SHARED "Build shared library" ON)
+option(TIFF_BUILD_STATIC "Build static library" ON)
 
 set(TIFF_SRC
 	libtiff/tif_aux.c

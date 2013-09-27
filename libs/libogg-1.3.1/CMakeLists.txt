@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(ogg)
 
-OPTION(OGG_BUILD_SHARED "Build shared library" TRUE)
-OPTION(OGG_BUILD_STATIC "Build static library" TRUE)
+option(OGG_BUILD_SHARED "Build shared library" ON)
+option(OGG_BUILD_STATIC "Build static library" ON)
 
 set(OGG_SRC
 	src/bitwise.c

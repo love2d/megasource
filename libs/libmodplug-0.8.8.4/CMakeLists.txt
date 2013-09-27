@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(modplug)
 
-OPTION(MODPLUG_BUILD_SHARED "Build shared library" TRUE)
-OPTION(MODPLUG_BUILD_STATIC "Build static library" TRUE)
+option(MODPLUG_BUILD_SHARED "Build shared library" ON)
+option(MODPLUG_BUILD_STATIC "Build static library" ON)
 
 set(MODPLUG_SRC
 	src/fastmix.cpp
