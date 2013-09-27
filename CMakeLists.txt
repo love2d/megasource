@@ -89,16 +89,7 @@ set(MEGA_DEVIL DevIL)
 add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
 set(MEGA_MODPLUG modplug-static)
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/love/CMakeLists.txt)
-	message(STATUS "Making LOVE")
-	add_subdirectory("libs/love" ${CMAKE_BINARY_DIR}/love)
-else()
-	message(STATUS "LOVE was not found")
-endif()
-
-link_directories(${SDL_LINK_DIR})
-add_executable(megatest src/test.cpp)
-target_link_libraries(megatest
+set(MEGA_3P
 	${MEGA_ZLIB}
 	${MEGA_PHYSFS}
 	${MEGA_LUA51}
@@ -117,6 +108,17 @@ target_link_libraries(megatest
 	${MEGA_DEVIL}
 	${MEGA_MODPLUG}
 )
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/love/CMakeLists.txt)
+	message(STATUS "Making LOVE")
+	add_subdirectory("libs/love" ${CMAKE_BINARY_DIR}/love)
+else()
+	message(STATUS "LOVE was not found")
+endif()
+
+link_directories(${SDL_LINK_DIR})
+add_executable(megatest src/test.cpp)
+target_link_libraries(megatest ${MEGA_3P})
 
 add_move_dll(megatest mpg123)
 add_move_dll(megatest SDL2)
