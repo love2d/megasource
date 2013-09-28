@@ -1175,6 +1175,10 @@ if(SDL_STATIC)
 endif(SDL_STATIC)
 
 ##### Installation targets #####
+
+# Skipping installation in megasource.
+return()
+
 install(TARGETS ${_INSTALL_LIBS}
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"
   ARCHIVE DESTINATION "lib${LIB_SUFFIX}")

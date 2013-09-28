@@ -764,22 +764,22 @@ TARGET_LINK_LIBRARIES(${LIBNAME} ${EXTRA_LIBS})
 TARGET_INCLUDE_DIRECTORIES(${LIBNAME} PUBLIC include)
 
 # Add an install target here
-INSTALL(TARGETS ${LIBNAME}
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION "lib${LIB_SUFFIX}"
-        ARCHIVE DESTINATION "lib${LIB_SUFFIX}"
-)
-INSTALL(FILES include/AL/al.h
-              include/AL/alc.h
-              include/AL/alext.h
-              include/AL/efx.h
-              include/AL/efx-creative.h
-              include/AL/efx-presets.h
-        DESTINATION include/AL
-)
-INSTALL(FILES "${OpenAL_BINARY_DIR}/openal.pc"
-        DESTINATION "lib${LIB_SUFFIX}/pkgconfig")
-
+# Disabled in megasource.
+#INSTALL(TARGETS ${LIBNAME}
+#        RUNTIME DESTINATION bin
+#        LIBRARY DESTINATION "lib${LIB_SUFFIX}"
+#        ARCHIVE DESTINATION "lib${LIB_SUFFIX}"
+#)
+#INSTALL(FILES include/AL/al.h
+#              include/AL/alc.h
+#              include/AL/alext.h
+#              include/AL/efx.h
+#              include/AL/efx-creative.h
+#              include/AL/efx-presets.h
+#        DESTINATION include/AL
+#)
+#INSTALL(FILES "${OpenAL_BINARY_DIR}/openal.pc"
+#        DESTINATION "lib${LIB_SUFFIX}/pkgconfig")
 
 MESSAGE(STATUS "")
 MESSAGE(STATUS "Building OpenAL with support for the following backends:")
