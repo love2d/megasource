@@ -66,7 +66,7 @@ OPTION(UTILS  "Build and install utility programs"  OFF)
 
 OPTION(EXAMPLES  "Build and install example programs"  OFF)
 
-OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" ON)
+OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" OFF)
 
 
 IF(WIN32)
