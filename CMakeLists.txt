@@ -25,6 +25,15 @@ function(add_move_dll ARG_POST_TARGET ARG_TARGET)
 		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${ARG_TARGET}>)
 endfunction()
 
+function(disable_warnings ARG_TARGET)
+	get_target_property(OLD_FLAGS ${ARG_TARGET} COMPILE_FLAGS)
+	set(NEW_FLAGS -W0)
+	if(OLD_FLAGS)
+		set(NEW_FLAGS "${OLD_FLAGS} ${NEW_FLAGS}")
+	endif()
+	set_target_properties(${ARG_TARGET} PROPERTIES COMPILE_FLAGS ${NEW_FLAGS})
+endfunction()
+
 set(MEGA_ZLIB_VER "1.2.8")
 set(MEGA_PHYSFS_VER "2.0.3")
 set(MEGA_LUA51_VER "5.1.5")
@@ -119,6 +128,12 @@ set(MEGA_3P
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/love/CMakeLists.txt)
 	message(STATUS "Making LOVE")
 	add_subdirectory("libs/love" ${CMAKE_BINARY_DIR}/love)
+
+	# Turn off third-party warnings when building with LOVE.
+	foreach(MEGA_LIB ${MEGA_3P})
+		disable_warnings(${MEGA_LIB})
+	endforeach()
+
 else()
 	message(STATUS "LOVE was not found")
 endif()
