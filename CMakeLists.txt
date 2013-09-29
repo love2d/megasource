@@ -7,6 +7,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(megasource)
 
+set(MEGA TRUE)
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set(MEGA_X64 TRUE)
 	set(MEGA_ARCH x64)
