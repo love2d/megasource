@@ -44,6 +44,34 @@ set(MODPLUG_SRC
 
 file(COPY src/modplug.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/libmodplug)
 
+if(APPLE)
+	include(CheckFunctionExists)
+	include(CheckIncludeFiles)
+	include(CheckLibraryExists)
+	include(CheckSymbolExists)
+	include(CheckTypeSize)
+
+	check_function_exists(sinf HAVE_SINF)
+	check_function_exists(setenv HAVE_SETENV)
+
+	check_include_files(dlfcn.h HAVE_DLFCN_H)
+	check_include_files(inttypes.h HAVE_INTTYPES_H)
+	check_include_files(malloc.h HAVE_MALLOC_H)
+	check_include_files(memory.h HAVE_MEMORY_H)
+	check_include_files(stdint.h HAVE_STDINT_H)
+	check_include_files(stdlib.h HAVE_STDLIB_H)
+	check_include_files(strings.h HAVE_STRINGS_H)
+	check_include_files(string.h HAVE_STRING_H)
+	check_include_files("sys/stat.h" HAVE_SYS_STAT_H)
+	check_include_files("sys/types.h" HAVE_SYS_TYPES_H)
+	check_include_files(unistd.h HAVE_UNISTD_H)
+
+	set(VERSION "0.8.8.4")
+
+	configure_file(src/config.h.cmake config.h)
+	add_definitions(-DHAVE_CONFIG_H)
+endif()
+
 if(MODPLUG_BUILD_STATIC)
 	add_library(modplug-static STATIC ${MODPLUG_SRC})
 	target_include_directories(modplug-static PUBLIC src src/libmodplug ${CMAKE_CURRENT_BINARY_DIR})
