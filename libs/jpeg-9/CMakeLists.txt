@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(jpeg)
 
+include(CheckIncludeFiles)
+
 option(JPEG_BUILD_SHARED "Build shared library" OFF)
 option(JPEG_BUILD_STATIC "Build static library" ON)
 
@@ -57,6 +59,11 @@ set(JPEG_SRC
 if(MSVC)
 	file(COPY jconfig.vc DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 	file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/jconfig.vc ${CMAKE_CURRENT_BINARY_DIR}/jconfig.h)
+elseif(APPLE)
+	check_include_files("stddef.h" HAVE_STDDEF_H)
+	check_include_files("stdlib.h" HAVE_STDLIB_H)
+	check_include_files("locale.h" HAVE_LOCALE_H)
+	configure_file(jconfig.cmake jconfig.h)
 endif()
 
 if(JPEG_BUILD_STATIC)
