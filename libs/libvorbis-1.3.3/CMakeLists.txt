@@ -39,13 +39,13 @@ set(VORBISFILE_SRC
 
 if(VORBIS_BUILD_STATIC)
 	add_library(vorbis-static STATIC ${VORBIS_SRC})
-	target_include_directories(vorbis-static PUBLIC include)
+	target_include_directories(vorbis-static PUBLIC include lib)
 	target_link_libraries(vorbis-static ${OGG_LIBRARY})
 endif()
 
 if(VORBIS_BUILD_SHARED)
 	add_library(vorbis SHARED ${VORBIS_SRC} win32/vorbis.def)
-	target_include_directories(vorbis PUBLIC include)
+	target_include_directories(vorbis PUBLIC include lib)
 	target_link_libraries(vorbis ${OGG_LIBRARY})
 endif()
 
