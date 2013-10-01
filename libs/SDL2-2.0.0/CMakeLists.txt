@@ -1149,7 +1149,7 @@ set(_INSTALL_LIBS "SDL2main")
 if(SDL_SHARED)
   add_library(SDL2 SHARED ${SOURCE_FILES})
   if(MEGA)
-    install(TARGETS SDL2 RUNTIME DESTINATION .)
+    install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
   endif()
   if(UNIX)
     set_target_properties(SDL2 PROPERTIES
