@@ -6,7 +6,7 @@ Prerequisites
 -------------
 
  - Windows.
- - Visual Studio 2012 (Express).
+ - Visual Studio 2012 or 2013 (Express).
  - [DirectX SDK][dxsdk] (required for SDL2).
  - [CMake 2.8.11][cmake].
  - [NSIS][nsis] if you want to build the LÖVE installer.
@@ -18,7 +18,7 @@ To build just the dependecies:
 
 	$ hg clone https://bitbucket.org/rude/megasource megasource
 	$ cd megasource
-	$ cmake -G "Visual Studio 2012" -H. -Bbuild
+	$ cmake -G "Visual Studio 11" -H. -Bbuild
 	$ cmake --build build --target megatest --config Release
 
 ... or you can of course open the solution file in Visual Studio and build from there instead of invoking cmake --build.
@@ -28,7 +28,7 @@ If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megaso
 	$ hg clone https://bitbucket.org/rude/megasource megasource
 	$ cd megasource
 	$ hg clone https://bitbucket.org/rude/love libs/love
-	$ cmake -G "Visual Studio 2012" -H. -Bbuild
+	$ cmake -G "Visual Studio 11" -H. -Bbuild
 	$ cmake --build build --target love --config Release
 
 The binaries can be found in *build/love/Release*.
