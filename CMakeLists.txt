@@ -173,15 +173,19 @@ set(MEGA_3P
 	${MEGA_MODPLUG}
 )
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/love/CMakeLists.txt)
+# Set to directory of love source. Defaults to ./libs/love.
+if(NOT MEGA_LOVE)
+	set(MEGA_LOVE ${CMAKE_CURRENT_SOURCE_DIR}/libs/love)
+endif()
+
+if(EXISTS ${MEGA_LOVE}/CMakeLists.txt)
 	message(STATUS "Making LOVE")
-	add_subdirectory("libs/love" ${CMAKE_BINARY_DIR}/love)
+	add_subdirectory(${MEGA_LOVE} ${CMAKE_BINARY_DIR}/love)
 
 	# Turn off third-party warnings when building with LOVE.
 	foreach(MEGA_LIB ${MEGA_3P})
 		disable_warnings(${MEGA_LIB})
 	endforeach()
-
 else()
 	message(STATUS "LOVE was not found")
 endif()
