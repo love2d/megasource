@@ -29,7 +29,7 @@ If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megaso
 	$ cd megasource
 	$ hg clone https://bitbucket.org/rude/love libs/love
 	$ cmake -G "Visual Studio 11" -H. -Bbuild
-	$ cmake --build build --target love --config Release
+	$ cmake --build build --target love/love --config Release
 
 The binaries can be found in *build/love/Release*.
 
