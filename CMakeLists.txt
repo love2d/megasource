@@ -5,6 +5,8 @@ endif()
 
 cmake_minimum_required(VERSION 2.8)
 
+include(ExternalProject)
+
 project(megasource)
 
 set(MEGA TRUE)
@@ -40,6 +42,14 @@ function(add_move_dll ARG_POST_TARGET ARG_TARGET)
 		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/$<TARGET_FILE_NAME:${ARG_TARGET}>)
 endfunction()
 
+function(add_move_file ARG_POST_TARGET ARG_FILE)
+	get_filename_component(TEMP_FILENAME ${ARG_FILE} NAME)
+	add_custom_command(TARGET ${ARG_POST_TARGET} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+		${ARG_FILE}
+		${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/${TEMP_FILENAME})
+endfunction()
+
 function(disable_warnings ARG_TARGET)
 	get_target_property(OLD_FLAGS ${ARG_TARGET} COMPILE_FLAGS)
 	set(NEW_FLAGS -W0)
@@ -64,6 +74,23 @@ if(MSVC11)
 		else()
 			message(WARNING "Could not find msvcp110.dll, msvcr110.dll")
 		endif()
+
+		# Find vcvarsall.bat.
+		get_filename_component(VS110_VCVARSALL_BAT ${VS110COMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+
+		if(EXISTS ${VS110_VCVARSALL_BAT})
+			message(STATUS "Found vsvarsall.bat")
+			set(MEGA_MSVC_VCVARSALL_BAT ${VS110_VCVARSALL_BAT})
+
+			if(MEGA_X86)
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
+			else()
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
+			endif()
+		else()
+			message(WARNING "Could not find vsvarsall.bat")
+		endif()
+
 	endif()
 elseif(MSVC12)
 	set(VS120COMNTOOLS "$ENV{VS120COMNTOOLS}")
@@ -79,12 +106,30 @@ elseif(MSVC12)
 		else()
 			message(WARNING "Could not find msvcp120.dll, msvcr120.dll")
 		endif()
+
+		# Find vcvarsall.bat.
+		get_filename_component(VS120_VCVARSALL_BAT ${VS120COMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+
+		if(EXISTS ${VS120_VCVARSALL_BAT})
+			message(STATUS "Found vsvarsall.bat")
+			set(MEGA_MSVC_VCVARSALL_BAT ${VS120_VCVARSALL_BAT})
+
+			if(MEGA_X86)
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
+			else()
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
+			endif()
+		else()
+			message(WARNING "Could not find vsvarsall.bat")
+		endif()
+
 	endif()
 endif()
 
 set(MEGA_ZLIB_VER "1.2.8")
 set(MEGA_PHYSFS_VER "2.0.3")
 set(MEGA_LUA51_VER "5.1.5")
+set(MEGA_LUAJIT_VER "2.0.2")
 set(MEGA_LIBPNG_VER "166")
 set(MEGA_JPEG_VER "9")
 set(MEGA_LIBOGG_VER "1.3.1")
@@ -152,6 +197,42 @@ set(MEGA_DEVIL DevIL)
 
 add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
 set(MEGA_MODPLUG modplug-static)
+
+# LuaJIT
+if(MSVC)
+	set(MEGA_LUAJIT_DIR "LuaJIT-${MEGA_LUAJIT_VER}")
+
+	# Copy LuaJIT source to binary dir. LuaJIT builds in-source,
+	# and we don't want to modify the original source tree, so
+	# we copy it.
+	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION libs)
+
+	set(MEGA_LUAJIT_DIR "LuaJIT-${MEGA_LUAJIT_VER}")
+
+	set(MEGA_LUAJIT_BUILD_BAT "
+		@echo off
+		call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
+		cd src
+		msvcbuild.bat
+	")
+
+	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
+	file(WRITE ${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat ${MEGA_LUAJIT_BUILD_BAT})
+
+	ExternalProject_Add(luajit
+		SOURCE_DIR ${MEGA_LUAJIT_SOURCE_DIR}
+		BUILD_IN_SOURCE 1
+		CONFIGURE_COMMAND ""
+		BUILD_COMMAND "${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat"
+		INSTALL_COMMAND cmake -E make_directory ${CMAKE_BINARY_DIR}/bin
+			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.dll ${CMAKE_BINARY_DIR}/bin
+			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.lib ${CMAKE_BINARY_DIR}/bin)
+
+	set(MEGA_LUAJIT_LIB ${CMAKE_BINARY_DIR}/bin/lua51.lib)
+	set(MEGA_LUAJIT_DLL ${CMAKE_BINARY_DIR}/bin/lua51.dll)
+	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_SOURCE_DIR}/src)
+
+endif()
 
 set(MEGA_3P
 	${MEGA_ZLIB}
