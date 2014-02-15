@@ -250,7 +250,7 @@ set_option(RENDER_D3D          "Enable the Direct3D render driver" ${WINDOWS})
 # TODO: We should (should we?) respect cmake's ${BUILD_SHARED_LIBS} flag here
 # The options below are for compatibility to configure's default behaviour.
 set(SDL_SHARED ON CACHE BOOL "Build a shared version of the library")
-set(SDL_STATIC ON CACHE BOOL "Build a static version of the library")
+set(SDL_STATIC OFF CACHE BOOL "Build a static version of the library")
 
 # General source files
 file(GLOB SOURCE_FILES
@@ -806,7 +806,9 @@ elseif(WINDOWS)
     if(HAVE_D3D_H OR HAVE_DDRAW_H OR HAVE_DSOUND_H OR HAVE_DINPUT_H OR HAVE_XAUDIO2_H)
       set(HAVE_DIRECTX TRUE)
       # TODO: change $ENV{DXSDL_DIR} to get the path from the include checks
-      link_directories($ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
+      set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
+      set(SDL_LINK_DIR ${SDL_LINK_DIR} PARENT_SCOPE)
+      link_directories(${SDL_LINK_DIR})
       include_directories($ENV{DXSDK_DIR}\\Include)
     endif()
     set(CMAKE_REQUIRED_FLAGS)
@@ -1236,6 +1238,9 @@ set(_INSTALL_LIBS "SDL2main")
 
 if(SDL_SHARED)
   add_library(SDL2 SHARED ${SOURCE_FILES})
+  if(MEGA)
+    install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
+  endif()
   if(UNIX)
     set_target_properties(SDL2 PROPERTIES
       VERSION ${LT_VERSION}
@@ -1249,6 +1254,7 @@ if(SDL_SHARED)
   endif()
  set(_INSTALL_LIBS "SDL2" ${_INSTALL_LIBS})
  target_link_libraries(SDL2 ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
+ target_include_directories(SDL2 PUBLIC include)
 endif()
 
 if(SDL_STATIC)
@@ -1264,9 +1270,14 @@ if(SDL_STATIC)
   # libraries - do we need to consider this?
   set(_INSTALL_LIBS "SDL2-static" ${_INSTALL_LIBS})
   target_link_libraries(SDL2-static ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
+  target_include_directories(SDL2-static PUBLIC include)
 endif()
 
 ##### Installation targets #####
+if (MEGA)
+  return()
+endif()
+
 install(TARGETS ${_INSTALL_LIBS}
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"
   ARCHIVE DESTINATION "lib${LIB_SUFFIX}")
