@@ -152,58 +152,109 @@ set(ZLIB_INCLUDE_DIR .)
 
 set(OGG_LIBRARY ogg-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: zlib ${MEGA_ZLIB_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/zlib-${MEGA_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
 set(MEGA_ZLIB zlibstatic)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: physfs ${MEGA_PHYSFS_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/physfs-${MEGA_PHYSFS_VER}" ${CMAKE_BINARY_DIR}/physfs)
 set(MEGA_PHYSFS physfs-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: lua ${MEGA_LUA51_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/lua-${MEGA_LUA51_VER}" ${CMAKE_BINARY_DIR}/lua51)
 set(MEGA_LUA51 lua51)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: libpng ${MEGA_LIBPNG_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/lpng${MEGA_LIBPNG_VER}" ${CMAKE_BINARY_DIR}/lpng)
 set(MEGA_LIBPNG ${PNG_LIB_NAME_STATIC})
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: jpeg ${MEGA_JPEG_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/jpeg-${MEGA_JPEG_VER}" ${CMAKE_BINARY_DIR}/jpeg)
 set(MEGA_JPEG jpeg-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: libogg ${MEGA_LIBOGG_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libogg-${MEGA_LIBOGG_VER}" ${CMAKE_BINARY_DIR}/libogg)
 set(MEGA_LIBOGG ogg-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: libvorbis ${MEGA_LIBVORBIS_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libvorbis-${MEGA_LIBVORBIS_VER}" ${CMAKE_BINARY_DIR}/libvorbis)
 set(MEGA_LIBVORBIS vorbis-static)
 set(MEGA_LIBVORBISFILE vorbisfile-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: mpg123 ${MEGA_MPG123_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/mpg123-${MEGA_MPG123_VER}" ${CMAKE_BINARY_DIR}/mpg123)
 set(MEGA_MPEG123 mpg123)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: freetype ${MEGA_FREETYPE_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/freetype-${MEGA_FREETYPE_VER}" ${CMAKE_BINARY_DIR}/freetype)
 set(MEGA_FREETYPE freetype-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
 set(MEGA_SDL2 SDL2)
 set(MEGA_SDL2MAIN SDL2main)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: openal-soft ${MEGA_OPENAL_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/openal-soft-${MEGA_OPENAL_VER}" ${CMAKE_BINARY_DIR}/openal-soft)
 set(MEGA_OPENAL ${OPENAL_LIB_NAME})
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: jasper ${MEGA_JASPER_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/jasper-${MEGA_JASPER_VER}" ${CMAKE_BINARY_DIR}/jasper)
 set(MEGA_JASPER jasper-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: tiff ${MEGA_TIFF_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/tiff-${MEGA_TIFF_VER}" ${CMAKE_BINARY_DIR}/tiff)
 set(MEGA_TIFF tiff-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: DevIL ${MEGA_DEVIL_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/DevIL-${MEGA_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
 set(MEGA_DEVIL DevIL)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: SDL2_image ${MEGA_SDL2_IMAGE_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/SDL2_image-${MEGA_SDL2_IMAGE_VER}" ${CMAKE_BINARY_DIR}/SDL2_image)
 set(MEGA_SDL2_IMAGE SDL2_image-static)
 
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: libmodplug ${MEGA_MODPLUG_VER}")
+message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
 set(MEGA_MODPLUG modplug-static)
 
 # LuaJIT
 if(MSVC)
+	message(STATUS "-----------------------------------------------------")
+	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
+	message(STATUS "-----------------------------------------------------")
 	set(MEGA_LUAJIT_DIR "LuaJIT-${MEGA_LUAJIT_VER}")
 
 	# Copy LuaJIT source to binary dir. LuaJIT builds in-source,
@@ -265,7 +316,9 @@ if(NOT MEGA_LOVE)
 endif()
 
 if(EXISTS ${MEGA_LOVE}/CMakeLists.txt)
-	message(STATUS "Making LOVE")
+	message(STATUS "-----------------------------------------------------")
+	message(STATUS "Configuring: love")
+	message(STATUS "-----------------------------------------------------")
 	add_subdirectory(${MEGA_LOVE} ${CMAKE_BINARY_DIR}/love)
 
 	# Turn off third-party warnings when building with LOVE.
