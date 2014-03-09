@@ -217,6 +217,7 @@ static int D3D_UpdateTextureYUV(SDL_Renderer * renderer, SDL_Texture * texture,
 static int D3D_LockTexture(SDL_Renderer * renderer, SDL_Texture * texture,
                            const SDL_Rect * rect, void **pixels, int *pitch);
 static void D3D_UnlockTexture(SDL_Renderer * renderer, SDL_Texture * texture);
+static int D3D_SetRenderTargetInternal(SDL_Renderer * renderer, SDL_Texture * texture);
 static int D3D_SetRenderTarget(SDL_Renderer * renderer, SDL_Texture * texture);
 static int D3D_UpdateViewport(SDL_Renderer * renderer);
 static int D3D_UpdateClipRect(SDL_Renderer * renderer);
@@ -481,6 +482,10 @@ D3D_Reset(SDL_Renderer * renderer)
         IDirect3DSurface9_Release(data->defaultRenderTarget);
         data->defaultRenderTarget = NULL;
     }
+    if (data->currentRenderTarget != NULL) {
+        IDirect3DSurface9_Release(data->currentRenderTarget);
+        data->currentRenderTarget = NULL;
+    }
 
     /* Release application render targets */
     for (texture = renderer->textures; texture; texture = texture->next) {
@@ -508,6 +513,7 @@ D3D_Reset(SDL_Renderer * renderer)
 
     IDirect3DDevice9_GetRenderTarget(data->device, 0, &data->defaultRenderTarget);
     D3D_InitRenderState(data);
+    D3D_SetRenderTargetInternal(renderer, renderer->target);
     D3D_UpdateViewport(renderer);
 
     /* Let the application know that render targets were reset */
@@ -1003,6 +1009,12 @@ D3D_UpdateTextureInternal(IDirect3DTexture9 *texture, Uint32 format, SDL_bool fu
     if (length == pitch && length == locked.Pitch) {
         SDL_memcpy(dst, src, length*h);
     } else {
+        if (length > pitch) {
+            length = pitch;
+        }
+        if (length > locked.Pitch) {
+            length = locked.Pitch;
+        }
         for (row = 0; row < h; ++row) {
             SDL_memcpy(dst, src, length);
             src += pitch;
@@ -1155,13 +1167,11 @@ D3D_UnlockTexture(SDL_Renderer * renderer, SDL_Texture * texture)
 }
 
 static int
-D3D_SetRenderTarget(SDL_Renderer * renderer, SDL_Texture * texture)
+D3D_SetRenderTargetInternal(SDL_Renderer * renderer, SDL_Texture * texture)
 {
     D3D_RenderData *data = (D3D_RenderData *) renderer->driverdata;
     D3D_TextureData *texturedata;
     HRESULT result;
-
-    D3D_ActivateRenderer(renderer);
 
     /* Release the previous render target if it wasn't the default one */
     if (data->currentRenderTarget != NULL) {
@@ -1190,6 +1200,14 @@ D3D_SetRenderTarget(SDL_Renderer * renderer, SDL_Texture * texture)
     }
 
     return 0;
+}
+
+static int
+D3D_SetRenderTarget(SDL_Renderer * renderer, SDL_Texture * texture)
+{
+    D3D_ActivateRenderer(renderer);
+
+    return D3D_SetRenderTargetInternal(renderer, texture);
 }
 
 static int

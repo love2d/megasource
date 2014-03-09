@@ -129,6 +129,17 @@ extern "C" {
 #define SDL_HINT_RENDER_VSYNC               "SDL_RENDER_VSYNC"
 
 /**
+ *  \brief  A variable controlling whether the screensaver is enabled. 
+ *
+ *  This variable can be set to the following values:
+ *    "0"       - Disable screensaver
+ *    "1"       - Enable screensaver
+ *
+ *  By default SDL will disable the screensaver.
+ */
+#define SDL_HINT_VIDEO_ALLOW_SCREENSAVER    "SDL_VIDEO_ALLOW_SCREENSAVER"
+
+/**
  *  \brief  A variable controlling whether the X11 VidMode extension should be used.
  *
  *  This variable can be set to the following values:
@@ -190,17 +201,6 @@ extern "C" {
 #define SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS   "SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"
 
 /**
- *  \brief Set whether windows go fullscreen in their own spaces on Mac OS X
- *
- *  This variable can be set to the following values:
- *    "0"       - Fullscreen windows will use the classic fullscreen mode
- *    "1"       - Fullscreen windows will use fullscreen spaces
- *
- *  By default SDL will use the classic fullscreen mode.
- */
-#define SDL_HINT_VIDEO_FULLSCREEN_SPACES   "SDL_VIDEO_FULLSCREEN_SPACES"
-
-/**
  *  \brief  A variable controlling whether the idle timer is disabled on iOS.
  *
  *  When an iOS app does not receive touches for some time, the screen is
@@ -233,15 +233,15 @@ extern "C" {
  *    "0"       - List only real joysticks and accept input from them
  *    "1"       - List real joysticks along with the accelerometer as if it were a 3 axis joystick (the default).
  */
-#define SDL_HINT_ACCEL_AS_JOY "SDL_ACCEL_AS_JOY"
+#define SDL_HINT_ACCELEROMETER_AS_JOYSTICK "SDL_ACCELEROMETER_AS_JOYSTICK"
 
 
 /**
  *  \brief  A variable that lets you disable the detection and use of Xinput gamepad devices
  *
  *  The variable can be set to the following values:
- *    "0"       - Disable XInput timer (only uses direct input)
- *    "1"       - Enable XInput timer (the default)
+ *    "0"       - Disable XInput detection (only uses direct input)
+ *    "1"       - Enable XInput detection (the default)
  */
 #define SDL_HINT_XINPUT_ENABLED "SDL_XINPUT_ENABLED"
 
@@ -264,7 +264,7 @@ extern "C" {
  *    "0"       - Disable joystick & gamecontroller input events when the
  *                application is in the background.
  *    "1"       - Enable joystick & gamecontroller input events when the
- *                application is in the backgroumd.
+ *                application is in the background.
  *
  *  The default value is "0".  This hint may be set at any time.
  */
@@ -318,7 +318,7 @@ extern "C" {
 *  SDL has EGL and OpenGL ES2 support on Windows via the ANGLE project. It
 *  can use two different sets of binaries, those compiled by the user from source
 *  or those provided by the Chrome browser. In the later case, these binaries require
-*  that SDL loads 
+*  that SDL loads a DLL providing the shader compiler.
 *
 *  This variable can be set to the following values:
 *    "d3dcompiler_46.dll" - default, best for Vista or later.
@@ -346,6 +346,26 @@ extern "C" {
 *    share a pixel format with.
 */
 #define SDL_HINT_VIDEO_WINDOW_SHARE_PIXEL_FORMAT    "SDL_VIDEO_WINDOW_SHARE_PIXEL_FORMAT"
+
+/**
+ *  \brief  A variable that dictates policy for fullscreen Spaces on Mac OS X.
+ *
+ *  This hint only applies to Mac OS X.
+ *
+ *  The variable can be set to the following values:
+ *    "0"       - Disable Spaces support (FULLSCREEN_DESKTOP won't use them and
+ *                SDL_WINDOW_RESIZABLE windows won't offer the "fullscreen"
+ *                button on their titlebars).
+ *    "1"       - Enable Spaces support (FULLSCREEN_DESKTOP will use them and
+ *                SDL_WINDOW_RESIZABLE windows will offer the "fullscreen"
+ *                button on their titlebars.
+ *
+ *  The default value is "1". Spaces are disabled regardless of this hint if
+ *   the OS isn't at least Mac OS X Lion (10.7). This hint must be set before
+ *   any windows are created.
+ */
+#define SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES    "SDL_VIDEO_MAC_FULLSCREEN_SPACES"
+
 
 /**
  *  \brief  An enumeration of hint priorities

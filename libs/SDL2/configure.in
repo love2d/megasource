@@ -1164,7 +1164,7 @@ CheckWayland()
 {
     AC_ARG_ENABLE(video-wayland,
 AC_HELP_STRING([--enable-video-wayland], [use Wayland video driver [[default=yes]]]),
-                  ,enable_video_wayland=no) #yes)
+                  ,enable_video_wayland=yes)
 
     AC_ARG_ENABLE(video-wayland-qt-touch,
 AC_HELP_STRING([--enable-video-wayland-qt-touch], [QtWayland server support for Wayland video driver [[default=yes]]]),
@@ -1246,7 +1246,7 @@ CheckMir()
 {
     AC_ARG_ENABLE(video-mir,
 AC_HELP_STRING([--enable-video-mir], [use Mir video driver [[default=yes]]]),
-                  ,enable_video_mir=no) #yes)
+                  ,enable_video_mir=yes)
 
     if test x$enable_video = xyes -a x$enable_video_mir = xyes; then
         AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
@@ -1555,11 +1555,6 @@ AC_HELP_STRING([--enable-video-x11-xinput], [enable X11 XInput extension for man
             	],[
 int event_type = XI_TouchBegin;
 XITouchClassInfo *t;
-Status 
-XIAllowTouchEvents(Display *a,int b,unsigned int c,Window d,int f)
-{
-    return (Status)0;
-}
             	],[
             	have_xinput2_multitouch=yes
             	AC_DEFINE(SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_MULTITOUCH)
@@ -2860,7 +2855,12 @@ AC_HELP_STRING([--enable-render-d3d], [enable the Direct3D render driver [[defau
             have_loadso=yes
         fi
         # Set up the system libraries we need
-        EXTRA_LDFLAGS="$EXTRA_LDFLAGS -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion -luuid -XCClinker -static-libgcc"
+        if test -f /lib/w32api/libuuid.a; then
+            LIBUUID=/lib/w32api/libuuid.a
+        else
+            LIBUUID=-luuid
+        fi
+        EXTRA_LDFLAGS="$EXTRA_LDFLAGS -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion $LIBUUID -XCClinker -static-libgcc"
         # The Windows platform requires special setup
         VERSION_SOURCES="$srcdir/src/main/windows/*.rc"
         SDLMAIN_SOURCES="$srcdir/src/main/windows/*.c"

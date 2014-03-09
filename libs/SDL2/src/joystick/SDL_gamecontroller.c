@@ -835,6 +835,7 @@ SDL_GameControllerLoadHints()
         char *pUserMappings = SDL_malloc( nchHints + 1 );
         char *pTempMappings = pUserMappings;
         SDL_memcpy( pUserMappings, hint, nchHints );
+        pUserMappings[nchHints] = '\0';
         while ( pUserMappings ) {
             char *pchNewLine = NULL;
 
@@ -1223,6 +1224,7 @@ SDL_GameControllerQuit(void)
         pControllerMap = s_pSupportedControllers;
         s_pSupportedControllers = s_pSupportedControllers->next;
         SDL_free( pControllerMap->name );
+        SDL_free( pControllerMap->mapping );
         SDL_free( pControllerMap );
     }
 

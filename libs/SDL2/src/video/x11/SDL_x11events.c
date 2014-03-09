@@ -29,7 +29,6 @@
 #include <limits.h> /* For INT_MAX */
 
 #include "SDL_x11video.h"
-#include "SDL_x11video.h"
 #include "SDL_x11touch.h"
 #include "SDL_x11xinput2.h"
 #include "../../events/SDL_events_c.h"
@@ -993,11 +992,6 @@ X11_Pending(Display * display)
     return (0);
 }
 
-
-/* !!! FIXME: this should be exposed in a header, or something. */
-int SDL_GetNumTouch(void);
-void SDL_dbus_screensaver_tickle(_THIS);
-
 void
 X11_PumpEvents(_THIS)
 {
@@ -1035,7 +1029,19 @@ X11_SuspendScreenSaver(_THIS)
     SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
     int dummy;
     int major_version, minor_version;
+#endif /* SDL_VIDEO_DRIVER_X11_XSCRNSAVER */
 
+#if SDL_USE_LIBDBUS
+    if (SDL_dbus_screensaver_inhibit(_this)) {
+        return;
+    }
+
+    if (_this->suspend_screensaver) {
+        SDL_dbus_screensaver_tickle(_this);
+    }
+#endif
+
+#if SDL_VIDEO_DRIVER_X11_XSCRNSAVER
     if (SDL_X11_HAVE_XSS) {
         /* X11_XScreenSaverSuspend was introduced in MIT-SCREEN-SAVER 1.1 */
         if (!X11_XScreenSaverQueryExtension(data->display, &dummy, &dummy) ||
@@ -1047,12 +1053,6 @@ X11_SuspendScreenSaver(_THIS)
 
         X11_XScreenSaverSuspend(data->display, _this->suspend_screensaver);
         X11_XResetScreenSaver(data->display);
-    }
-#endif
-
-#if SDL_USE_LIBDBUS
-    if (_this->suspend_screensaver) {
-        SDL_dbus_screensaver_tickle(_this);
     }
 #endif
 }

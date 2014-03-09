@@ -18688,9 +18688,9 @@ CheckWayland()
 if test "${enable_video_wayland+set}" = set; then :
   enableval=$enable_video_wayland;
 else
-  enable_video_wayland=no
+  enable_video_wayland=yes
 fi
- #yes)
+
 
     # Check whether --enable-video-wayland-qt-touch was given.
 if test "${enable_video_wayland_qt_touch+set}" = set; then :
@@ -18842,9 +18842,9 @@ CheckMir()
 if test "${enable_video_mir+set}" = set; then :
   enableval=$enable_video_mir;
 else
-  enable_video_mir=no
+  enable_video_mir=yes
 fi
- #yes)
+
 
     if test x$enable_video = xyes -a x$enable_video_mir = xyes; then
         # Extract the first word of "pkg-config", so it can be a program name with args.
@@ -20173,11 +20173,6 @@ main ()
 
 int event_type = XI_TouchBegin;
 XITouchClassInfo *t;
-Status
-XIAllowTouchEvents(Display *a,int b,unsigned int c,Window d,int f)
-{
-    return (Status)0;
-}
 
   ;
   return 0;
@@ -22808,7 +22803,12 @@ $as_echo "#define SDL_LOADSO_WINDOWS 1" >>confdefs.h
             have_loadso=yes
         fi
         # Set up the system libraries we need
-        EXTRA_LDFLAGS="$EXTRA_LDFLAGS -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion -luuid -XCClinker -static-libgcc"
+        if test -f /lib/w32api/libuuid.a; then
+            LIBUUID=/lib/w32api/libuuid.a
+        else
+            LIBUUID=-luuid
+        fi
+        EXTRA_LDFLAGS="$EXTRA_LDFLAGS -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion $LIBUUID -XCClinker -static-libgcc"
         # The Windows platform requires special setup
         VERSION_SOURCES="$srcdir/src/main/windows/*.rc"
         SDLMAIN_SOURCES="$srcdir/src/main/windows/*.c"

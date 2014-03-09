@@ -673,7 +673,7 @@ SDL_HelperWindowCreate(void)
 
     /* Register the class. */
     SDL_HelperWindowClass = RegisterClass(&wce);
-    if (SDL_HelperWindowClass == 0) {
+    if (SDL_HelperWindowClass == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
         return WIN_SetError("Unable to create Helper Window Class");
     }
 
@@ -746,7 +746,7 @@ WIN_UpdateClipCursor(SDL_Window *window)
     SDL_Mouse *mouse = SDL_GetMouse();
 
     /* Don't clip the cursor while we're in the modal resize or move loop */
-    if (data->in_modal_loop) {
+    if (data->in_title_click || data->in_modal_loop) {
         ClipCursor(NULL);
         return;
     }

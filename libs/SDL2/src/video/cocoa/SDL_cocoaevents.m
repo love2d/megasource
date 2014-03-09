@@ -36,6 +36,22 @@
 #define UsrActivity 1
 #endif
 
+@interface SDLApplication : NSApplication
+
+- (void)terminate:(id)sender;
+
+@end
+
+@implementation SDLApplication
+
+// Override terminate to handle Quit and System Shutdown smoothly.
+- (void)terminate:(id)sender
+{
+    SDL_SendQuit();
+}
+
+@end // SDLApplication
+
 /* setAppleMenu disappeared from the headers in 10.4 */
 @interface NSApplication(NSAppleMenu)
 - (void)setAppleMenu:(NSMenu *)menu;
@@ -69,12 +85,6 @@
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [super dealloc];
-}
-
-- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
-{
-    SDL_SendQuit();
-    return NSTerminateCancel;
 }
 
 - (void)focusSomeWindow:(NSNotification *)aNotification
@@ -125,13 +135,12 @@ static SDLAppDelegate *appDelegate = nil;
 static NSString *
 GetApplicationName(void)
 {
-    NSDictionary *dict;
-    NSString *appName = 0;
+    NSString *appName;
 
     /* Determine the application name */
-    dict = (NSDictionary *)CFBundleGetInfoDictionary(CFBundleGetMainBundle());
-    if (dict)
-        appName = [dict objectForKey: @"CFBundleName"];
+    appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+    if (!appName)
+        appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"];
 
     if (![appName length])
         appName = [[NSProcessInfo processInfo] processName];
@@ -256,13 +265,16 @@ Cocoa_RegisterApp(void)
 
     pool = [[NSAutoreleasePool alloc] init];
     if (NSApp == nil) {
-        [NSApplication sharedApplication];
+        [SDLApplication sharedApplication];
 
         if ([NSApp mainMenu] == nil) {
             CreateApplicationMenus();
         }
         [NSApp finishLaunching];
-        NSDictionary *appDefaults = [NSDictionary dictionaryWithObject:@"NO" forKey:@"AppleMomentumScrollSupported"];
+        NSDictionary *appDefaults = [[NSDictionary alloc] initWithObjectsAndKeys:
+            [NSNumber numberWithBool:NO], @"AppleMomentumScrollSupported",
+            [NSNumber numberWithBool:NO], @"ApplePressAndHoldEnabled",
+            nil];
         [[NSUserDefaults standardUserDefaults] registerDefaults:appDefaults];
 
     }
