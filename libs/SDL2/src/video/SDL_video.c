@@ -31,6 +31,8 @@
 #include "../events/SDL_events_c.h"
 #include "../timer/SDL_timer_c.h"
 
+#include "SDL_syswm.h"
+
 #if SDL_VIDEO_OPENGL
 #include "SDL_opengl.h"
 #endif /* SDL_VIDEO_OPENGL */
@@ -43,8 +45,6 @@
 #if SDL_VIDEO_OPENGL_ES2 && !SDL_VIDEO_OPENGL
 #include "SDL_opengles2.h"
 #endif /* SDL_VIDEO_OPENGL_ES2 && !SDL_VIDEO_OPENGL */
-
-#include "SDL_syswm.h"
 
 /* On Windows, windows.h defines CreateWindow */
 #ifdef CreateWindow
@@ -67,6 +67,9 @@ static VideoBootStrap *bootstrap[] = {
 #endif
 #if SDL_VIDEO_DRIVER_WINDOWS
     &WINDOWS_bootstrap,
+#endif
+#if SDL_VIDEO_DRIVER_WINRT
+    &WINRT_bootstrap,
 #endif
 #if SDL_VIDEO_DRIVER_HAIKU
     &HAIKU_bootstrap,

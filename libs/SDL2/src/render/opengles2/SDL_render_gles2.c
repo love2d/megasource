@@ -1784,7 +1784,7 @@ GLES2_CreateRenderer(SDL_Window *window, Uint32 flags)
         return NULL;
     }
     renderer->info = GLES2_RenderDriver.info;
-    renderer->info.flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE;
+    renderer->info.flags = (SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
     renderer->driverdata = data;
     renderer->window = window;
 
@@ -1804,6 +1804,14 @@ GLES2_CreateRenderer(SDL_Window *window, Uint32 flags)
         GLES2_DestroyRenderer(renderer);
         return NULL;
     }
+
+#if __WINRT__
+    /* DLudwig, 2013-11-29: ANGLE for WinRT doesn't seem to work unless VSync
+     * is turned on.  Not doing so will freeze the screen's contents to that
+     * of the first drawn frame.
+     */
+    flags |= SDL_RENDERER_PRESENTVSYNC;
+#endif
 
     if (flags & SDL_RENDERER_PRESENTVSYNC) {
         SDL_GL_SetSwapInterval(1);

@@ -162,7 +162,6 @@ SDL_GLContext
 Cocoa_GL_CreateContext(_THIS, SDL_Window * window)
 {
     SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
-    const GLubyte *(APIENTRY * glGetStringFunc)(GLenum) = NULL;
     NSAutoreleasePool *pool;
     SDL_VideoDisplay *display = SDL_GetDisplayForWindow(window);
     SDL_DisplayData *displaydata = (SDL_DisplayData *)display->driverdata;
@@ -249,7 +248,7 @@ Cocoa_GL_CreateContext(_THIS, SDL_Window * window)
 
     fmt = [[NSOpenGLPixelFormat alloc] initWithAttributes:attr];
     if (fmt == nil) {
-        SDL_SetError ("Failed creating OpenGL pixel format");
+        SDL_SetError("Failed creating OpenGL pixel format");
         [pool release];
         return NULL;
     }
@@ -263,7 +262,7 @@ Cocoa_GL_CreateContext(_THIS, SDL_Window * window)
     [fmt release];
 
     if (context == nil) {
-        SDL_SetError ("Failed creating OpenGL context");
+        SDL_SetError("Failed creating OpenGL context");
         [pool release];
         return NULL;
     }
@@ -272,40 +271,50 @@ Cocoa_GL_CreateContext(_THIS, SDL_Window * window)
 
     if ( Cocoa_GL_MakeCurrent(_this, window, context) < 0 ) {
         Cocoa_GL_DeleteContext(_this, context);
-        SDL_SetError ("Failed making OpenGL context current");
+        SDL_SetError("Failed making OpenGL context current");
         return NULL;
     }
 
-    glGetStringFunc = (const GLubyte *(APIENTRY *)(GLenum)) SDL_GL_GetProcAddress("glGetString");
-    if (!glGetStringFunc) {
-        Cocoa_GL_DeleteContext(_this, context);
-        SDL_SetError ("Failed getting OpenGL glGetString entry point");
-        return NULL;
+    if (_this->gl_config.major_version < 3 &&
+        _this->gl_config.profile_mask == 0 &&
+        _this->gl_config.flags == 0) {
+        /* This is a legacy profile, so to match other backends, we're done. */
+    } else {
+        const GLubyte *(APIENTRY * glGetStringFunc)(GLenum);
+
+        glGetStringFunc = (const GLubyte *(APIENTRY *)(GLenum)) SDL_GL_GetProcAddress("glGetString");
+        if (!glGetStringFunc) {
+            Cocoa_GL_DeleteContext(_this, context);
+            SDL_SetError ("Failed getting OpenGL glGetString entry point");
+            return NULL;
+        }
+
+        glversion = (const char *)glGetStringFunc(GL_VERSION);
+        if (glversion == NULL) {
+            Cocoa_GL_DeleteContext(_this, context);
+            SDL_SetError ("Failed getting OpenGL context version");
+            return NULL;
+        }
+
+        if (SDL_sscanf(glversion, "%d.%d", &glversion_major, &glversion_minor) != 2) {
+            Cocoa_GL_DeleteContext(_this, context);
+            SDL_SetError ("Failed parsing OpenGL context version");
+            return NULL;
+        }
+
+        if ((glversion_major < _this->gl_config.major_version) ||
+           ((glversion_major == _this->gl_config.major_version) && (glversion_minor < _this->gl_config.minor_version))) {
+            Cocoa_GL_DeleteContext(_this, context);
+            SDL_SetError ("Failed creating OpenGL context at version requested");
+            return NULL;
+        }
+
+        /* In the future we'll want to do this, but to match other platforms
+           we'll leave the OpenGL version the way it is for now
+         */
+        /*_this->gl_config.major_version = glversion_major;*/
+        /*_this->gl_config.minor_version = glversion_minor;*/
     }
-
-    glversion = (const char *)glGetStringFunc(GL_VERSION);
-    if (glversion == NULL) {
-        Cocoa_GL_DeleteContext(_this, context);
-        SDL_SetError ("Failed getting OpenGL context version");
-        return NULL;
-    }
-
-    if (SDL_sscanf(glversion, "%d.%d", &glversion_major, &glversion_minor) != 2) {
-        Cocoa_GL_DeleteContext(_this, context);
-        SDL_SetError ("Failed parsing OpenGL context version");
-        return NULL;
-    }
-
-    if ((glversion_major <  _this->gl_config.major_version) ||
-       ((glversion_major == _this->gl_config.major_version) && (glversion_minor < _this->gl_config.minor_version))) {
-        Cocoa_GL_DeleteContext(_this, context);
-        SDL_SetError ("Failed creating OpenGL context at version requested");
-        return NULL;
-    }
-
-    _this->gl_config.major_version = glversion_major;
-    _this->gl_config.minor_version = glversion_minor;
-
     return context;
 }
 
