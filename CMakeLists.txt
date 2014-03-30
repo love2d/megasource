@@ -129,7 +129,7 @@ endif()
 set(MEGA_ZLIB_VER "1.2.8")
 set(MEGA_PHYSFS_VER "2.0.3")
 set(MEGA_LUA51_VER "5.1.5")
-set(MEGA_LUAJIT_VER "2.0.2")
+set(MEGA_LUAJIT_VER "2.0.3")
 set(MEGA_LIBPNG_VER "166")
 set(MEGA_JPEG_TURBO_VER "1.3.1")
 set(MEGA_LIBOGG_VER "1.3.1")
@@ -256,14 +256,14 @@ if(MSVC)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
 	message(STATUS "-----------------------------------------------------")
-	set(MEGA_LUAJIT_DIR "LuaJIT-${MEGA_LUAJIT_VER}")
+	set(MEGA_LUAJIT_DIR "LuaJIT")
 
 	# Copy LuaJIT source to binary dir. LuaJIT builds in-source,
 	# and we don't want to modify the original source tree, so
 	# we copy it.
 	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION libs)
 
-	set(MEGA_LUAJIT_DIR "LuaJIT-${MEGA_LUAJIT_VER}")
+	set(MEGA_LUAJIT_DIR "LuaJIT")
 
 	set(MEGA_LUAJIT_BUILD_BAT "
 		@echo off
