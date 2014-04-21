@@ -8,6 +8,7 @@
 #include <physfs.h>
 #include <png.h>
 #include <jpeglib.h>
+#include <turbojpeg.h>
 #include <ogg/ogg.h>
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
@@ -92,6 +93,15 @@ int main(int argc, char **argv)
 		c << (int)JPEG_LIB_VERSION;
 		l << "N/A";
 		return "jpeg";
+	};
+
+	vfunc turbojpeg = [](strs &c, strs &l)
+	{
+		auto handle = tjInitCompress();
+		tjDestroy(handle);
+		c << "N/A";
+		l << "N/A";
+		return "libjpeg-turbo";
 	};
 
 	vfunc ogg = [](strs &c, strs &l)
@@ -194,6 +204,7 @@ int main(int argc, char **argv)
 	funcs.push_back(lua);
 	funcs.push_back(png);
 	funcs.push_back(jpeg);
+	funcs.push_back(turbojpeg);
 	funcs.push_back(ogg);
 	funcs.push_back(vorbis);
 	funcs.push_back(vorbisfile);
