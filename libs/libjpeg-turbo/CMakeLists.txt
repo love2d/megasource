@@ -196,7 +196,7 @@ if(WITH_JAVA)
   add_subdirectory(java)
 endif()
 
-add_subdirectory(sharedlib)
+#add_subdirectory(sharedlib)
 
 add_library(jpeg-static STATIC ${JPEG_SOURCES} ${SIMD_OBJS})
 if(NOT MSVC)
@@ -212,6 +212,9 @@ if(WITH_JAVA)
   include_directories(${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
 endif()
 
+if(NOT MEGA)
+# Don't build shared library version.
+
 add_library(turbojpeg SHARED ${TURBOJPEG_SOURCES})
 set_target_properties(turbojpeg PROPERTIES DEFINE_SYMBOL DLLDEFINE)
 if(MINGW)
@@ -220,6 +223,8 @@ endif()
 target_link_libraries(turbojpeg jpeg-static)
 set_target_properties(turbojpeg PROPERTIES LINK_INTERFACE_LIBRARIES "")
 
+endif()
+
 add_library(turbojpeg-static STATIC ${JPEG_SOURCES} ${SIMD_OBJS}
   turbojpeg.c transupp.c jdatadst-tj.c jdatasrc-tj.c)
 if(NOT MSVC)
@@ -227,6 +232,10 @@ if(NOT MSVC)
 endif()
 if(WITH_SIMD)
   add_dependencies(turbojpeg-static simd)
+endif()
+
+if(MEGA)
+  return()
 endif()
 
 add_executable(tjunittest tjunittest.c tjutil.c)

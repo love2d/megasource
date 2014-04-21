@@ -42,6 +42,10 @@ if(WITH_SIMD)
   add_dependencies(jpeg simd)
 endif()
 
+if(MEGA)
+  return()
+endif()
+
 add_executable(cjpeg ../cjpeg.c ../cdjpeg.c ../rdbmp.c ../rdgif.c ../rdppm.c
   ../rdswitch.c ../rdtarga.c)
 set_property(TARGET cjpeg PROPERTY COMPILE_FLAGS
