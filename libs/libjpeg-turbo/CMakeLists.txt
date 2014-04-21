@@ -96,7 +96,7 @@ else()
   message(STATUS "In-memory source/destination managers disabled")
 endif()
 
-if(MSVC)
+if(MSVC AND NOT MEGA)
   # Use the static C library for all build types
   foreach(var CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
     CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO)
