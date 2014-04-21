@@ -131,7 +131,7 @@ set(MEGA_PHYSFS_VER "2.0.3")
 set(MEGA_LUA51_VER "5.1.5")
 set(MEGA_LUAJIT_VER "2.0.2")
 set(MEGA_LIBPNG_VER "166")
-set(MEGA_JPEG_VER "9")
+set(MEGA_JPEG_TURBO_VER "1.3.1")
 set(MEGA_LIBOGG_VER "1.3.1")
 set(MEGA_LIBVORBIS_VER "1.3.3")
 set(MEGA_MPG123_VER "1.15.3")
@@ -177,10 +177,11 @@ add_subdirectory("libs/lpng${MEGA_LIBPNG_VER}" ${CMAKE_BINARY_DIR}/lpng)
 set(MEGA_LIBPNG ${PNG_LIB_NAME_STATIC})
 
 message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: jpeg ${MEGA_JPEG_VER}")
+message(STATUS "Configuring: jpeg-turbo ${MEGA_JPEG_TURBO_VER}")
 message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/jpeg-${MEGA_JPEG_VER}" ${CMAKE_BINARY_DIR}/jpeg)
+add_subdirectory("libs/libjpeg-turbo" ${CMAKE_BINARY_DIR}/jpeg-turbo)
 set(MEGA_JPEG jpeg-static)
+set(MEGA_JPEG_TURBO turbojpeg-static)
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: libogg ${MEGA_LIBOGG_VER}")
@@ -295,6 +296,7 @@ set(MEGA_3P
 	${MEGA_LUA51}
 	${MEGA_LIBPNG}
 	${MEGA_JPEG}
+	${MEGA_JPEG_TURBO}
 	${MEGA_LIBOGG}
 	${MEGA_LIBVORBIS}
 	${MEGA_LIBVORBISFILE}
