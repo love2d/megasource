@@ -139,10 +139,10 @@ endif()
 
 message(STATUS "Install directory = ${CMAKE_INSTALL_PREFIX}")
 
-configure_file(win/jconfig.h.in jconfig.h)
+configure_file(win/jconfig.h.in include/jconfig.h)
 configure_file(win/config.h.in config.h)
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 if(WITH_JAVA)
   find_package(Java)
@@ -199,6 +199,7 @@ endif()
 #add_subdirectory(sharedlib)
 
 add_library(jpeg-static STATIC ${JPEG_SOURCES} ${SIMD_OBJS})
+target_include_directories(jpeg-static PUBLIC . ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/include)
 if(NOT MSVC)
   set_target_properties(jpeg-static PROPERTIES OUTPUT_NAME jpeg)
 endif()
