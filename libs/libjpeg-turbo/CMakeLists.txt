@@ -199,7 +199,7 @@ endif()
 #add_subdirectory(sharedlib)
 
 add_library(jpeg-static STATIC ${JPEG_SOURCES} ${SIMD_OBJS})
-target_include_directories(jpeg-static PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/include)
+target_include_directories(jpeg-static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/include)
 if(NOT MSVC)
   set_target_properties(jpeg-static PROPERTIES OUTPUT_NAME jpeg)
 endif()
