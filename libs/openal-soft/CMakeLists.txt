@@ -30,12 +30,12 @@ OPTION(ALSOFT_DLOPEN  "Check for the dlopen API for loading optional libs"  ON)
 
 OPTION(ALSOFT_WERROR  "Treat compile warnings as errors"      OFF)
 
-OPTION(ALSOFT_UTILS          "Build and install utility programs"         ON)
+OPTION(ALSOFT_UTILS          "Build and install utility programs"         OFF)
 OPTION(ALSOFT_NO_CONFIG_UTIL "Disable building the alsoft-config utility" OFF)
 
-OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  ON)
+OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  OFF)
 
-OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" ON)
+OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" OFF)
 OPTION(ALSOFT_HRTF_DEFS "Install HRTF definition files" ON)
 
 
@@ -81,6 +81,8 @@ IF ("${CMAKE_C_PLATFORM_ID}" STREQUAL "QNX")
     ADD_DEFINITIONS("-I/usr/include")
     SET(EXTRA_LIBS ${EXTRA_LIBS} -L/usr/lib)
 ENDIF()
+
+SET(OPENAL_LIB_NAME ${LIBNAME} PARENT_SCOPE)
 
 IF(NOT LIBTYPE)
     SET(LIBTYPE SHARED)
@@ -1092,8 +1094,10 @@ IF(WIN32 AND NOT LIBTYPE STREQUAL "STATIC")
 ENDIF()
 
 TARGET_LINK_LIBRARIES(${LIBNAME} common ${EXTRA_LIBS})
+TARGET_INCLUDE_DIRECTORIES(${LIBNAME} PUBLIC include)
 
 # Add an install target here
+IF(NOT MEGA)
 INSTALL(TARGETS ${LIBNAME}
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION "lib${LIB_SUFFIX}"
@@ -1109,7 +1113,7 @@ INSTALL(FILES include/AL/al.h
 )
 INSTALL(FILES "${OpenAL_BINARY_DIR}/openal.pc"
         DESTINATION "lib${LIB_SUFFIX}/pkgconfig")
-
+ENDIF()
 
 MESSAGE(STATUS "")
 MESSAGE(STATUS "Building OpenAL with support for the following backends:")
@@ -1246,4 +1250,8 @@ IF(ALSOFT_EXAMPLES)
         ENDIF()
         MESSAGE(STATUS "")
     ENDIF()
+ENDIF()
+
+IF(MEGA)
+    install(TARGETS ${LIBNAME} RUNTIME DESTINATION . LIBRARY DESTINATION .)
 ENDIF()
