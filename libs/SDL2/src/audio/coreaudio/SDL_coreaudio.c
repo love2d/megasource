@@ -19,6 +19,9 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 #include "../../SDL_internal.h"
+
+#if SDL_AUDIO_DRIVER_COREAUDIO
+
 #include "SDL_audio.h"
 #include "../SDL_audio_c.h"
 #include "../SDL_sysaudio.h"
@@ -319,7 +322,6 @@ COREAUDIO_CloseDevice(_THIS)
 {
     if (this->hidden != NULL) {
         if (this->hidden->audioUnitOpened) {
-            OSStatus result = noErr;
             AURenderCallbackStruct callback;
             const AudioUnitElement output_bus = 0;
             const AudioUnitElement input_bus = 1;
@@ -331,14 +333,13 @@ COREAUDIO_CloseDevice(_THIS)
                  kAudioUnitScope_Input);
 
             /* stop processing the audio unit */
-            result = AudioOutputUnitStop(this->hidden->audioUnit);
+            AudioOutputUnitStop(this->hidden->audioUnit);
 
             /* Remove the input callback */
             SDL_memset(&callback, 0, sizeof(AURenderCallbackStruct));
-            result = AudioUnitSetProperty(this->hidden->audioUnit,
-                                          kAudioUnitProperty_SetRenderCallback,
-                                          scope, bus, &callback,
-                                          sizeof(callback));
+            AudioUnitSetProperty(this->hidden->audioUnit,
+                                 kAudioUnitProperty_SetRenderCallback,
+                                 scope, bus, &callback, sizeof(callback));
 
             #if MACOSX_COREAUDIO
             CloseComponent(this->hidden->audioUnit);
@@ -555,5 +556,7 @@ COREAUDIO_Init(SDL_AudioDriverImpl * impl)
 AudioBootStrap COREAUDIO_bootstrap = {
     "coreaudio", "CoreAudio", COREAUDIO_Init, 0
 };
+
+#endif /* SDL_AUDIO_DRIVER_COREAUDIO */
 
 /* vi: set ts=4 sw=4 expandtab: */

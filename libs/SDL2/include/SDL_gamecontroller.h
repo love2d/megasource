@@ -43,7 +43,7 @@ extern "C" {
  *  \file SDL_gamecontroller.h
  *
  *  In order to use these functions, SDL_Init() must have been called
- *  with the ::SDL_INIT_JOYSTICK flag.  This causes SDL to scan the system
+ *  with the ::SDL_INIT_GAMECONTROLLER flag.  This causes SDL to scan the system
  *  for game controllers, and load appropriate drivers.
  *
  *  If you would like to receive controller updates while the application
@@ -241,7 +241,8 @@ SDL_GameControllerGetBindForAxis(SDL_GameController *gamecontroller,
 /**
  *  Get the current state of an axis control on a game controller.
  *
- *  The state is a value ranging from -32768 to 32767.
+ *  The state is a value ranging from -32768 to 32767 (except for the triggers,
+ *  which range from 0 to 32767).
  *
  *  The axis indices start at index 0.
  */

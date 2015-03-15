@@ -17,7 +17,6 @@
 #include <string.h>
 
 #include "SDL.h"
-#include "SDL_haptic.h"
 
 #if !defined SDL_JOYSTICK_DISABLED && !defined SDL_HAPTIC_DISABLED
 
@@ -53,7 +52,9 @@ main(int argc, char *argv[])
         exit(1);
     }
 
+    /*
     //SDL_CreateWindow("Dummy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 128, 128, 0);
+    */
 
     SDL_Log("There are %d joysticks at startup\n", SDL_NumJoysticks());
     if (enable_haptic)
@@ -121,7 +122,9 @@ main(int argc, char *argv[])
                     }
                     break;
                 case SDL_JOYAXISMOTION:
+/*
 //                    SDL_Log("Axis Move: %d\n", event.jaxis.axis);
+*/
                     if (enable_haptic)
                         SDL_HapticRumblePlay(haptic, 0.25, 250);
                     break;

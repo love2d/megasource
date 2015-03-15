@@ -99,12 +99,11 @@ static void
 SDL_FillRect1SSE(Uint8 *pixels, int pitch, Uint32 color, int w, int h)
 {
     int i, n;
-    Uint8 *p = NULL;
-    
+
     SSE_BEGIN;
     while (h--) {
+        Uint8 *p = pixels;
         n = w;
-        p = pixels;
 
         if (n > 63) {
             int adjust = 16 - ((uintptr_t)p & 15);
@@ -118,7 +117,6 @@ SDL_FillRect1SSE(Uint8 *pixels, int pitch, Uint32 color, int w, int h)
         if (n & 63) {
             int remainder = (n & 63);
             SDL_memset(p, color, remainder);
-            p += remainder;
         }
         pixels += pitch;
     }
@@ -253,6 +251,10 @@ SDL_FillRect(SDL_Surface * dst, const SDL_Rect * rect, Uint32 color)
         rect = &clipped;
     } else {
         rect = &dst->clip_rect;
+        /* Don't attempt to fill if the surface's clip_rect is empty */
+        if (SDL_RectEmpty(rect)) {
+            return 0;
+        }
     }
 
     /* Perform software fill */

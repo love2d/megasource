@@ -18,6 +18,11 @@
      misrepresented as being the original software.
   3. This notice may not be removed or altered from any source distribution.
 */
+
+#if defined(__clang_analyzer__) && !defined(SDL_DISABLE_ANALYZE_MACROS)
+#define SDL_DISABLE_ANALYZE_MACROS 1
+#endif
+
 #include "../SDL_internal.h"
 
 /* This file contains portable memory management functions for SDL */
@@ -54,6 +59,7 @@ void SDL_free(void *ptr)
 #define LACKS_STRING_H
 #define LACKS_STDLIB_H
 #define ABORT
+#define USE_LOCKS 1
 
 /*
   This is a version (aka dlmalloc) of malloc/free/realloc written by

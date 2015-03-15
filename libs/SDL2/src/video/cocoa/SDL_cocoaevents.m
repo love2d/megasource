@@ -25,15 +25,11 @@
 
 #include "SDL_cocoavideo.h"
 #include "../../events/SDL_events_c.h"
+#include "SDL_assert.h"
 
-#if !defined(UsrActivity) && defined(__LP64__) && !defined(__POWER__)
-/*
- * Workaround for a bug in the 10.5 SDK: By accident, OSService.h does
- * not include Power.h at all when compiling in 64bit mode. This has
- * been fixed in 10.6, but for 10.5, we manually define UsrActivity
- * to ensure compilation works.
- */
-#define UsrActivity 1
+/* This define was added in the 10.9 SDK. */
+#ifndef kIOPMAssertPreventUserIdleDisplaySleep
+#define kIOPMAssertPreventUserIdleDisplaySleep kIOPMAssertionTypePreventUserIdleDisplaySleep
 #endif
 
 @interface SDLApplication : NSApplication
@@ -57,7 +53,7 @@
 - (void)setAppleMenu:(NSMenu *)menu;
 @end
 
-@interface SDLAppDelegate : NSObject {
+@interface SDLAppDelegate : NSObject <NSApplicationDelegate> {
 @public
     BOOL seenFirstActivate;
 }
@@ -69,7 +65,6 @@
 - (id)init
 {
     self = [super init];
-
     if (self) {
         seenFirstActivate = NO;
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -100,15 +95,12 @@
     }
 
     SDL_VideoDevice *device = SDL_GetVideoDevice();
-    if (device && device->windows)
-    {
+    if (device && device->windows) {
         SDL_Window *window = device->windows;
         int i;
-        for (i = 0; i < device->num_displays; ++i)
-        {
+        for (i = 0; i < device->num_displays; ++i) {
             SDL_Window *fullscreen_window = device->displays[i].fullscreen_window;
-            if (fullscreen_window)
-            {
+            if (fullscreen_window) {
                 if (fullscreen_window->flags & SDL_WINDOW_MINIMIZED) {
                     SDL_RestoreWindow(fullscreen_window);
                 }
@@ -139,11 +131,13 @@ GetApplicationName(void)
 
     /* Determine the application name */
     appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
-    if (!appName)
+    if (!appName) {
         appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"];
+    }
 
-    if (![appName length])
+    if (![appName length]) {
         appName = [[NSProcessInfo processInfo] processName];
+    }
 
     return appName;
 }
@@ -158,13 +152,19 @@ CreateApplicationMenus(void)
     NSMenu *windowMenu;
     NSMenu *viewMenu;
     NSMenuItem *menuItem;
+    NSMenu *mainMenu;
 
     if (NSApp == nil) {
         return;
     }
-    
+
+    mainMenu = [[NSMenu alloc] init];
+
     /* Create the main menu bar */
-    [NSApp setMainMenu:[[NSMenu alloc] init]];
+    [NSApp setMainMenu:mainMenu];
+
+    [mainMenu release];  /* we're done with it, let NSApp own it. */
+    mainMenu = nil;
 
     /* Create the application menu */
     appName = GetApplicationName();
@@ -253,19 +253,26 @@ CreateApplicationMenus(void)
 
 void
 Cocoa_RegisterApp(void)
+{ @autoreleasepool
 {
     /* This can get called more than once! Be careful what you initialize! */
-    ProcessSerialNumber psn;
-    NSAutoreleasePool *pool;
 
-    if (!GetCurrentProcess(&psn)) {
-        TransformProcessType(&psn, kProcessTransformToForegroundApplication);
-        SetFrontProcess(&psn);
-    }
-
-    pool = [[NSAutoreleasePool alloc] init];
     if (NSApp == nil) {
         [SDLApplication sharedApplication];
+        SDL_assert(NSApp != nil);
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
+        if ([NSApp respondsToSelector:@selector(setActivationPolicy:)]) {
+#endif
+            [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
+        } else {
+            ProcessSerialNumber psn = {0, kCurrentProcess};
+            TransformProcessType(&psn, kProcessTransformToForegroundApplication);
+        }
+#endif
+
+        [NSApp activateIgnoringOtherApps:YES];
 
         if ([NSApp mainMenu] == nil) {
             CreateApplicationMenus();
@@ -274,9 +281,10 @@ Cocoa_RegisterApp(void)
         NSDictionary *appDefaults = [[NSDictionary alloc] initWithObjectsAndKeys:
             [NSNumber numberWithBool:NO], @"AppleMomentumScrollSupported",
             [NSNumber numberWithBool:NO], @"ApplePressAndHoldEnabled",
+            [NSNumber numberWithBool:YES], @"ApplePersistenceIgnoreState",
             nil];
         [[NSUserDefaults standardUserDefaults] registerDefaults:appDefaults];
-
+        [appDefaults release];
     }
     if (NSApp && !appDelegate) {
         appDelegate = [[SDLAppDelegate alloc] init];
@@ -285,22 +293,20 @@ Cocoa_RegisterApp(void)
          * termination into SDL_Quit, and we can't handle application:openFile:
          */
         if (![NSApp delegate]) {
-            [NSApp setDelegate:appDelegate];
+            [(NSApplication *)NSApp setDelegate:appDelegate];
         } else {
             appDelegate->seenFirstActivate = YES;
         }
     }
-    [pool release];
-}
+}}
 
 void
 Cocoa_PumpEvents(_THIS)
+{ @autoreleasepool
 {
-    NSAutoreleasePool *pool;
-
     /* Update activity every 30 seconds to prevent screensaver */
-    if (_this->suspend_screensaver) {
-        SDL_VideoData *data = (SDL_VideoData *)_this->driverdata;
+    SDL_VideoData *data = (SDL_VideoData *)_this->driverdata;
+    if (_this->suspend_screensaver && !data->screensaver_use_iopm) {
         Uint32 now = SDL_GetTicks();
         if (!data->screensaver_activity ||
             SDL_TICKS_PASSED(now, data->screensaver_activity + 30000)) {
@@ -309,7 +315,6 @@ Cocoa_PumpEvents(_THIS)
         }
     }
 
-    pool = [[NSAutoreleasePool alloc] init];
     for ( ; ; ) {
         NSEvent *event = [NSApp nextEventMatchingMask:NSAnyEventMask untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES ];
         if ( event == nil ) {
@@ -341,8 +346,36 @@ Cocoa_PumpEvents(_THIS)
         /* Pass through to NSApp to make sure everything stays in sync */
         [NSApp sendEvent:event];
     }
-    [pool release];
-}
+}}
+
+void
+Cocoa_SuspendScreenSaver(_THIS)
+{ @autoreleasepool
+{
+    SDL_VideoData *data = (SDL_VideoData *)_this->driverdata;
+
+    if (!data->screensaver_use_iopm) {
+        return;
+    }
+
+    if (data->screensaver_assertion) {
+        IOPMAssertionRelease(data->screensaver_assertion);
+        data->screensaver_assertion = 0;
+    }
+
+    if (_this->suspend_screensaver) {
+        /* FIXME: this should ideally describe the real reason why the game
+         * called SDL_DisableScreenSaver. Note that the name is only meant to be
+         * seen by OS X power users. there's an additional optional human-readable
+         * (localized) reason parameter which we don't set.
+         */
+        NSString *name = [GetApplicationName() stringByAppendingString:@" using SDL_DisableScreenSaver"];
+        IOPMAssertionCreateWithDescription(kIOPMAssertPreventUserIdleDisplaySleep,
+                                           (CFStringRef) name,
+                                           NULL, NULL, NULL, 0, NULL,
+                                           &data->screensaver_assertion);
+    }
+}}
 
 #endif /* SDL_VIDEO_DRIVER_COCOA */
 
