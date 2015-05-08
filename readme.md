@@ -8,7 +8,7 @@ Prerequisites
  - Windows.
  - [Visual Studio 2013 (Express)][vs2013] preferably for desktop.
  - [DirectX SDK][dxsdk] required for SDL2. If you encounter **Error Code S1023** you may need to [uninstall some packages][s1023] and reinstall them after installing the DirectX SDK.
- - [CMake 3.2.2][cmake].
+ - [CMake 2.8.12][cmake] or greater.
  - [NSIS][nsis] if you want to build the LÖVE installer.
 
 Building
@@ -37,7 +37,7 @@ If you want to build the installer, replace the previous build command with:
 
     $ cmake --build build --target PACKAGE --config Release
 
-Folders with the binaries and the installer will appear in **build/_CPack_Packages/win32**.
+A zip with the binaries and the installer will appear in *build*.
 
 [love2d]: http://love2d.org
 [dxsdk]: http://www.microsoft.com/en-us/download/details.aspx?id=6812
