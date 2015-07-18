@@ -137,7 +137,6 @@ set(MEGA_LIBVORBIS_VER "1.3.3")
 set(MEGA_MPG123_VER "1.15.3")
 set(MEGA_FREETYPE_VER "2.5.0.1")
 set(MEGA_SDL2_VER "2.0.3-1c0f6952e65e")
-set(MEGA_SDL2_IMAGE_VER "2.0.0")
 set(MEGA_OPENAL_VER "1.16.0")
 set(MEGA_JASPER_VER "1.900.1")
 set(MEGA_TIFF_VER "4.0.3")
@@ -240,12 +239,6 @@ add_subdirectory("libs/DevIL-${MEGA_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
 set(MEGA_DEVIL DevIL)
 
 message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: SDL2_image ${MEGA_SDL2_IMAGE_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/SDL2_image-${MEGA_SDL2_IMAGE_VER}" ${CMAKE_BINARY_DIR}/SDL2_image)
-set(MEGA_SDL2_IMAGE SDL2_image-static)
-
-message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: libmodplug ${MEGA_MODPLUG_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmodplug)
@@ -304,7 +297,6 @@ set(MEGA_3P
 	${MEGA_FREETYPE}
 	${MEGA_SDL2}
 	${MEGA_SDL2MAIN}
-	${MEGA_SDL2_IMAGE}
 	${MEGA_OPENAL}
 	${MEGA_JASPER}
 	${MEGA_TIFF}
