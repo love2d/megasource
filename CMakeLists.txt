@@ -183,7 +183,6 @@ message(STATUS "Configuring: jpeg-turbo ${MEGA_JPEG_TURBO_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libjpeg-turbo" ${CMAKE_BINARY_DIR}/jpeg-turbo)
 set(MEGA_JPEG jpeg-static)
-set(MEGA_JPEG_TURBO turbojpeg-static)
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: libogg ${MEGA_LIBOGG_VER}")
@@ -298,7 +297,6 @@ set(MEGA_3P
 	${MEGA_LUA51}
 	${MEGA_LIBPNG}
 	${MEGA_JPEG}
-	${MEGA_JPEG_TURBO}
 	${MEGA_LIBOGG}
 	${MEGA_LIBVORBIS}
 	${MEGA_LIBVORBISFILE}
