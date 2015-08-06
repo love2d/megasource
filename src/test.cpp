@@ -6,9 +6,6 @@
 
 #include <zlib.h>
 #include <physfs.h>
-#include <png.h>
-#include <jpeglib.h>
-#include <turbojpeg.h>
 #include <ogg/ogg.h>
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
@@ -18,20 +15,7 @@
 #include <SDL.h>
 #include <AL/al.h>
 #include <AL/alext.h>
-#include <tiff.h>
-#include <tiffio.h>
-#include <IL/il.h>
 #include <modplug.h>
-
-#ifdef WIN32
-#define JAS_WIN_MSVC_BUILD
-#endif
-
-namespace jasper
-{
-	#include <jasper/jasper.h>
-}
-
 
 extern "C" {
 #	include "lua.h"
@@ -79,29 +63,6 @@ int main(int argc, char **argv)
 		c << compiled;
 		l << "N/A";
 		return "Lua";
-	};
-
-	vfunc png = [](strs &c, strs &l)
-	{
-		c << PNG_LIBPNG_VER_STRING;
-		l << png_libpng_ver;
-		return "libpng";
-	};
-
-	vfunc jpeg = [](strs &c, strs &l)
-	{
-		c << (int)JPEG_LIB_VERSION;
-		l << "N/A";
-		return "jpeg";
-	};
-
-	vfunc turbojpeg = [](strs &c, strs &l)
-	{
-		auto handle = tjInitCompress();
-		tjDestroy(handle);
-		c << "N/A";
-		l << "N/A";
-		return "libjpeg-turbo";
 	};
 
 	vfunc ogg = [](strs &c, strs &l)
@@ -166,29 +127,6 @@ int main(int argc, char **argv)
 		return "OpenAL";
 	};
 
-	vfunc jasper = [](strs &c, strs &l)
-	{
-		c << JAS_VERSION;
-		l << jasper::jas_getversion();
-		return "jasper";
-	};
-
-	vfunc tiff = [](strs &c, strs &l)
-	{
-		const char *unused = TIFFGetVersion(); // Output is too ugly.
-		c << TIFF_VERSION_BIG;
-		l << "N/A";
-		return "tiff";
-	};
-
-	vfunc DevIL = [](strs &c, strs &l)
-	{
-		ilInit();
-		c << IL_VERSION;
-		l << "N/A";
-		return "DevIL";
-	};
-
 	vfunc modplug = [](strs &c, strs &l)
 	{
 		ModPlug_Settings settings;
@@ -202,9 +140,6 @@ int main(int argc, char **argv)
 	funcs.push_back(zlib);
 	funcs.push_back(physfs);
 	funcs.push_back(lua);
-	funcs.push_back(png);
-	funcs.push_back(jpeg);
-	funcs.push_back(turbojpeg);
 	funcs.push_back(ogg);
 	funcs.push_back(vorbis);
 	funcs.push_back(vorbisfile);
@@ -212,9 +147,6 @@ int main(int argc, char **argv)
 	funcs.push_back(freetype);
 	funcs.push_back(SDL2);
 	funcs.push_back(OpenAL);
-	funcs.push_back(jasper);
-	funcs.push_back(tiff);
-	funcs.push_back(DevIL);
 	funcs.push_back(modplug);
 
 	for (size_t i = 0; i < funcs.size(); ++i)

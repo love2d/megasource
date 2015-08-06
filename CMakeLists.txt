@@ -132,8 +132,6 @@ set(MEGA_ZLIB_VER "1.2.8")
 set(MEGA_PHYSFS_VER "2.0.3")
 set(MEGA_LUA51_VER "5.1.5")
 set(MEGA_LUAJIT_VER "2.0.3")
-set(MEGA_LIBPNG_VER "166")
-set(MEGA_JPEG_TURBO_VER "1.3.1")
 set(MEGA_LIBOGG_VER "1.3.1")
 set(MEGA_LIBVORBIS_VER "1.3.3")
 set(MEGA_LIBTHEORA_VER "1.1")
@@ -141,9 +139,6 @@ set(MEGA_MPG123_VER "1.15.3")
 set(MEGA_FREETYPE_VER "2.5.0.1")
 set(MEGA_SDL2_VER "2.0.3-1c0f6952e65e")
 set(MEGA_OPENAL_VER "1.16.0")
-set(MEGA_JASPER_VER "1.900.1")
-set(MEGA_TIFF_VER "4.0.3")
-set(MEGA_DEVIL_VER "1.7.8")
 set(MEGA_MODPLUG_VER "0.8.8.4")
 
 set(SKIP_INSTALL_ALL TRUE)
@@ -171,18 +166,6 @@ message(STATUS "Configuring: lua ${MEGA_LUA51_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/lua-${MEGA_LUA51_VER}" ${CMAKE_BINARY_DIR}/lua51)
 set(MEGA_LUA51 lua51)
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: libpng ${MEGA_LIBPNG_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/lpng${MEGA_LIBPNG_VER}" ${CMAKE_BINARY_DIR}/lpng)
-set(MEGA_LIBPNG ${PNG_LIB_NAME_STATIC})
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: jpeg-turbo ${MEGA_JPEG_TURBO_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/libjpeg-turbo" ${CMAKE_BINARY_DIR}/jpeg-turbo)
-set(MEGA_JPEG jpeg-static)
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: libogg ${MEGA_LIBOGG_VER}")
@@ -227,24 +210,6 @@ message(STATUS "Configuring: openal-soft ${MEGA_OPENAL_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/openal-soft" ${CMAKE_BINARY_DIR}/openal-soft)
 set(MEGA_OPENAL ${OPENAL_LIB_NAME})
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: jasper ${MEGA_JASPER_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/jasper-${MEGA_JASPER_VER}" ${CMAKE_BINARY_DIR}/jasper)
-set(MEGA_JASPER jasper-static)
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: tiff ${MEGA_TIFF_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/tiff-${MEGA_TIFF_VER}" ${CMAKE_BINARY_DIR}/tiff)
-set(MEGA_TIFF tiff-static)
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: DevIL ${MEGA_DEVIL_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/DevIL-${MEGA_DEVIL_VER}" ${CMAKE_BINARY_DIR}/DevIL)
-set(MEGA_DEVIL DevIL)
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: libmodplug ${MEGA_MODPLUG_VER}")
@@ -295,8 +260,6 @@ set(MEGA_3P
 	${MEGA_ZLIB}
 	${MEGA_PHYSFS}
 	${MEGA_LUA51}
-	${MEGA_LIBPNG}
-	${MEGA_JPEG}
 	${MEGA_LIBOGG}
 	${MEGA_LIBVORBIS}
 	${MEGA_LIBVORBISFILE}
@@ -306,9 +269,6 @@ set(MEGA_3P
 	${MEGA_SDL2}
 	${MEGA_SDL2MAIN}
 	${MEGA_OPENAL}
-	${MEGA_JASPER}
-	${MEGA_TIFF}
-	${MEGA_DEVIL}
 	${MEGA_MODPLUG}
 )
 
@@ -338,5 +298,4 @@ target_link_libraries(megatest ${MEGA_3P})
 add_move_dll(megatest ${MEGA_MPEG123})
 add_move_dll(megatest ${MEGA_SDL2})
 add_move_dll(megatest ${MEGA_OPENAL})
-add_move_dll(megatest ${MEGA_DEVIL})
 add_move_dll(megatest ${MEGA_LUA51})
