@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2014 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -35,6 +35,7 @@ struct SDL_GLDriverData
     SDL_bool HAS_GLX_EXT_visual_info;
     SDL_bool HAS_GLX_EXT_swap_control_tear;
     SDL_bool HAS_GLX_EXT_create_context_es2_profile;
+    SDL_bool HAS_GLX_ARB_context_flush_control;
 
     Bool (*glXQueryExtension) (Display*,int*,int*);
     void *(*glXGetProcAddress) (const GLubyte*);

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2014 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -167,7 +167,7 @@ TestAssertions(SDL_bool verbose)
 #endif
 
     {
-        const SDL_assert_data *item = SDL_GetAssertionReport();
+        const SDL_AssertData *item = SDL_GetAssertionReport();
         while (item) {
             SDL_Log("'%s', %s (%s:%d), triggered %u times, always ignore: %s.\n",
                 item->condition, item->function, item->filename,

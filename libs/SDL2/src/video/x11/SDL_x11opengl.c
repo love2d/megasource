@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2014 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -120,6 +120,13 @@ typedef GLXContext(*PFNGLXCREATECONTEXTATTRIBSARBPROC) (Display * dpy,
 
 #ifndef GLX_EXT_swap_control_tear
 #define GLX_LATE_SWAPS_TEAR_EXT 0x20F3
+#endif
+
+#ifndef GLX_ARB_context_flush_control
+#define GLX_ARB_context_flush_control
+#define GLX_CONTEXT_RELEASE_BEHAVIOR_ARB   0x2097
+#define GLX_CONTEXT_RELEASE_BEHAVIOR_NONE_ARB           0x0000
+#define GLX_CONTEXT_RELEASE_BEHAVIOR_FLUSH_ARB          0x2098
 #endif
 
 #define OPENGL_REQUIRES_DLOPEN
@@ -375,12 +382,17 @@ X11_GL_InitExtensions(_THIS)
     if (HasExtension("GLX_EXT_create_context_es2_profile", extensions)) {
         _this->gl_data->HAS_GLX_EXT_create_context_es2_profile = SDL_TRUE;
     }
+
+    /* Check for GLX_ARB_context_flush_control */
+    if (HasExtension("GLX_ARB_context_flush_control", extensions)) {
+        _this->gl_data->HAS_GLX_ARB_context_flush_control = SDL_TRUE;
+    }
 }
 
 /* glXChooseVisual and glXChooseFBConfig have some small differences in
  * the attribute encoding, it can be chosen with the for_FBConfig parameter.
  */
-int
+static int
 X11_GL_GetAttributes(_THIS, Display * display, int screen, int * attribs, int size, Bool for_FBConfig)
 {
     int i = 0;
@@ -462,9 +474,7 @@ X11_GL_GetAttributes(_THIS, Display * display, int screen, int * attribs, int si
 
     if (_this->gl_config.framebuffer_srgb_capable) {
         attribs[i++] = GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB;
-        if( for_FBConfig ) {
-            attribs[i++] = True;
-        }
+        attribs[i++] = True;  /* always needed, for_FBConfig or not! */
     }
 
     if (_this->gl_config.accelerated >= 0 &&
@@ -519,10 +529,11 @@ X11_GL_GetVisual(_THIS, Display * display, int screen)
 #define GLXBadProfileARB 13
 #endif
 static int (*handler) (Display *, XErrorEvent *) = NULL;
+static const char *errorHandlerOperation = NULL;
 static int errorBase = 0;
 static int errorCode = 0;
 static int
-X11_GL_CreateContextErrorHandler(Display * d, XErrorEvent * e)
+X11_GL_ErrorHandler(Display * d, XErrorEvent * e)
 {
     char *x11_error = NULL;
     char x11_error_locale[256];
@@ -535,12 +546,12 @@ X11_GL_CreateContextErrorHandler(Display * d, XErrorEvent * e)
 
     if (x11_error)
     {
-        SDL_SetError("Could not create GL context: %s", x11_error);
+        SDL_SetError("Could not %s: %s", errorHandlerOperation, x11_error);
         SDL_free(x11_error);
     }
     else
     {
-        SDL_SetError("Could not create GL context: %i (Base %i)\n", errorCode, errorBase);
+        SDL_SetError("Could not %s: %i (Base %i)\n", errorHandlerOperation, errorCode, errorBase);
     }
 
     return (0);
@@ -566,9 +577,10 @@ X11_GL_CreateContext(_THIS, SDL_Window * window)
 
     /* We do this to create a clean separation between X and GLX errors. */
     X11_XSync(display, False);
+    errorHandlerOperation = "create GL context";
     errorBase = _this->gl_data->errorBase;
     errorCode = Success;
-    handler = X11_XSetErrorHandler(X11_GL_CreateContextErrorHandler);
+    handler = X11_XSetErrorHandler(X11_GL_ErrorHandler);
     X11_XGetWindowAttributes(display, data->xwindow, &xattr);
     v.screen = screen;
     v.visualid = X11_XVisualIDFromVisual(xattr.visual);
@@ -581,8 +593,8 @@ X11_GL_CreateContext(_THIS, SDL_Window * window)
             context =
                 _this->gl_data->glXCreateContext(display, vinfo, share_context, True);
         } else {
-            /* max 8 attributes plus terminator */
-            int attribs[9] = {
+            /* max 10 attributes plus terminator */
+            int attribs[11] = {
                 GLX_CONTEXT_MAJOR_VERSION_ARB,
                 _this->gl_config.major_version,
                 GLX_CONTEXT_MINOR_VERSION_ARB,
@@ -601,6 +613,15 @@ X11_GL_CreateContext(_THIS, SDL_Window * window)
             if( _this->gl_config.flags != 0 ) {
                 attribs[iattr++] = GLX_CONTEXT_FLAGS_ARB;
                 attribs[iattr++] = _this->gl_config.flags;
+            }
+
+            /* only set if glx extension is available */
+            if( _this->gl_data->HAS_GLX_ARB_context_flush_control ) {
+                attribs[iattr++] = GLX_CONTEXT_RELEASE_BEHAVIOR_ARB;
+                attribs[iattr++] = 
+                    _this->gl_config.release_behavior ? 
+                    GLX_CONTEXT_RELEASE_BEHAVIOR_FLUSH_ARB : 
+                    GLX_CONTEXT_RELEASE_BEHAVIOR_NONE_ARB;
             }
 
             attribs[iattr++] = 0;
@@ -657,12 +678,24 @@ X11_GL_MakeCurrent(_THIS, SDL_Window * window, SDL_GLContext context)
     Window drawable =
         (context ? ((SDL_WindowData *) window->driverdata)->xwindow : None);
     GLXContext glx_context = (GLXContext) context;
+    int rc;
 
     if (!_this->gl_data) {
         return SDL_SetError("OpenGL not initialized");
     }
 
-    if (!_this->gl_data->glXMakeCurrent(display, drawable, glx_context)) {
+    /* We do this to create a clean separation between X and GLX errors. */
+    X11_XSync(display, False);
+    errorHandlerOperation = "make GL context current";
+    errorBase = _this->gl_data->errorBase;
+    errorCode = Success;
+    handler = X11_XSetErrorHandler(X11_GL_ErrorHandler);
+    rc = _this->gl_data->glXMakeCurrent(display, drawable, glx_context);
+    X11_XSetErrorHandler(handler);
+
+    if (errorCode != Success) {   /* uhoh, an X error was thrown! */
+        return -1;  /* the error handler called SDL_SetError() already. */
+    } else if (!rc) {  /* glxMakeCurrent() failed without throwing an X error */
         return SDL_SetError("Unable to make GL context current");
     }
 

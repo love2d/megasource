@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2014 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -43,7 +43,7 @@
 #define PSPAUD_DRIVER_NAME         "psp"
 
 static int
-PSPAUD_OpenDevice(_THIS, const char *devname, int iscapture)
+PSPAUD_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
 {
     int format, mixlen, i;
     this->hidden = (struct SDL_PrivateAudioData *)

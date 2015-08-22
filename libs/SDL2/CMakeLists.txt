@@ -118,9 +118,9 @@ else()
 endif()
 
 if (UNIX_OR_MAC_SYS AND NOT EMSCRIPTEN) # JavaScript does not yet have threading support, so disable pthreads when building for Emscripten.
-  set(PTHREADS_ENABLED_BY_DEFAULT ON)
+  set(SDL_PTHREADS_ENABLED_BY_DEFAULT ON)
 else()
-  set(PTHREADS_ENABLED_BY_DEFAULT OFF)
+  set(SDL_PTHREADS_ENABLED_BY_DEFAULT OFF)
 endif()
 
 # Default option knobs
@@ -202,6 +202,7 @@ include_directories(${SDL2_BINARY_DIR}/include ${SDL2_SOURCE_DIR}/include)
 
 # All these ENABLED_BY_DEFAULT vars will default to ON if not specified, so
 #  you only need to have a platform override them if they are disabling.
+set(OPT_DEF_ASM TRUE)
 if(EMSCRIPTEN)
   # Set up default values for the currently supported set of subsystems:
   # Emscripten/Javascript does not have assembly support, a dynamic library 
@@ -212,12 +213,16 @@ if(EMSCRIPTEN)
   set(SDL_THREADS_ENABLED_BY_DEFAULT OFF)
   set(SDL_LOADSO_ENABLED_BY_DEFAULT OFF)
   set(SDL_CPUINFO_ENABLED_BY_DEFAULT OFF)
-  set(DLOPEN_ENABLED_BY_DEFAULT OFF)
+  set(SDL_DLOPEN_ENABLED_BY_DEFAULT OFF)
+endif()
+
+if (NOT DEFINED SDL_SHARED_ENABLED_BY_DEFAULT)
+    set(SDL_SHARED_ENABLED_BY_DEFAULT ON)
 endif()
 
 set(SDL_SUBSYSTEMS
     Atomic Audio Video Render Events Joystick Haptic Power Threads Timers
-    File Loadso CPUinfo Filesystem)
+    File Loadso CPUinfo Filesystem Dlopen)
 foreach(_SUB ${SDL_SUBSYSTEMS})
   string(TOUPPER ${_SUB} _OPT)
   if (NOT DEFINED SDL_${_OPT}_ENABLED_BY_DEFAULT)
@@ -242,13 +247,13 @@ set_option(DUMMYAUDIO          "Support the dummy audio driver" ON)
 set_option(VIDEO_DIRECTFB      "Use DirectFB video driver" OFF)
 dep_option(DIRECTFB_SHARED     "Dynamically load directfb support" ON "VIDEO_DIRECTFB" OFF)
 set_option(FUSIONSOUND         "Use FusionSound audio driver" OFF)
-dep_option(FUSIONSOUND_SHARED  "Dynamically load fusionsound audio support" ON "FUSIONSOUND_SHARED" OFF)
+dep_option(FUSIONSOUND_SHARED  "Dynamically load fusionsound audio support" ON "FUSIONSOUND" OFF)
 set_option(VIDEO_DUMMY         "Use dummy video driver" ON)
 set_option(VIDEO_OPENGL        "Include OpenGL support" ON)
 set_option(VIDEO_OPENGLES      "Include OpenGL ES support" ON)
-set_option(PTHREADS            "Use POSIX threads for multi-threading" ${PTHREADS_ENABLED_BY_DEFAULT})
+set_option(PTHREADS            "Use POSIX threads for multi-threading" ${SDL_PTHREADS_ENABLED_BY_DEFAULT})
 dep_option(PTHREADS_SEM        "Use pthread semaphores" ON "PTHREADS" OFF)
-set_option(SDL_DLOPEN          "Use dlopen for shared object loading" ${DLOPEN_ENABLED_BY_DEFAULT})
+set_option(SDL_DLOPEN          "Use dlopen for shared object loading" ${SDL_DLOPEN_ENABLED_BY_DEFAULT})
 set_option(OSS                 "Support the OSS audio API" ${UNIX_SYS})
 set_option(ALSA                "Support the ALSA audio API" ${UNIX_SYS})
 dep_option(ALSA_SHARED         "Dynamically load ALSA audio support" ON "ALSA" OFF)
@@ -266,7 +271,10 @@ set_option(CLOCK_GETTIME       "Use clock_gettime() instead of gettimeofday()" O
 set_option(INPUT_TSLIB         "Use the Touchscreen library for input" ${UNIX_SYS})
 set_option(VIDEO_X11           "Use X11 video driver" ${UNIX_SYS})
 set_option(VIDEO_WAYLAND       "Use Wayland video driver" ${UNIX_SYS})
+dep_option(WAYLAND_SHARED      "Dynamically load Wayland support" ON "VIDEO_WAYLAND" OFF)
+dep_option(VIDEO_WAYLAND_QT_TOUCH  "QtWayland server support for Wayland video driver" ON "VIDEO_WAYLAND" OFF)
 set_option(VIDEO_MIR           "Use Mir video driver" ${UNIX_SYS})
+dep_option(MIR_SHARED          "Dynamically load Mir support" ON "VIDEO_MIR" OFF)
 set_option(VIDEO_RPI           "Use Raspberry Pi video driver" ${UNIX_SYS})
 dep_option(X11_SHARED          "Dynamically load X11 support" ON "VIDEO_X11" OFF)
 set(SDL_X11_OPTIONS Xcursor Xinerama XInput Xrandr Xscrnsaver XShape Xvm)
@@ -281,8 +289,8 @@ set_option(VIDEO_VIVANTE       "Use Vivante EGL video driver" ${UNIX_SYS})
 
 # TODO: We should (should we?) respect cmake's ${BUILD_SHARED_LIBS} flag here
 # The options below are for compatibility to configure's default behaviour.
-set(SDL_SHARED ON CACHE BOOL "Build a shared version of the library")
-set(SDL_STATIC OFF CACHE BOOL "Build a static version of the library")
+set(SDL_SHARED ${SDL_SHARED_ENABLED_BY_DEFAULT} CACHE BOOL "Build a shared version of the library")
+set(SDL_STATIC ON CACHE BOOL "Build a static version of the library")
 
 # General source files
 file(GLOB SOURCE_FILES
@@ -585,7 +593,7 @@ if(LIBC)
       set(CMAKE_REQUIRED_LIBRARIES m)
       foreach(_FN
               atan atan2 ceil copysign cos cosf fabs floor log pow scalbn sin
-              sinf sqrt sqrtf tan tanf)
+              sinf sqrt sqrtf tan tanf acos asin)
         string(TOUPPER ${_FN} _UPPER)
         set(_HAVEVAR "HAVE_${_UPPER}")
         check_function_exists("${_FN}" ${_HAVEVAR})
@@ -597,6 +605,15 @@ if(LIBC)
     check_library_exists(iconv iconv_open "" HAVE_LIBICONV)
     if(HAVE_LIBICONV)
       list(APPEND EXTRA_LIBS iconv)
+      set(HAVE_ICONV 1)
+    endif()
+
+    if(NOT APPLE)
+      check_include_file(alloca.h HAVE_ALLOCA_H)
+      check_function_exists(alloca HAVE_ALLOCA)
+    else()
+      set(HAVE_ALLOCA_H 1)
+      set(HAVE_ALLOCA 1)
     endif()
 
     check_struct_has_member("struct sigaction" "sa_sigaction" "signal.h" HAVE_SA_SIGACTION)
@@ -883,31 +900,27 @@ elseif(WINDOWS)
 
   # Check for DirectX
   if(DIRECTX)
-    if("$ENV{DXSDK_DIR}" STREQUAL "")
-      message_error("DIRECTX requires the \$DXSDK_DIR environment variable to be set")
+    if(NOT CMAKE_COMPILER_IS_MINGW)
+      if("$ENV{DXSDK_DIR}" STREQUAL "")
+        message_error("DIRECTX requires the \$DXSDK_DIR environment variable to be set")
+      endif()
+      set(CMAKE_REQUIRED_FLAGS "/I\"$ENV{DXSDK_DIR}\\Include\"")
     endif()
-    set(CMAKE_REQUIRED_FLAGS "/I\"$ENV{DXSDK_DIR}\\Include\"")
-
-    # xinput.h needs windows.h but doesn't include it itself.
-    check_c_source_compiles("
-      #include <windows.h>
-      #include <xinput.h>
-      int main(int argc, char **argv) { }" HAVE_XINPUT_H)
-
     check_include_file(d3d9.h HAVE_D3D_H)
     check_include_file(d3d11_1.h HAVE_D3D11_H)
     check_include_file(ddraw.h HAVE_DDRAW_H)
     check_include_file(dsound.h HAVE_DSOUND_H)
     check_include_file(dinput.h HAVE_DINPUT_H)
     check_include_file(xaudio2.h HAVE_XAUDIO2_H)
+    check_include_file(xinput.h HAVE_XINPUT_H)
     check_include_file(dxgi.h HAVE_DXGI_H)
     if(HAVE_D3D_H OR HAVE_D3D11_H OR HAVE_DDRAW_H OR HAVE_DSOUND_H OR HAVE_DINPUT_H OR HAVE_XAUDIO2_H)
       set(HAVE_DIRECTX TRUE)
+      if(NOT CMAKE_COMPILER_IS_MINGW)
       # TODO: change $ENV{DXSDL_DIR} to get the path from the include checks
-      set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
-      set(SDL_LINK_DIR ${SDL_LINK_DIR} PARENT_SCOPE)
-      link_directories(${SDL_LINK_DIR})
-      include_directories($ENV{DXSDK_DIR}\\Include)
+        link_directories($ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
+        include_directories($ENV{DXSDK_DIR}\\Include)
+      endif()
     endif()
     set(CMAKE_REQUIRED_FLAGS ${ORIG_CMAKE_REQUIRED_FLAGS})
   endif()
@@ -1011,7 +1024,12 @@ elseif(WINDOWS)
     set(SOURCE_FILES ${SOURCE_FILES} ${JOYSTICK_SOURCES})
     if(HAVE_DINPUT_H)
       set(SDL_JOYSTICK_DINPUT 1)
-      list(APPEND EXTRA_LIBS dinput8 dxguid dxerr)
+      list(APPEND EXTRA_LIBS dinput8 dxguid)
+      if(CMAKE_COMPILER_IS_MINGW)
+        list(APPEND EXTRA_LIBS dxerr8)
+      else()
+        list(APPEND EXTRA_LIBS dxerr)
+      endif()
     endif()
     if(HAVE_XINPUT_H)
       set(SDL_JOYSTICK_XINPUT 1)
@@ -1022,14 +1040,19 @@ elseif(WINDOWS)
     set(HAVE_SDL_JOYSTICK TRUE)
 
     if(SDL_HAPTIC)
-      file(GLOB HAPTIC_SOURCES ${SDL2_SOURCE_DIR}/src/haptic/windows/*.c)
+      if(HAVE_DINPUT_H OR HAVE_XINPUT_H)
+        file(GLOB HAPTIC_SOURCES ${SDL2_SOURCE_DIR}/src/haptic/windows/*.c)
+        if(HAVE_DINPUT_H)
+          set(SDL_HAPTIC_DINPUT 1)
+        endif()
+        if(HAVE_XINPUT_H)
+          set(SDL_HAPTIC_XINPUT 1)
+        endif()
+      else()
+        file(GLOB HAPTIC_SOURCES ${SDL2_SOURCE_DIR}/src/haptic/dummy/*.c)
+        set(SDL_HAPTIC_DUMMY 1)
+      endif()
       set(SOURCE_FILES ${SOURCE_FILES} ${HAPTIC_SOURCES})
-      if(HAVE_DINPUT_H)
-        set(SDL_HAPTIC_DINPUT 1)
-      endif()
-      if(HAVE_XINPUT_H)
-        set(SDL_HAPTIC_XINPUT 1)
-      endif()
       set(HAVE_SDL_HAPTIC TRUE)
     endif()
   endif()
@@ -1148,10 +1171,6 @@ elseif(APPLE)
       set(SDL_VIDEO_OPENGL 1)
       set(SDL_VIDEO_OPENGL_CGL 1)
       set(SDL_VIDEO_RENDER_OGL 1)
-      if(DARWIN)
-        find_library(OpenGL_LIBRARY OpenGL)
-        list(APPEND EXTRA_LIBRARIES ${OpenGL_LIBRARY})
-      endif()
       set(HAVE_VIDEO_OPENGL TRUE)
     endif()
   endif()
@@ -1356,7 +1375,6 @@ set(_INSTALL_LIBS "SDL2main")
 
 if(SDL_SHARED)
   add_library(SDL2 SHARED ${SOURCE_FILES})
-  install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
   if(UNIX)
     set_target_properties(SDL2 PROPERTIES
       VERSION ${LT_VERSION}
@@ -1370,7 +1388,6 @@ if(SDL_SHARED)
   endif()
  set(_INSTALL_LIBS "SDL2" ${_INSTALL_LIBS})
  target_link_libraries(SDL2 ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
- target_include_directories(SDL2 PUBLIC include)
 endif()
 
 if(SDL_STATIC)
@@ -1389,14 +1406,10 @@ if(SDL_STATIC)
 endif()
 
 ##### Installation targets #####
-
-if (MEGA)
-  return()
-endif()
-
 install(TARGETS ${_INSTALL_LIBS}
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"
-  ARCHIVE DESTINATION "lib${LIB_SUFFIX}")
+  ARCHIVE DESTINATION "lib${LIB_SUFFIX}"
+  RUNTIME DESTINATION bin)
 
 file(GLOB INCLUDE_FILES ${SDL2_SOURCE_DIR}/include/*.h)
 file(GLOB BIN_INCLUDE_FILES ${SDL2_BINARY_DIR}/include/*.h)
@@ -1424,10 +1437,6 @@ if(NOT WINDOWS OR CYGWIN)
   install(PROGRAMS ${SDL2_BINARY_DIR}/sdl2-config DESTINATION bin)
   # TODO: what about the .spec file? Is it only needed for RPM creation?
   install(FILES "${SDL2_SOURCE_DIR}/sdl2.m4" DESTINATION "share/aclocal")
-else()
-  if(SDL_SHARED)
-    install(TARGETS SDL2 RUNTIME DESTINATION bin)
-  endif()
 endif()
 
 ##### Uninstall target #####

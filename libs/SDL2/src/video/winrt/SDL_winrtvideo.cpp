@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2014 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -325,7 +325,7 @@ WINRT_CreateWindow(_THIS, SDL_Window * window)
         if (SDL_EGL_ChooseConfig(_this) != 0) {
             char buf[512];
             SDL_snprintf(buf, sizeof(buf), "SDL_EGL_ChooseConfig failed: %s", SDL_GetError());
-            return SDL_SetError(buf);
+            return SDL_SetError("%s", buf);
         }
 
         if (video_data->winrtEglWindow) {   /* ... is the 'old' version of ANGLE/WinRT being used? */
