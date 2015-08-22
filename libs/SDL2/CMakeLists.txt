@@ -1084,7 +1084,8 @@ elseif(WINDOWS)
     set(SDL_CFLAGS "${SDL_CFLAGS} -Dmain=SDL_main")
     list(APPEND SDL_LIBS "-lmingw32" "-lSDL2main" "-mwindows")
   elseif(MSVC)
-    add_definitions(/arch:SSE)
+    # Avoids linker errors, since we don't link with the CRT
+    add_definitions(/arch:SSE /GS-)
   endif()
 elseif(APPLE)
   # TODO: rework this for proper MacOS X, iOS and Darwin support
