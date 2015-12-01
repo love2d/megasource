@@ -25,8 +25,8 @@
 #ifndef SDL_JOYSTICK_DISABLED
 
 #ifdef __IPHONEOS__
-#define SCREEN_WIDTH    320
-#define SCREEN_HEIGHT    480
+#define SCREEN_WIDTH    480
+#define SCREEN_HEIGHT    320
 #else
 #define SCREEN_WIDTH    512
 #define SCREEN_HEIGHT   317
@@ -247,7 +247,7 @@ main(int argc, char *argv[])
     SDL_GameController *gamecontroller;
 
     /* Enable standard application logging */
-	SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
+    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     /* Initialize SDL (Note: video is required to start event loop) */
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER ) < 0) {
@@ -284,13 +284,18 @@ main(int argc, char *argv[])
         SDL_Event event;
         int device = atoi(argv[1]);
         if (device >= SDL_NumJoysticks()) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%i is an invalid joystick index.\n", device);
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%i is an invalid joystick index.\n", device);
             retcode = 1;
         } else {
             SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(device),
                                       guid, sizeof (guid));
             SDL_Log("Attempting to open device %i, guid %s\n", device, guid);
             gamecontroller = SDL_GameControllerOpen(device);
+
+            if (gamecontroller != NULL) {
+                SDL_assert(SDL_GameControllerFromInstanceID(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamecontroller))) == gamecontroller);
+            }
+
             while (keepGoing) {
                 if (gamecontroller == NULL) {
                     if (!reportederror) {
@@ -316,6 +321,9 @@ main(int argc, char *argv[])
                         keepGoing = SDL_FALSE;
                     } else if (event.type == SDL_CONTROLLERDEVICEADDED) {
                         gamecontroller = SDL_GameControllerOpen(event.cdevice.which);
+                        if (gamecontroller != NULL) {
+                            SDL_assert(SDL_GameControllerFromInstanceID(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamecontroller))) == gamecontroller);
+                        }
                         break;
                     }
                 }

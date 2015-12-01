@@ -282,6 +282,8 @@ SetWindowStyle(SDL_Window * window, unsigned int style)
         [center addObserver:self selector:@selector(windowDidEnterFullScreen:) name:NSWindowDidEnterFullScreenNotification object:window];
         [center addObserver:self selector:@selector(windowWillExitFullScreen:) name:NSWindowWillExitFullScreenNotification object:window];
         [center addObserver:self selector:@selector(windowDidExitFullScreen:) name:NSWindowDidExitFullScreenNotification object:window];
+        [center addObserver:self selector:@selector(windowDidFailToEnterFullScreen:) name:@"NSWindowDidFailToEnterFullScreenNotification" object:window];
+        [center addObserver:self selector:@selector(windowDidFailToExitFullScreen:) name:@"NSWindowDidFailToExitFullScreenNotification" object:window];
     } else {
         [window setDelegate:self];
     }
@@ -413,6 +415,8 @@ SetWindowStyle(SDL_Window * window, unsigned int style)
         [center removeObserver:self name:NSWindowDidEnterFullScreenNotification object:window];
         [center removeObserver:self name:NSWindowWillExitFullScreenNotification object:window];
         [center removeObserver:self name:NSWindowDidExitFullScreenNotification object:window];
+        [center removeObserver:self name:@"NSWindowDidFailToEnterFullScreenNotification" object:window];
+        [center removeObserver:self name:@"NSWindowDidFailToExitFullScreenNotification" object:window];
     } else {
         [window setDelegate:nil];
     }
@@ -634,6 +638,22 @@ SetWindowStyle(SDL_Window * window, unsigned int style)
     inFullscreenTransition = YES;
 }
 
+- (void)windowDidFailToEnterFullScreen:(NSNotification *)aNotification
+{
+    SDL_Window *window = _data->window;
+
+    if (window->is_destroying) {
+        return;
+    }
+
+    SetWindowStyle(window, GetWindowStyle(window));
+
+    isFullscreenSpace = NO;
+    inFullscreenTransition = NO;
+    
+    [self windowDidExitFullScreen:nil];
+}
+
 - (void)windowDidEnterFullScreen:(NSNotification *)aNotification
 {
     SDL_Window *window = _data->window;
@@ -662,10 +682,29 @@ SetWindowStyle(SDL_Window * window, unsigned int style)
 {
     SDL_Window *window = _data->window;
 
-    SetWindowStyle(window, GetWindowStyle(window));
+    /* As of OS X 10.11, the window seems to need to be resizable when exiting
+       a Space, in order for it to resize back to its windowed-mode size.
+     */
+    SetWindowStyle(window, GetWindowStyle(window) | NSResizableWindowMask);
 
     isFullscreenSpace = NO;
     inFullscreenTransition = YES;
+}
+
+- (void)windowDidFailToExitFullScreen:(NSNotification *)aNotification
+{
+    SDL_Window *window = _data->window;
+    
+    if (window->is_destroying) {
+        return;
+    }
+
+    SetWindowStyle(window, (NSTitledWindowMask|NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask));
+    
+    isFullscreenSpace = YES;
+    inFullscreenTransition = NO;
+    
+    [self windowDidEnterFullScreen:nil];
 }
 
 - (void)windowDidExitFullScreen:(NSNotification *)aNotification
@@ -674,6 +713,8 @@ SetWindowStyle(SDL_Window * window, unsigned int style)
     NSWindow *nswindow = _data->nswindow;
 
     inFullscreenTransition = NO;
+
+    SetWindowStyle(window, GetWindowStyle(window));
 
     [nswindow setLevel:kCGNormalWindowLevel];
 
@@ -1288,13 +1329,23 @@ Cocoa_SetWindowSize(_THIS, SDL_Window * window)
 {
     SDL_WindowData *windata = (SDL_WindowData *) window->driverdata;
     NSWindow *nswindow = windata->nswindow;
+    NSRect rect;
+    Uint32 moveHack;
 
-    NSRect frame = [nswindow frame];
-    frame.origin.y = (frame.origin.y + frame.size.height) - ((float) window->h);
-    frame.size.width = window->w;
-    frame.size.height = window->h;
+    /* Cocoa will resize the window from the bottom-left rather than the
+     * top-left when -[nswindow setContentSize:] is used, so we must set the
+     * entire frame based on the new size, in order to preserve the position.
+     */
+    rect.origin.x = window->x;
+    rect.origin.y = window->y;
+    rect.size.width = window->w;
+    rect.size.height = window->h;
+    ConvertNSRect([nswindow screen], (window->flags & FULLSCREEN_MASK), &rect);
 
-    [nswindow setFrame:frame display:YES];
+    moveHack = s_moveHack;
+    s_moveHack = 0;
+    [nswindow setFrame:[nswindow frameRectForContentRect:rect] display:YES];
+    s_moveHack = moveHack;
 
     ScheduleContextUpdates(windata);
 }}
@@ -1592,8 +1643,10 @@ Cocoa_SetWindowGrab(_THIS, SDL_Window * window, SDL_bool grabbed)
     }
 
     if ( data && (window->flags & SDL_WINDOW_FULLSCREEN) ) {
-        if (SDL_ShouldAllowTopmost() && (window->flags & SDL_WINDOW_INPUT_FOCUS)) {
+        if (SDL_ShouldAllowTopmost() && (window->flags & SDL_WINDOW_INPUT_FOCUS)
+            && ![data->listener isInFullscreenSpace]) {
             /* OpenGL is rendering to the window, so make it visible! */
+            /* Doing this in 10.11 while in a Space breaks things (bug #3152) */
             [data->nswindow setLevel:CGShieldingWindowLevel()];
         } else {
             [data->nswindow setLevel:kCGNormalWindowLevel];
@@ -1608,6 +1661,9 @@ Cocoa_DestroyWindow(_THIS, SDL_Window * window)
     SDL_WindowData *data = (SDL_WindowData *) window->driverdata;
 
     if (data) {
+        if ([data->listener isInFullscreenSpace]) {
+            [NSMenu setMenuBarVisible:YES];
+        }
         [data->listener close];
         [data->listener release];
         if (data->created) {
@@ -1662,21 +1718,30 @@ Cocoa_SetWindowFullscreenSpace(SDL_Window * window, SDL_bool state)
     SDL_WindowData *data = (SDL_WindowData *) window->driverdata;
 
     if ([data->listener setFullscreenSpace:(state ? YES : NO)]) {
-        succeeded = SDL_TRUE;
-
-        /* Wait for the transition to complete, so application changes
-           take effect properly (e.g. setting the window size, etc.)
-         */
-        const int limit = 10000;
-        int count = 0;
-        while ([data->listener isInFullscreenSpaceTransition]) {
-            if ( ++count == limit ) {
-                /* Uh oh, transition isn't completing. Should we assert? */
-                break;
+        const int maxattempts = 3;
+        int attempt = 0;
+        while (++attempt <= maxattempts) {
+            /* Wait for the transition to complete, so application changes
+             take effect properly (e.g. setting the window size, etc.)
+             */
+            const int limit = 10000;
+            int count = 0;
+            while ([data->listener isInFullscreenSpaceTransition]) {
+                if ( ++count == limit ) {
+                    /* Uh oh, transition isn't completing. Should we assert? */
+                    break;
+                }
+                SDL_Delay(1);
+                SDL_PumpEvents();
             }
-            SDL_Delay(1);
-            SDL_PumpEvents();
+            if ([data->listener isInFullscreenSpace] == (state ? YES : NO))
+                break;
+            /* Try again, the last attempt was interrupted by user gestures */
+            if (![data->listener setFullscreenSpace:(state ? YES : NO)])
+                break; /* ??? */
         }
+        /* Return TRUE to prevent non-space fullscreen logic from running */
+        succeeded = SDL_TRUE;
     }
 
     return succeeded;

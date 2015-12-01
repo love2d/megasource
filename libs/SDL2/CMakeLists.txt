@@ -935,9 +935,9 @@ elseif(WINDOWS)
       set(HAVE_DIRECTX TRUE)
       if(NOT CMAKE_COMPILER_IS_MINGW)
       # TODO: change $ENV{DXSDL_DIR} to get the path from the include checks
-      set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
-      set(SDL_LINK_DIR ${SDL_LINK_DIR} PARENT_SCOPE)
-      link_directories(${SDL_LINK_DIR})
+        set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
+        set(SDL_LINK_DIR ${SDL_LINK_DIR} PARENT_SCOPE)
+        link_directories(${SDL_LINK_DIR})
         include_directories($ENV{DXSDK_DIR}\\Include)
       endif()
     endif()
@@ -1036,7 +1036,7 @@ elseif(WINDOWS)
       set(SDL_VIDEO_RENDER_OGL 1)
       set(HAVE_VIDEO_OPENGL TRUE)
     endif()
-    
+
     if(VIDEO_OPENGLES)
       set(SDL_VIDEO_OPENGL_EGL 1)
       set(SDL_VIDEO_OPENGL_ES2 1)
@@ -1443,9 +1443,10 @@ endif()
 
 ##### Installation targets #####
 
-if (MEGA)
+if(MEGA)
   return()
 endif()
+
 
 install(TARGETS ${_INSTALL_LIBS}
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"

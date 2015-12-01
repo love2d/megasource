@@ -18,36 +18,38 @@
      misrepresented as being the original software.
   3. This notice may not be removed or altered from any source distribution.
 */
-#include "../SDL_internal.h"
+#include "../../SDL_internal.h"
 
-/* Useful functions and variables from SDL_events.c */
-#include "SDL_events.h"
-#include "SDL_thread.h"
-#include "SDL_clipboardevents_c.h"
-#include "SDL_dropevents_c.h"
-#include "SDL_gesture_c.h"
-#include "SDL_keyboard_c.h"
-#include "SDL_mouse_c.h"
-#include "SDL_touch_c.h"
-#include "SDL_windowevents_c.h"
+#ifndef SDL_JOYSTICK_IOS_H
+#define SDL_JOYSTICK_IOS_H
 
-/* Start and stop the event processing loop */
-extern int SDL_StartEventLoop(void);
-extern void SDL_StopEventLoop(void);
-extern void SDL_QuitInterrupt(void);
+#include "SDL_stdinc.h"
+#include "../SDL_sysjoystick.h"
 
-extern int SDL_SendAppEvent(SDL_EventType eventType);
-extern int SDL_SendSysWMEvent(SDL_SysWMmsg * message);
-extern int SDL_SendKeymapChangedEvent(void);
+@class GCController;
 
-extern int SDL_QuitInit(void);
-extern int SDL_SendQuit(void);
-extern void SDL_QuitQuit(void);
+typedef struct joystick_hwdata
+{
+    SDL_bool accelerometer;
 
-extern void SDL_SendPendingQuit(void);
+    GCController __unsafe_unretained *controller;
+    int num_pause_presses;
 
-/* The event filter function */
-extern SDL_EventFilter SDL_EventOK;
-extern void *SDL_EventOKParam;
+    char *name;
+    SDL_Joystick *joystick;
+    SDL_JoystickID instance_id;
+    SDL_JoystickGUID guid;
+
+    int naxes;
+    int nbuttons;
+    int nhats;
+
+    struct joystick_hwdata *next;
+} joystick_hwdata;
+
+typedef joystick_hwdata SDL_JoystickDeviceItem;
+
+#endif /* SDL_JOYSTICK_IOS_H */
+
 
 /* vi: set ts=4 sw=4 expandtab: */
