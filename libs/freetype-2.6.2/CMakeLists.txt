@@ -353,7 +353,7 @@ endif ()
 
 if (NOT CMAKE_VERSION VERSION_LESS 2.8.11)
   target_include_directories(freetype
-    PUBLIC $<INSTALL_INTERFACE:include/freetype2>)
+    PUBLIC include)
 endif ()
 
 if (CMAKE_VERSION VERSION_LESS 2.8.12)
@@ -381,6 +381,7 @@ if (HARFBUZZ_FOUND)
 endif ()
 
 
+if (NOT MEGA)
 # Installations
 # Note the trailing slash in the argument to the `DIRECTORY' directive
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
@@ -432,5 +433,8 @@ include(CPack)
 if (NOT DEFINED FREETYPE_NO_DIST)
   add_custom_target(dist COMMAND ${CMAKE_MAKE_PROGRAM} package_source)
 endif ()
+
+
+endif() # NOT MEGA
 
 # eof
