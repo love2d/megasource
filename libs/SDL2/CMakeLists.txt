@@ -296,8 +296,8 @@ set_option(VIDEO_VIVANTE       "Use Vivante EGL video driver" ${UNIX_SYS})
 
 # TODO: We should (should we?) respect cmake's ${BUILD_SHARED_LIBS} flag here
 # The options below are for compatibility to configure's default behaviour.
-set(SDL_SHARED ON CACHE BOOL "Build a shared version of the library")
-set(SDL_STATIC OFF CACHE BOOL "Build a static version of the library")
+set(SDL_SHARED ${SDL_SHARED_ENABLED_BY_DEFAULT} CACHE BOOL "Build a shared version of the library")
+set(SDL_STATIC ON CACHE BOOL "Build a static version of the library")
 
 # General source files
 file(GLOB SOURCE_FILES
@@ -389,7 +389,7 @@ if(USE_GCC OR USE_CLANG)
 
   set(CMAKE_REQUIRED_FLAGS "-Wl,--no-undefined")
   check_c_compiler_flag("" HAVE_NO_UNDEFINED)
-  set(CMAKE_REQUIRED_FLAGS)
+  set(CMAKE_REQUIRED_FLAGS ${ORIG_CMAKE_REQUIRED_FLAGS})
   if(HAVE_NO_UNDEFINED)
     list(APPEND EXTRA_LDFLAGS "-Wl,--no-undefined")
   endif()
@@ -695,6 +695,52 @@ if(SDL_VIDEO)
   endif()
 endif()
 
+if(ANDROID)
+  file(GLOB ANDROID_CORE_SOURCES ${SDL2_SOURCE_DIR}/src/core/android/*.c)
+  set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_CORE_SOURCES})
+  file(GLOB ANDROID_MAIN_SOURCES ${SDL2_SOURCE_DIR}/src/main/android/*.c)
+  set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_MAIN_SOURCES})
+  if(SDL_AUDIO)
+    set(SDL_AUDIO_DRIVER_ANDROID 1)
+    file(GLOB ANDROID_AUDIO_SOURCES ${SDL2_SOURCE_DIR}/src/audio/android/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_AUDIO_SOURCES})
+    set(HAVE_SDL_AUDIO TRUE)
+  endif()
+  if(SDL_FILESYSTEM)
+    set(SDL_FILESYSTEM_ANDROID 1)
+    file(GLOB ANDROID_FILESYSTEM_SOURCES ${SDL2_SOURCE_DIR}/src/filesystem/android/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_FILESYSTEM_SOURCES})
+    set(HAVE_SDL_FILESYSTEM TRUE)
+  endif()
+  if(SDL_JOYSTICK)
+    set(SDL_JOYSTICK_ANDROID 1)
+    file(GLOB ANDROID_JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/android/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_JOYSTICK_SOURCES})
+    set(HAVE_SDL_JOYSTICK TRUE)
+  endif()
+  if(SDL_POWER)
+    set(SDL_POWER_ANDROID 1)
+    file(GLOB ANDROID_POWER_SOURCES ${SDL2_SOURCE_DIR}/src/power/android/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_POWER_SOURCES})
+    set(HAVE_SDL_POWER TRUE)
+  endif()
+  if(SDL_VIDEO)
+    set(SDL_VIDEO_DRIVER_ANDROID 1)
+    file(GLOB ANDROID_VIDEO_SOURCES ${SDL2_SOURCE_DIR}/src/video/android/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_VIDEO_SOURCES})
+    set(HAVE_SDL_VIDEO TRUE)
+
+    #enable gles
+    if(VIDEO_OPENGLES)
+      set(SDL_VIDEO_OPENGL_EGL 1)
+      set(HAVE_VIDEO_OPENGLES TRUE)
+      set(SDL_VIDEO_OPENGL_ES2 1)
+      set(SDL_VIDEO_RENDER_OGL_ES2 1)
+    endif()
+  endif()
+  list(APPEND EXTRA_LDFLAGS "-Wl,--undefined=Java_org_libsdl_app_SDLActivity_nativeInit")
+endif()
+
 # Platform-specific options and settings
 if(EMSCRIPTEN)
   # Hide noisy warnings that intend to aid mostly during initial stages of porting a new
@@ -833,7 +879,7 @@ elseif(UNIX AND NOT APPLE)
 
   if(SDL_JOYSTICK)
     CheckUSBHID()   # seems to be BSD specific - limit the test to BSD only?
-    if(LINUX)
+    if(LINUX AND NOT ANDROID)
       set(SDL_JOYSTICK_LINUX 1)
       file(GLOB JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/linux/*.c)
       set(SOURCE_FILES ${SOURCE_FILES} ${JOYSTICK_SOURCES})
@@ -905,9 +951,20 @@ elseif(WINDOWS)
   file(GLOB CORE_SOURCES ${SDL2_SOURCE_DIR}/src/core/windows/*.c)
   set(SOURCE_FILES ${SOURCE_FILES} ${CORE_SOURCES})
 
+  if(MSVC)
+    # Prevent codegen that would use the VC runtime libraries.
+    add_definitions(/GS-)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+      add_definitions(/arch:SSE)
+    endif()
+  endif()
+
   # Check for DirectX
   if(DIRECTX)
-    if(NOT CMAKE_COMPILER_IS_MINGW)
+    if(DEFINED MSVC_VERSION AND NOT ${MSVC_VERSION} LESS 1700)
+        set(USE_WINSDK_DIRECTX TRUE)
+    endif()
+    if(NOT CMAKE_COMPILER_IS_MINGW AND NOT USE_WINSDK_DIRECTX)
       if("$ENV{DXSDK_DIR}" STREQUAL "")
         message_error("DIRECTX requires the \$DXSDK_DIR environment variable to be set")
       endif()
@@ -933,11 +990,9 @@ elseif(WINDOWS)
     check_include_file(dxgi.h HAVE_DXGI_H)
     if(HAVE_D3D_H OR HAVE_D3D11_H OR HAVE_DDRAW_H OR HAVE_DSOUND_H OR HAVE_DINPUT_H OR HAVE_XAUDIO2_H)
       set(HAVE_DIRECTX TRUE)
-      if(NOT CMAKE_COMPILER_IS_MINGW)
+      if(NOT CMAKE_COMPILER_IS_MINGW AND NOT USE_WINSDK_DIRECTX)
       # TODO: change $ENV{DXSDL_DIR} to get the path from the include checks
-        set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
-        set(SDL_LINK_DIR ${SDL_LINK_DIR} PARENT_SCOPE)
-        link_directories(${SDL_LINK_DIR})
+        link_directories($ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
         include_directories($ENV{DXSDK_DIR}\\Include)
       endif()
     endif()
@@ -1053,7 +1108,7 @@ elseif(WINDOWS)
       list(APPEND EXTRA_LIBS dinput8 dxguid)
       if(CMAKE_COMPILER_IS_MINGW)
         list(APPEND EXTRA_LIBS dxerr8)
-      else()
+      elseif (NOT USE_WINSDK_DIRECTX)
         list(APPEND EXTRA_LIBS dxerr)
       endif()
     endif()
@@ -1090,16 +1145,13 @@ elseif(WINDOWS)
     list(APPEND EXTRA_LDFLAGS "-mwindows")
     set(SDL_CFLAGS "${SDL_CFLAGS} -Dmain=SDL_main")
     list(APPEND SDL_LIBS "-lmingw32" "-lSDL2main" "-mwindows")
-  elseif(MSVC)
-    # Avoids linker errors, since we don't link with the CRT
-    add_definitions(/arch:SSE /GS-)
   endif()
 elseif(APPLE)
   # TODO: rework this for proper MacOS X, iOS and Darwin support
 
   # Requires the darwin file implementation
   if(SDL_FILE)
-    file(GLOB EXTRA_SOURCES ${PROJECT_SOURCE_DIR}/src/file/cocoa/*.m)
+    file(GLOB EXTRA_SOURCES ${SDL2_SOURCE_DIR}/src/file/cocoa/*.m)
     set(SOURCE_FILES ${EXTRA_SOURCES} ${SOURCE_FILES})
     set_source_files_properties(${EXTRA_SOURCES} PROPERTIES LANGUAGE C)
     set(HAVE_SDL_FILE TRUE)
@@ -1404,7 +1456,6 @@ set(_INSTALL_LIBS "SDL2main")
 
 if(SDL_SHARED)
   add_library(SDL2 SHARED ${SOURCE_FILES})
-  install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
   if(UNIX)
     set_target_properties(SDL2 PROPERTIES
       VERSION ${LT_VERSION}
@@ -1415,15 +1466,15 @@ if(SDL_SHARED)
       VERSION ${SDL_VERSION}
       SOVERSION ${LT_REVISION}
       OUTPUT_NAME "SDL2")
-    if(MSVC)
-      set_target_properties(SDL2 PROPERTIES LINK_FLAGS_RELEASE "/NODEFAULTLIB")
-      set_target_properties(SDL2 PROPERTIES LINK_FLAGS_DEBUG "/NODEFAULTLIB")
-      set_target_properties(SDL2 PROPERTIES STATIC_LIBRARY_FLAGS "/NODEFAULTLIB")
-    endif()
   endif()
- set(_INSTALL_LIBS "SDL2" ${_INSTALL_LIBS})
- target_link_libraries(SDL2 ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
- target_include_directories(SDL2 PUBLIC include)
+  if(MSVC)
+    # Don't try to link with the default set of libraries.
+    set_target_properties(SDL2 PROPERTIES LINK_FLAGS_RELEASE "/NODEFAULTLIB")
+    set_target_properties(SDL2 PROPERTIES LINK_FLAGS_DEBUG "/NODEFAULTLIB")
+    set_target_properties(SDL2 PROPERTIES STATIC_LIBRARY_FLAGS "/NODEFAULTLIB")
+  endif()
+  set(_INSTALL_LIBS "SDL2" ${_INSTALL_LIBS})
+  target_link_libraries(SDL2 ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
 endif()
 
 if(SDL_STATIC)
@@ -1442,12 +1493,6 @@ if(SDL_STATIC)
 endif()
 
 ##### Installation targets #####
-
-if(MEGA)
-  return()
-endif()
-
-
 install(TARGETS ${_INSTALL_LIBS}
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"
   ARCHIVE DESTINATION "lib${LIB_SUFFIX}"

@@ -1488,6 +1488,7 @@ SDL_RecreateWindow(SDL_Window * window, Uint32 flags)
     if (window->surface) {
         window->surface->flags &= ~SDL_DONTFREE;
         SDL_FreeSurface(window->surface);
+        window->surface = NULL;
     }
     if (_this->DestroyWindowFramebuffer) {
         _this->DestroyWindowFramebuffer(_this, window);
@@ -2913,17 +2914,7 @@ SDL_GL_GetAttribute(SDL_GLattr attr, int *value)
     void (APIENTRY *glGetFramebufferAttachmentParameterivFunc) (GLenum target, GLenum attachment, GLenum pname, GLint* params);
     GLenum attachment = GL_BACK_LEFT;
     GLenum attachmentattrib = 0;
-
-    glGetStringFunc = SDL_GL_GetProcAddress("glGetString");
-    if (!glGetStringFunc) {
-        return SDL_SetError("Failed getting OpenGL glGetString entry point");
-    }
 #endif
-
-    glGetErrorFunc = SDL_GL_GetProcAddress("glGetError");
-    if (!glGetErrorFunc) {
-        return SDL_SetError("Failed getting OpenGL glGetError entry point");
-    }
 
     /* Clear value in any case */
     *value = 0;
@@ -3095,6 +3086,11 @@ SDL_GL_GetAttribute(SDL_GLattr attr, int *value)
     }
 
 #if SDL_VIDEO_OPENGL
+    glGetStringFunc = SDL_GL_GetProcAddress("glGetString");
+    if (!glGetStringFunc) {
+        return SDL_SetError("Failed getting OpenGL glGetString entry point");
+    }
+
     if (attachmentattrib && isAtLeastGL3((const char *) glGetStringFunc(GL_VERSION))) {
         glGetFramebufferAttachmentParameterivFunc = SDL_GL_GetProcAddress("glGetFramebufferAttachmentParameteriv");
 
@@ -3113,6 +3109,11 @@ SDL_GL_GetAttribute(SDL_GLattr attr, int *value)
         } else {
             return SDL_SetError("Failed getting OpenGL glGetIntegerv entry point");
         }
+    }
+
+    glGetErrorFunc = SDL_GL_GetProcAddress("glGetError");
+    if (!glGetErrorFunc) {
+        return SDL_SetError("Failed getting OpenGL glGetError entry point");
     }
 
     error = glGetErrorFunc();

@@ -218,7 +218,14 @@ WINRT_ProcessWindowSizeChange() // TODO: Pass an SDL_Window-identifying thing in
             }
 #endif
 
-            WINRT_UpdateWindowFlags(window, SDL_WINDOW_MAXIMIZED | SDL_WINDOW_FULLSCREEN_DESKTOP);
+            const Uint32 latestFlags = WINRT_DetectWindowFlags(window);
+            if (latestFlags & SDL_WINDOW_MAXIMIZED) {
+                SDL_SendWindowEvent(window, SDL_WINDOWEVENT_MAXIMIZED, 0, 0);
+            } else {
+                SDL_SendWindowEvent(window, SDL_WINDOWEVENT_RESTORED, 0, 0);
+            }
+
+            WINRT_UpdateWindowFlags(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 
             /* The window can move during a resize event, such as when maximizing
                or resizing from a corner */
@@ -364,7 +371,10 @@ void SDL_WinRTApp::SetWindow(CoreWindow^ window)
     window->CharacterReceived +=
         ref new TypedEventHandler<CoreWindow^, CharacterReceivedEventArgs^>(this, &SDL_WinRTApp::OnCharacterReceived);
 
-#if WINAPI_FAMILY == WINAPI_FAMILY_PHONE_APP
+#if NTDDI_VERSION >= NTDDI_WIN10
+    Windows::UI::Core::SystemNavigationManager::GetForCurrentView()->BackRequested +=
+        ref new EventHandler<BackRequestedEventArgs^>(this, &SDL_WinRTApp::OnBackButtonPressed);
+#elif WINAPI_FAMILY == WINAPI_FAMILY_PHONE_APP
     HardwareButtons::BackPressed +=
         ref new EventHandler<BackPressedEventArgs^>(this, &SDL_WinRTApp::OnBackButtonPressed);
 #endif
@@ -618,6 +628,15 @@ void SDL_WinRTApp::OnWindowActivated(CoreWindow^ sender, WindowActivatedEventArg
             // * FIXME: Update keyboard state
             // */
             //WIN_CheckClipboardUpdate(data->videodata);
+
+            // HACK: Resetting the mouse-cursor here seems to fix
+            // https://bugzilla.libsdl.org/show_bug.cgi?id=3217, whereby a
+            // WinRT app's mouse cursor may switch to Windows' 'wait' cursor,
+            // after a user alt-tabs back into a full-screened SDL app.
+            // This bug does not appear to reproduce 100% of the time.
+            // It may be a bug in Windows itself (v.10.0.586.36, as tested,
+            // and the most-recent as of this writing).
+            SDL_SetCursor(NULL);
         } else {
             if (SDL_GetKeyboardFocus() == window) {
                 SDL_SetKeyboardFocus(NULL);
@@ -785,8 +804,8 @@ void SDL_WinRTApp::OnCharacterReceived(Windows::UI::Core::CoreWindow^ sender, Wi
     WINRT_ProcessCharacterReceivedEvent(args);
 }
 
-#if WINAPI_FAMILY == WINAPI_FAMILY_PHONE_APP
-void SDL_WinRTApp::OnBackButtonPressed(Platform::Object^ sender, Windows::Phone::UI::Input::BackPressedEventArgs^ args)
+template <typename BackButtonEventArgs>
+static void WINRT_OnBackButtonPressed(BackButtonEventArgs ^ args)
 {
     SDL_SendKeyboardKey(SDL_PRESSED, SDL_SCANCODE_AC_BACK);
     SDL_SendKeyboardKey(SDL_RELEASED, SDL_SCANCODE_AC_BACK);
@@ -797,6 +816,19 @@ void SDL_WinRTApp::OnBackButtonPressed(Platform::Object^ sender, Windows::Phone:
             args->Handled = true;
         }
     }
+}
+
+#if NTDDI_VERSION == NTDDI_WIN10
+void SDL_WinRTApp::OnBackButtonPressed(Platform::Object^ sender, Windows::UI::Core::BackRequestedEventArgs^ args)
+
+{
+    WINRT_OnBackButtonPressed(args);
+}
+#elif WINAPI_FAMILY == WINAPI_FAMILY_PHONE_APP
+void SDL_WinRTApp::OnBackButtonPressed(Platform::Object^ sender, Windows::Phone::UI::Input::BackPressedEventArgs^ args)
+
+{
+    WINRT_OnBackButtonPressed(args);
 }
 #endif
 
