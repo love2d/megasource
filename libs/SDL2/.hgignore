@@ -116,8 +116,10 @@ test/testtimer
 test/testver
 test/testviewport
 test/testwm2
+test/testbounds
 test/torturethread
 test/testdisplayinfo
+test/testqsort
 test/*.exe
 test/*.dSYM
 buildbot

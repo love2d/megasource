@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2016 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -376,7 +376,7 @@ SDL_SYS_IsXInputGamepad_DeviceIndex(int device_index)
     for (index = device_index; index > 0; index--)
         device = device->pNext;
 
-    return (device->SubType == XINPUT_DEVSUBTYPE_GAMEPAD);
+    return device->bXInputDevice;
 }
 
 #else /* !SDL_JOYSTICK_XINPUT */

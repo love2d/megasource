@@ -4,6 +4,17 @@ endif()
 
 cmake_minimum_required(VERSION 2.8)
 project(SDL2 C)
+
+# !!! FIXME: this should probably do "MACOSX_RPATH ON" as a target property
+# !!! FIXME:  for the SDL2 shared library (so you get an
+# !!! FIXME:  install_name ("soname") of "@rpath/libSDL-whatever.dylib"
+# !!! FIXME:  instead of "/usr/local/lib/libSDL-whatever.dylib"), but I'm
+# !!! FIXME:  punting for now and leaving the existing behavior. Until this
+# !!! FIXME:  properly resolved, this line silences a warning in CMake 3.0+.
+# !!! FIXME:  remove it and this comment entirely once the problem is
+# !!! FIXME:  properly resolved.
+#cmake_policy(SET CMP0042 OLD)
+
 include(CheckFunctionExists)
 include(CheckLibraryExists)
 include(CheckIncludeFiles)
@@ -147,8 +158,10 @@ endif()
 
 # Default flags, if not set otherwise
 if("$ENV{CFLAGS}" STREQUAL "")
-  if(USE_GCC OR USE_CLANG)
-    set(CMAKE_C_FLAGS "-g -O3")
+  if(CMAKE_BUILD_TYPE STREQUAL "")
+    if(USE_GCC OR USE_CLANG)
+      set(CMAKE_C_FLAGS "-g -O3")
+    endif()
   endif()
 else()
   set(CMAKE_C_FLAGS "$ENV{CFLAGS}")
@@ -296,8 +309,10 @@ set_option(VIDEO_VIVANTE       "Use Vivante EGL video driver" ${UNIX_SYS})
 
 # TODO: We should (should we?) respect cmake's ${BUILD_SHARED_LIBS} flag here
 # The options below are for compatibility to configure's default behaviour.
-set(SDL_SHARED ON CACHE BOOL "Build a shared version of the library")
-set(SDL_STATIC OFF CACHE BOOL "Build a static version of the library")
+set(SDL_SHARED ${SDL_SHARED_ENABLED_BY_DEFAULT} CACHE BOOL "Build a shared version of the library")
+set(SDL_STATIC ON CACHE BOOL "Build a static version of the library")
+
+dep_option(SDL_STATIC_PIC      "Static version of the library should be built with Position Independent Code" OFF "SDL_STATIC" OFF)
 
 # General source files
 file(GLOB SOURCE_FILES
@@ -334,6 +349,24 @@ set(HAVE_ASSERTIONS ${ASSERTIONS})
 
 # Compiler option evaluation
 if(USE_GCC OR USE_CLANG)
+  # Check for -Wall first, so later things can override pieces of it.
+  check_c_compiler_flag(-Wall HAVE_GCC_WALL)
+  if(HAVE_GCC_WALL)
+    list(APPEND EXTRA_CFLAGS "-Wall")
+    if(HAIKU)
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-multichar")
+    endif()
+  endif()
+
+  check_c_compiler_flag(-Wdeclaration-after-statement HAVE_GCC_WDECLARATION_AFTER_STATEMENT)
+  if(HAVE_GCC_WDECLARATION_AFTER_STATEMENT)
+    check_c_compiler_flag(-Werror=declaration-after-statement HAVE_GCC_WERROR_DECLARATION_AFTER_STATEMENT)
+    if(HAVE_GCC_WERROR_DECLARATION_AFTER_STATEMENT)
+      list(APPEND EXTRA_CFLAGS "-Werror=declaration-after-statement")
+    endif()
+    list(APPEND EXTRA_CFLAGS "-Wdeclaration-after-statement")
+  endif()
+
   if(DEPENDENCY_TRACKING)
     check_c_source_compiles("
         #if !defined(__GNUC__) || __GNUC__ < 3
@@ -375,13 +408,6 @@ if(USE_GCC OR USE_CLANG)
   endif()
   set(CMAKE_REQUIRED_FLAGS ${ORIG_CMAKE_REQUIRED_FLAGS})
 
-  check_c_compiler_flag(-Wall HAVE_GCC_WALL)
-  if(HAVE_GCC_WALL)
-    list(APPEND EXTRA_CFLAGS "-Wall")
-    if(HAIKU)
-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-multichar")
-    endif()
-  endif()
   check_c_compiler_flag(-Wshadow HAVE_GCC_WSHADOW)
   if(HAVE_GCC_WSHADOW)
     list(APPEND EXTRA_CFLAGS "-Wshadow")
@@ -933,7 +959,14 @@ elseif(UNIX AND NOT APPLE)
   if(RPATH)
     set(SDL_RLD_FLAGS "")
     if(BSDI OR FREEBSD OR LINUX OR NETBSD)
-      set(SDL_RLD_FLAGS "-Wl,-rpath,\${libdir}")
+      set(CMAKE_REQUIRED_FLAGS "-Wl,--enable-new-dtags")
+      check_c_compiler_flag("" HAVE_ENABLE_NEW_DTAGS)
+      set(CMAKE_REQUIRED_FLAGS ${ORIG_CMAKE_REQUIRED_FLAGS})
+      if(HAVE_ENABLE_NEW_DTAGS)
+        set(SDL_RLD_FLAGS "-Wl,-rpath,\${libdir} -Wl,--enable-new-dtags")
+      else()
+        set(SDL_RLD_FLAGS "-Wl,-rpath,\${libdir}")
+      endif()
     elseif(SOLARIS)
       set(SDL_RLD_FLAGS "-R\${libdir}")
     endif()
@@ -958,8 +991,6 @@ elseif(WINDOWS)
       add_definitions(/arch:SSE)
     endif()
   endif()
-
-  set(SDL_LINK_DIR ${PARENT_SCOPE})
 
   # Check for DirectX
   if(DIRECTX)
@@ -994,14 +1025,12 @@ elseif(WINDOWS)
       set(HAVE_DIRECTX TRUE)
       if(NOT CMAKE_COMPILER_IS_MINGW AND NOT USE_WINSDK_DIRECTX)
       # TODO: change $ENV{DXSDL_DIR} to get the path from the include checks
-        set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH} ${SDL_LINK_DIR})
+        link_directories($ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
         include_directories($ENV{DXSDK_DIR}\\Include)
       endif()
     endif()
     set(CMAKE_REQUIRED_FLAGS ${ORIG_CMAKE_REQUIRED_FLAGS})
   endif()
-
-  link_directories(${SDL_LINK_DIR})
 
   if(SDL_AUDIO)
     set(SDL_AUDIO_DRIVER_WINMM 1)
@@ -1109,7 +1138,7 @@ elseif(WINDOWS)
     set(SOURCE_FILES ${SOURCE_FILES} ${JOYSTICK_SOURCES})
     if(HAVE_DINPUT_H)
       set(SDL_JOYSTICK_DINPUT 1)
-      list(APPEND EXTRA_LIBS dinput8 dxguid)
+      list(APPEND EXTRA_LIBS dinput8)
       if(CMAKE_COMPILER_IS_MINGW)
         list(APPEND EXTRA_LIBS dxerr8)
       elseif (NOT USE_WINSDK_DIRECTX)
@@ -1443,6 +1472,9 @@ message(STATUS " EXTRA_LIBS:    ${EXTRA_LIBS}")
 message(STATUS "")
 message(STATUS " Build Shared Library: ${SDL_SHARED}")
 message(STATUS " Build Static Library: ${SDL_STATIC}")
+if(SDL_STATIC)
+    message(STATUS " Build Static Library with Position Independent Code: ${SDL_STATIC_PIC}")
+endif()
 message(STATUS "")
 if(UNIX)
   message(STATUS "If something was not detected, although the libraries")
@@ -1460,7 +1492,6 @@ set(_INSTALL_LIBS "SDL2main")
 
 if(SDL_SHARED)
   add_library(SDL2 SHARED ${SOURCE_FILES})
-  install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
   if(UNIX)
     set_target_properties(SDL2 PROPERTIES
       VERSION ${LT_VERSION}
@@ -1480,13 +1511,13 @@ if(SDL_SHARED)
   endif()
   set(_INSTALL_LIBS "SDL2" ${_INSTALL_LIBS})
   target_link_libraries(SDL2 ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
-  target_include_directories(SDL2 PUBLIC include)
 endif()
 
 if(SDL_STATIC)
   set (BUILD_SHARED_LIBS FALSE)
   add_library(SDL2-static STATIC ${SOURCE_FILES})
   set_target_properties(SDL2-static PROPERTIES OUTPUT_NAME "SDL2")
+  set_target_properties(SDL2-static PROPERTIES POSITION_INDEPENDENT_CODE ${SDL_STATIC_PIC})
   if(MSVC)
     set_target_properties(SDL2-static PROPERTIES LINK_FLAGS_RELEASE "/NODEFAULTLIB")
     set_target_properties(SDL2-static PROPERTIES LINK_FLAGS_DEBUG "/NODEFAULTLIB")
@@ -1499,11 +1530,6 @@ if(SDL_STATIC)
 endif()
 
 ##### Installation targets #####
-
-if(MEGA)
-  return()
-endif()
-
 install(TARGETS ${_INSTALL_LIBS}
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"
   ARCHIVE DESTINATION "lib${LIB_SUFFIX}"
@@ -1518,12 +1544,17 @@ endforeach()
 list(APPEND INCLUDE_FILES ${BIN_INCLUDE_FILES})
 install(FILES ${INCLUDE_FILES} DESTINATION include/SDL2)
 
-if(NOT WINDOWS OR CYGWIN)
+if(NOT (WINDOWS OR CYGWIN))
   if(SDL_SHARED)
+    if (APPLE)
+        set(SOEXT "dylib")
+    else()
+        set(SOEXT "so")
+    endif()
     install(CODE "
       execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-      \"libSDL2-2.0.so\" \"libSDL2.so\")")
-    install(FILES ${SDL2_BINARY_DIR}/libSDL2.so DESTINATION "lib${LIB_SUFFIX}")
+      \"libSDL2-2.0.${SOEXT}\" \"libSDL2.${SOEXT}\")")
+    install(FILES ${SDL2_BINARY_DIR}/libSDL2.${SOEXT} DESTINATION "lib${LIB_SUFFIX}")
   endif()
   if(FREEBSD)
     # FreeBSD uses ${PREFIX}/libdata/pkgconfig

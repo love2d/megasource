@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2016 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -70,7 +70,16 @@ RPI_CreateCursor(SDL_Surface * surface, int hot_x, int hot_y)
     SDL_assert(surface->pitch == surface->w * 4);
     
     cursor = (SDL_Cursor *) SDL_calloc(1, sizeof(*cursor));
+    if (cursor == NULL) {
+        SDL_OutOfMemory();
+        return NULL;
+    }
     curdata = (RPI_CursorData *) SDL_calloc(1, sizeof(*curdata));
+    if (curdata == NULL) {
+        SDL_OutOfMemory();
+        SDL_free(cursor);
+        return NULL;
+    }
 
     curdata->hot_x = hot_x;
     curdata->hot_y = hot_y;

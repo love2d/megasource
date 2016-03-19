@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2016 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -46,6 +46,8 @@
 #if TARGET_OS_IPHONE || __native_client__ || __EMSCRIPTEN__  /* probably not useful on iOS, NACL or Emscripten. */
 #define SDL_DYNAMIC_API 0
 #elif SDL_BUILDING_WINRT /* probaly not useful on WinRT, given current .dll loading restrictions */
+#define SDL_DYNAMIC_API 0
+#elif __PSP__
 #define SDL_DYNAMIC_API 0
 #elif defined(__clang_analyzer__)
 #define SDL_DYNAMIC_API 0  /* Turn off for static analysis, so reports are more clear. */

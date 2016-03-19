@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2016 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -340,7 +340,6 @@ Android_RemoveJoystick(int device_id)
         return -1;
     }
 
-    const int retval = item->device_instance;
     if (item->joystick) {
         item->joystick->hwdata = NULL;
     }
@@ -376,7 +375,7 @@ Android_RemoveJoystick(int device_id)
     
     SDL_free(item->name);
     SDL_free(item);
-    return retval;
+    return numjoysticks;
 }
 
 

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2016 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -130,6 +130,7 @@ create_buffer_from_shm(Wayland_CursorData *d,
         d->shm_data = NULL;
         fprintf (stderr, "mmap () failed\n");
         close (shm_fd);
+        return -1;
     }
 
     shm_pool = wl_shm_create_pool(data->shm, shm_fd, size);
@@ -159,6 +160,11 @@ Wayland_CreateCursor(SDL_Surface *surface, int hot_x, int hot_y)
         SDL_VideoDevice *vd = SDL_GetVideoDevice ();
         SDL_VideoData *wd = (SDL_VideoData *) vd->driverdata;
         Wayland_CursorData *data = calloc (1, sizeof (Wayland_CursorData));
+        if (!data) {
+            SDL_OutOfMemory();
+            free(cursor);
+            return NULL;
+        }
         cursor->driverdata = (void *) data;
 
         /* Assume ARGB8888 */
@@ -169,7 +175,7 @@ Wayland_CreateCursor(SDL_Surface *surface, int hot_x, int hot_y)
         if (create_buffer_from_shm (data,
                                     surface->w,
                                     surface->h,
-                                    WL_SHM_FORMAT_XRGB8888) < 0)
+                                    WL_SHM_FORMAT_ARGB8888) < 0)
         {
             free (cursor->driverdata);
             free (cursor);
@@ -187,6 +193,8 @@ Wayland_CreateCursor(SDL_Surface *surface, int hot_x, int hot_y)
         data->hot_y = hot_y;
         data->w = surface->w;
         data->h = surface->h;
+    } else {
+        SDL_OutOfMemory();
     }
 
     return cursor;
@@ -200,6 +208,11 @@ CreateCursorFromWlCursor(SDL_VideoData *d, struct wl_cursor *wlcursor)
     cursor = calloc(1, sizeof (*cursor));
     if (cursor) {
         Wayland_CursorData *data = calloc (1, sizeof (Wayland_CursorData));
+        if (!data) {
+            SDL_OutOfMemory();
+            free(cursor);
+            return NULL;
+        }
         cursor->driverdata = (void *) data;
 
         data->buffer = WAYLAND_wl_cursor_image_get_buffer(wlcursor->images[0]);
@@ -322,13 +335,13 @@ Wayland_ShowCursor(SDL_Cursor *cursor)
     {
         Wayland_CursorData *data = cursor->driverdata;
 
-        wl_surface_attach(data->surface, data->buffer, 0, 0);
-        wl_surface_damage(data->surface, 0, 0, data->w, data->h);
-        wl_surface_commit(data->surface);
         wl_pointer_set_cursor (pointer, 0,
                                data->surface,
                                data->hot_x,
                                data->hot_y);
+        wl_surface_attach(data->surface, data->buffer, 0, 0);
+        wl_surface_damage(data->surface, 0, 0, data->w, data->h);
+        wl_surface_commit(data->surface);
     }
     else
     {

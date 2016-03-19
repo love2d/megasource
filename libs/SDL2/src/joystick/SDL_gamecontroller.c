@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2015 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2016 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -861,7 +861,6 @@ SDL_GameControllerInit(void)
 {
     int i = 0;
     const char *pMappingString = NULL;
-    s_pSupportedControllers = NULL;
     pMappingString = s_ControllerMappings[i];
     while (pMappingString) {
         SDL_GameControllerAddMapping(pMappingString);
