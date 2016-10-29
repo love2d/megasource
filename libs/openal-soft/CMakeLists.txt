@@ -33,15 +33,15 @@ OPTION(ALSOFT_DLOPEN  "Check for the dlopen API for loading optional libs"  ON)
 
 OPTION(ALSOFT_WERROR  "Treat compile warnings as errors"      OFF)
 
-OPTION(ALSOFT_UTILS          "Build and install utility programs"         ON)
+OPTION(ALSOFT_UTILS          "Build and install utility programs"         OFF)
 OPTION(ALSOFT_NO_CONFIG_UTIL "Disable building the alsoft-config utility" OFF)
 
-OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  ON)
+OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  OFF)
 OPTION(ALSOFT_TESTS     "Build and install test programs"     ON)
 
-OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" ON)
+OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" OFF)
 OPTION(ALSOFT_HRTF_DEFS "Install HRTF definition files" ON)
-OPTION(ALSOFT_INSTALL "Install headers and libraries" ON)
+OPTION(ALSOFT_INSTALL "Install headers and libraries" OFF)
 
 
 set(SHARE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/share" CACHE STRING "The share install dir")
@@ -76,6 +76,8 @@ IF ("${CMAKE_C_PLATFORM_ID}" STREQUAL "QNX")
     ADD_DEFINITIONS("-I/usr/include")
     SET(EXTRA_LIBS ${EXTRA_LIBS} -L/usr/lib)
 ENDIF()
+
+SET(OPENAL_LIB_NAME ${LIBNAME} PARENT_SCOPE)
 
 IF(NOT LIBTYPE)
     SET(LIBTYPE SHARED)
@@ -1167,6 +1169,7 @@ IF(WIN32 AND NOT LIBTYPE STREQUAL "STATIC")
 ENDIF()
 
 TARGET_LINK_LIBRARIES(${LIBNAME} common ${EXTRA_LIBS})
+TARGET_INCLUDE_DIRECTORIES(${LIBNAME} PUBLIC include)
 
 IF(ALSOFT_INSTALL)
     # Add an install target here
@@ -1358,4 +1361,8 @@ IF(ALSOFT_EXAMPLES)
         ENDIF()
         MESSAGE(STATUS "")
     ENDIF()
+ENDIF()
+
+if(MEGA)
+    install(TARGETS ${LIBNAME} RUNTIME DESTINATION . LIBRARY DESTINATION .)
 ENDIF()
