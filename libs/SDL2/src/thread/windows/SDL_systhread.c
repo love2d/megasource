@@ -24,6 +24,7 @@
 
 /* Win32 thread management routines for SDL */
 
+#include "SDL_hints.h"
 #include "SDL_thread.h"
 #include "../SDL_thread_c.h"
 #include "../SDL_systhread.h"
@@ -32,6 +33,10 @@
 #ifndef SDL_PASSED_BEGINTHREAD_ENDTHREAD
 /* We'll use the C library from this DLL */
 #include <process.h>
+
+#ifndef STACK_SIZE_PARAM_IS_A_RESERVATION
+#define STACK_SIZE_PARAM_IS_A_RESERVATION 0x00010000
+#endif
 
 /* Cygwin gcc-3 ... MingW64 (even with a i386 host) does this like MSVC. */
 #if (defined(__MINGW32__) && (__GNUC__ < 4))
@@ -121,6 +126,7 @@ SDL_SYS_CreateThread(SDL_Thread * thread, void *args)
 #endif /* SDL_PASSED_BEGINTHREAD_ENDTHREAD */
     pThreadStartParms pThreadParms =
         (pThreadStartParms) SDL_malloc(sizeof(tThreadStartParms));
+    const DWORD flags = thread->stacksize ? STACK_SIZE_PARAM_IS_A_RESERVATION : 0;
     if (!pThreadParms) {
         return SDL_OutOfMemory();
     }
@@ -129,15 +135,18 @@ SDL_SYS_CreateThread(SDL_Thread * thread, void *args)
     /* Also save the real parameters we have to pass to thread function */
     pThreadParms->args = args;
 
+    /* thread->stacksize == 0 means "system default", same as win32 expects */
     if (pfnBeginThread) {
         unsigned threadid = 0;
         thread->handle = (SYS_ThreadHandle)
-            ((size_t) pfnBeginThread(NULL, 0, RunThreadViaBeginThreadEx,
-                                     pThreadParms, 0, &threadid));
+            ((size_t) pfnBeginThread(NULL, (unsigned int) thread->stacksize,
+                                     RunThreadViaBeginThreadEx,
+                                     pThreadParms, flags, &threadid));
     } else {
         DWORD threadid = 0;
-        thread->handle = CreateThread(NULL, 0, RunThreadViaCreateThread,
-                                      pThreadParms, 0, &threadid);
+        thread->handle = CreateThread(NULL, thread->stacksize,
+                                      RunThreadViaCreateThread,
+                                      pThreadParms, flags, &threadid);
     }
     if (thread->handle == NULL) {
         return SDL_SetError("Not enough resources to create thread");
@@ -159,8 +168,14 @@ void
 SDL_SYS_SetupThread(const char *name)
 {
     if ((name != NULL) && IsDebuggerPresent()) {
-        /* This magic tells the debugger to name a thread if it's listening. */
         THREADNAME_INFO inf;
+
+        /* C# and friends will try to catch this Exception, let's avoid it. */
+        if (SDL_GetHintBoolean(SDL_HINT_WINDOWS_DISABLE_THREAD_NAMING, SDL_FALSE)) {
+            return;
+        }
+
+        /* This magic tells the debugger to name a thread if it's listening. */
         SDL_zero(inf);
         inf.dwType = 0x1000;
         inf.szName = name;

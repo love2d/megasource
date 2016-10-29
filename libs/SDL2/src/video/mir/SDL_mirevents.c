@@ -53,16 +53,6 @@ HandleKeyText(int32_t key_code)
     }
 }
 
-static void
-CheckKeyboardFocus(SDL_Window* sdl_window)
-{
-    SDL_Window* keyboard_window = SDL_GetKeyboardFocus();
-
-    if (sdl_window && keyboard_window != sdl_window)
-        SDL_SetKeyboardFocus(sdl_window);
-}
-
-
 /* FIXME
    Mir still needs to implement its IM API, for now we assume
    a single key press produces a character.
@@ -83,8 +73,6 @@ HandleKeyEvent(MirKeyboardEvent const* key_event, SDL_Window* window)
 
     if (action == mir_keyboard_action_up)
         key_state = SDL_RELEASED;
-
-    CheckKeyboardFocus(window);
 
     if (event_scancode < SDL_arraysize(xfree86_scancode_table2))
         sdl_scancode = xfree86_scancode_table2[event_scancode];
@@ -136,7 +124,8 @@ HandleMouseButton(SDL_Window* sdl_window, Uint8 state, MirPointerEvent const* po
 static void
 HandleMouseMotion(SDL_Window* sdl_window, int x, int y)
 {
-    SDL_SendMouseMotion(sdl_window, 0, 0, x, y);
+    SDL_Mouse* mouse = SDL_GetMouse();
+    SDL_SendMouseMotion(sdl_window, 0, mouse->relative_mode, x, y);
 }
 
 static void
@@ -196,6 +185,8 @@ HandleTouchEvent(MirTouchEvent const* touch, int device_id, SDL_Window* sdl_wind
             case mir_touch_action_change:
                 HandleTouchMotion(device_id, id, n_x, n_y, pressure);
                 break;
+            case mir_touch_actions:
+                break;
         }
     }
 }
@@ -218,11 +209,20 @@ HandleMouseEvent(MirPointerEvent const* pointer, SDL_Window* sdl_window)
             SDL_Mouse* mouse = SDL_GetMouse();
             x = MIR_mir_pointer_event_axis_value(pointer, mir_pointer_axis_x);
             y = MIR_mir_pointer_event_axis_value(pointer, mir_pointer_axis_y);
+
+            if (mouse) {
+                if (mouse->relative_mode) {
+                    int relative_x = MIR_mir_pointer_event_axis_value(pointer, mir_pointer_axis_relative_x);
+                    int relative_y = MIR_mir_pointer_event_axis_value(pointer, mir_pointer_axis_relative_y);
+                    HandleMouseMotion(sdl_window, relative_x, relative_y);
+                }
+                else if (mouse->x != x || mouse->y != y) {
+                    HandleMouseMotion(sdl_window, x, y);
+                }
+            }
+
             hscroll = MIR_mir_pointer_event_axis_value(pointer, mir_pointer_axis_hscroll);
             vscroll = MIR_mir_pointer_event_axis_value(pointer, mir_pointer_axis_vscroll);
-
-            if (mouse && (mouse->x != x || mouse->y != y))
-                HandleMouseMotion(sdl_window, x, y);
             if (vscroll != 0 || hscroll != 0)
                 HandleMouseScroll(sdl_window, hscroll, vscroll);
         }
@@ -269,6 +269,22 @@ MIR_HandleResize(MirResizeEvent const* resize_event, SDL_Window* window)
         SDL_SendWindowEvent(window, SDL_WINDOWEVENT_RESIZED, new_w, new_h);
 }
 
+static void
+MIR_HandleSurface(MirSurfaceEvent const* surface_event, SDL_Window* window)
+{
+    MirSurfaceAttrib attrib = MIR_mir_surface_event_get_attribute(surface_event);
+    int value               = MIR_mir_surface_event_get_attribute_value(surface_event);
+
+    if (attrib == mir_surface_attrib_focus) {
+        if (value == mir_surface_focused) {
+            SDL_SetKeyboardFocus(window);
+        }
+        else if (value == mir_surface_unfocused) {
+            SDL_SetKeyboardFocus(NULL);
+        }
+    }
+}
+
 void
 MIR_HandleEvent(MirSurface* surface, MirEvent const* ev, void* context)
 {
@@ -282,6 +298,9 @@ MIR_HandleEvent(MirSurface* surface, MirEvent const* ev, void* context)
                 break;
             case (mir_event_type_resize):
                 MIR_HandleResize(MIR_mir_event_get_resize_event(ev), window);
+                break;
+            case (mir_event_type_surface):
+                MIR_HandleSurface(MIR_mir_event_get_surface_event(ev), window);
                 break;
             default:
                 break;

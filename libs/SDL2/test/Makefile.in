@@ -13,8 +13,10 @@ TARGETS = \
 	loopwavequeue$(EXE) \
 	testatomic$(EXE) \
 	testaudioinfo$(EXE) \
+	testaudiocapture$(EXE) \
 	testautomation$(EXE) \
 	testbounds$(EXE) \
+	testcustomcursor$(EXE) \
 	testdraw2$(EXE) \
 	testdrawchessboard$(EXE) \
 	testdropfile$(EXE) \
@@ -110,6 +112,9 @@ testmultiaudio$(EXE): $(srcdir)/testmultiaudio.c
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 testaudiohotplug$(EXE): $(srcdir)/testaudiohotplug.c
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+
+testaudiocapture$(EXE): $(srcdir)/testaudiocapture.c
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 testatomic$(EXE): $(srcdir)/testatomic.c
@@ -276,6 +281,9 @@ testqsort$(EXE): $(srcdir)/testqsort.c
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 testbounds$(EXE): $(srcdir)/testbounds.c
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+
+testcustomcursor$(EXE): $(srcdir)/testcustomcursor.c
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 controllermap$(EXE): $(srcdir)/controllermap.c

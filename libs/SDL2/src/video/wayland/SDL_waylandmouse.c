@@ -27,7 +27,6 @@
 #define _GNU_SOURCE
 #endif
 
-#include <errno.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -70,7 +69,6 @@ wayland_create_tmp_file(off_t size)
 
     xdg_path = SDL_getenv("XDG_RUNTIME_DIR");
     if (!xdg_path) {
-        errno = ENOENT;
         return -1;
     }
 
@@ -116,8 +114,7 @@ create_buffer_from_shm(Wayland_CursorData *d,
     shm_fd = wayland_create_tmp_file(size);
     if (shm_fd < 0)
     {
-        fprintf(stderr, "creating mouse cursor buffer failed!\n");
-        return -1;
+        return SDL_SetError("Creating mouse cursor buffer failed.");
     }
 
     d->shm_data = mmap(NULL,
@@ -128,9 +125,8 @@ create_buffer_from_shm(Wayland_CursorData *d,
                        0);
     if (d->shm_data == MAP_FAILED) {
         d->shm_data = NULL;
-        fprintf (stderr, "mmap () failed\n");
         close (shm_fd);
-        return -1;
+        return SDL_SetError("mmap() failed.");
     }
 
     shm_pool = wl_shm_create_pool(data->shm, shm_fd, size);
@@ -369,7 +365,13 @@ Wayland_WarpMouseGlobal(int x, int y)
 static int
 Wayland_SetRelativeMouseMode(SDL_bool enabled)
 {
-    return SDL_Unsupported();
+    SDL_VideoDevice *vd = SDL_GetVideoDevice();
+    SDL_VideoData *data = (SDL_VideoData *) vd->driverdata;
+
+    if (enabled)
+        return Wayland_input_lock_pointer(data->input);
+    else
+        return Wayland_input_unlock_pointer(data->input);
 }
 
 void
