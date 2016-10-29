@@ -86,6 +86,9 @@
 /* Define if we have the strtof function */
 #cmakedefine HAVE_STRTOF
 
+/* Define if we have the strnlen function */
+#cmakedefine HAVE_STRNLEN
+
 /* Define if we have the __int64 type */
 #cmakedefine HAVE___INT64
 
@@ -143,9 +146,6 @@
 /* Define if we have dirent.h */
 #cmakedefine HAVE_DIRENT_H
 
-/* Define if we have io.h */
-#cmakedefine HAVE_IO_H
-
 /* Define if we have strings.h */
 #cmakedefine HAVE_STRINGS_H
 
@@ -190,6 +190,9 @@
 
 /* Define if we have pthread_setname_np() */
 #cmakedefine HAVE_PTHREAD_SETNAME_NP
+
+/* Define if pthread_setname_np() only accepts one parameter */
+#cmakedefine PTHREAD_SETNAME_NP_ONE_PARAM
 
 /* Define if we have pthread_set_name_np() */
 #cmakedefine HAVE_PTHREAD_SET_NAME_NP

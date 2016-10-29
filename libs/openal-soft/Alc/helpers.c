@@ -364,6 +364,11 @@ void RestoreFPUMode(const FPUCtl *ctl)
 }
 
 
+static int StringSortCompare(const void *str1, const void *str2)
+{
+    return al_string_cmp(*(const_al_string*)str1, *(const_al_string*)str2);
+}
+
 #ifdef _WIN32
 
 static WCHAR *FromUTF8(const char *str)
@@ -549,6 +554,13 @@ FILE *OpenDataFile(const char *fname, const char *subdir)
 }
 
 
+static size_t strlenW(const WCHAR *str)
+{
+    const WCHAR *end = str;
+    while(*end) ++end;
+    return end-str;
+}
+
 static const WCHAR *strchrW(const WCHAR *str, WCHAR ch)
 {
     for(;*str != 0;++str)
@@ -570,9 +582,27 @@ static const WCHAR *strrchrW(const WCHAR *str, WCHAR ch)
     return ret;
 }
 
+static const WCHAR *strstrW(const WCHAR *haystack, const WCHAR *needle)
+{
+    size_t len = strlenW(needle);
+    while(*haystack != 0)
+    {
+        if(CompareStringW(GetThreadLocale(), NORM_IGNORECASE,
+                          haystack, len, needle, len) == CSTR_EQUAL)
+            return haystack;
+
+        do {
+            ++haystack;
+        } while(((*haystack)&0xC000) == 0x8000);
+    }
+    return NULL;
+}
+
+
 /* Compares the filename in the find data with the match string. The match
  * string may contain the "%r" marker to signifiy a sample rate (really any
- * positive integer), or "%%" to signify a single '%'.
+ * positive integer), "%%" to signify a single '%', or "%s" for a (non-greedy)
+ * string.
  */
 static int MatchFilter(const WCHAR *match, const WIN32_FIND_DATAW *fdata)
 {
@@ -607,6 +637,40 @@ static int MatchFilter(const WCHAR *match, const WIN32_FIND_DATAW *fdata)
                     }
                     ret = l > 0;
                     ++p;
+                }
+                else if(*p == 's')
+                {
+                    const WCHAR *next = p+1;
+                    if(*next != '\0' && *next != '%')
+                    {
+                        const WCHAR *next_p = strchrW(next, '%');
+                        const WCHAR *m;
+
+                        if(!next_p)
+                            m = strstrW(name, next);
+                        else
+                        {
+                            WCHAR *tmp = malloc((next_p - next + 1) * 2);
+                            memcpy(tmp, next, (next_p - next) * 2);
+                            tmp[next_p - next] = 0;
+
+                            m = strstrW(name, tmp);
+
+                            free(tmp);
+                        }
+
+                        ret = !!m;
+                        if(ret)
+                        {
+                            size_t l;
+                            if(next_p) l = next_p - next;
+                            else l = strlenW(next);
+
+                            name = m + l;
+                            next += l;
+                        }
+                    }
+                    p = next;
                 }
             }
         }
@@ -647,6 +711,7 @@ static void RecurseDirectorySearch(const char *path, const WCHAR *match, vector_
         hdl = FindFirstFileW(wpath, &fdata);
         if(hdl != INVALID_HANDLE_VALUE)
         {
+            size_t base = VECTOR_SIZE(*results);
             do {
                 if(MatchFilter(match, &fdata))
                 {
@@ -659,6 +724,10 @@ static void RecurseDirectorySearch(const char *path, const WCHAR *match, vector_
                 }
             } while(FindNextFileW(hdl, &fdata));
             FindClose(hdl);
+
+            if(VECTOR_SIZE(*results) > base)
+                qsort(VECTOR_ITER_BEGIN(*results)+base, VECTOR_SIZE(*results)-base,
+                      sizeof(VECTOR_FRONT(*results)), StringSortCompare);
         }
 
         free(wpath);
@@ -785,8 +854,17 @@ vector_al_string SearchDataFiles(const char *match, const char *subdir)
         al_string path = AL_STRING_INIT_STATIC();
         WCHAR *cwdbuf;
 
-        /* Search the CWD. */
-        if(!(cwdbuf=_wgetcwd(NULL, 0)))
+        /* Search the app-local directory. */
+        if((cwdbuf=_wgetenv(L"ALSOFT_LOCAL_PATH")) && *cwdbuf != '\0')
+        {
+            al_string_copy_wcstr(&path, cwdbuf);
+            if(is_slash(VECTOR_BACK(path)))
+            {
+                VECTOR_POP_BACK(path);
+                *VECTOR_ITER_END(path) = 0;
+            }
+        }
+        else if(!(cwdbuf=_wgetcwd(NULL, 0)))
             al_string_copy_cstr(&path, ".");
         else
         {
@@ -798,6 +876,9 @@ vector_al_string SearchDataFiles(const char *match, const char *subdir)
             }
             free(cwdbuf);
         }
+#define FIX_SLASH(i) do { if(*(i) == '/') *(i) = '\\'; } while(0)
+        VECTOR_FOR_EACH(char, path, FIX_SLASH);
+#undef FIX_SLASH
         RecurseDirectorySearch(al_string_get_cstr(path), wmatch, &results);
 
         /* Search the local and global data dirs. */
@@ -945,11 +1026,8 @@ FILE *OpenDataFile(const char *fname, const char *subdir)
 }
 
 
-static const char *MatchString;
-static int MatchFilter(const struct dirent *dir)
+static int MatchFilter(const char *name, const char *match)
 {
-    const char *match = MatchString;
-    const char *name = dir->d_name;
     int ret = 1;
 
     do {
@@ -973,6 +1051,40 @@ static int MatchFilter(const struct dirent *dir)
                     if(ret) name = end;
                     ++p;
                 }
+                else if(*p == 's')
+                {
+                    const char *next = p+1;
+                    if(*next != '\0' && *next != '%')
+                    {
+                        const char *next_p = strchr(next, '%');
+                        const char *m;
+
+                        if(!next_p)
+                            m = strstr(name, next);
+                        else
+                        {
+                            char *tmp = malloc(next_p - next + 1);
+                            memcpy(tmp, next, next_p - next);
+                            tmp[next_p - next] = 0;
+
+                            m = strstr(name, tmp);
+
+                            free(tmp);
+                        }
+
+                        ret = !!m;
+                        if(ret)
+                        {
+                            size_t l;
+                            if(next_p) l = next_p - next;
+                            else l = strlen(next);
+
+                            name = m + l;
+                            next += l;
+                        }
+                    }
+                    p = next;
+                }
             }
         }
 
@@ -984,9 +1096,7 @@ static int MatchFilter(const struct dirent *dir)
 
 static void RecurseDirectorySearch(const char *path, const char *match, vector_al_string *results)
 {
-    struct dirent **namelist;
     char *sep, *p;
-    int n, i;
 
     if(!match[0])
         return;
@@ -996,22 +1106,33 @@ static void RecurseDirectorySearch(const char *path, const char *match, vector_a
 
     if(!sep)
     {
-        MatchString = match;
+        DIR *dir;
+
         TRACE("Searching %s for %s\n", path?path:"/", match);
-        n = scandir(path?path:"/", &namelist, MatchFilter, alphasort);
-        if(n >= 0)
+        dir = opendir(path?path:"/");
+        if(dir != NULL)
         {
-            for(i = 0;i < n;++i)
+            size_t base = VECTOR_SIZE(*results);
+            struct dirent *dirent;
+            while((dirent=readdir(dir)) != NULL)
             {
-                al_string str = AL_STRING_INIT_STATIC();
+                al_string str;
+                if(strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0 ||
+                   !MatchFilter(dirent->d_name, match))
+                    continue;
+
+                AL_STRING_INIT(str);
                 if(path) al_string_copy_cstr(&str, path);
                 al_string_append_char(&str, '/');
-                al_string_append_cstr(&str, namelist[i]->d_name);
+                al_string_append_cstr(&str, dirent->d_name);
                 TRACE("Got result %s\n", al_string_get_cstr(str));
                 VECTOR_PUSH_BACK(*results, str);
-                free(namelist[i]);
             }
-            free(namelist);
+            closedir(dir);
+
+            if(VECTOR_SIZE(*results) > base)
+                qsort(VECTOR_ITER_BEGIN(*results)+base, VECTOR_SIZE(*results)-base,
+                      sizeof(VECTOR_FRONT(*results)), StringSortCompare);
         }
 
         return;
@@ -1040,11 +1161,13 @@ static void RecurseDirectorySearch(const char *path, const char *match, vector_a
         {
             al_string npath = AL_STRING_INIT_STATIC();
             al_string nmatch = AL_STRING_INIT_STATIC();
+            const char *tomatch;
+            DIR *dir;
 
             if(!sep)
             {
                 al_string_append_cstr(&npath, path?path:"/.");
-                MatchString = match;
+                tomatch = match;
             }
             else
             {
@@ -1053,25 +1176,30 @@ static void RecurseDirectorySearch(const char *path, const char *match, vector_a
                 al_string_append_range(&npath, match, sep);
 
                 al_string_append_range(&nmatch, sep+1, next);
-                MatchString = al_string_get_cstr(nmatch);
+                tomatch = al_string_get_cstr(nmatch);
             }
 
-            TRACE("Searching %s for %s\n", al_string_get_cstr(npath), MatchString);
-            n = scandir(al_string_get_cstr(npath), &namelist, MatchFilter, alphasort);
-            if(n >= 0)
+            TRACE("Searching %s for %s\n", al_string_get_cstr(npath), tomatch);
+            dir = opendir(path?path:"/");
+            if(dir != NULL)
             {
                 al_string ndir = AL_STRING_INIT_STATIC();
-                for(i = 0;i < n;++i)
+                struct dirent *dirent;
+
+                while((dirent=readdir(dir)) != NULL)
                 {
+                    if(strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0 ||
+                       !MatchFilter(dirent->d_name, tomatch))
+                        continue;
                     al_string_copy(&ndir, npath);
                     al_string_append_char(&ndir, '/');
-                    al_string_append_cstr(&ndir, namelist[i]->d_name);
-                    free(namelist[i]);
+                    al_string_append_cstr(&ndir, dirent->d_name);
                     TRACE("Recursing %s with %s\n", al_string_get_cstr(ndir), next+1);
                     RecurseDirectorySearch(al_string_get_cstr(ndir), next+1, results);
                 }
+                closedir(dir);
+
                 al_string_deinit(&ndir);
-                free(namelist);
             }
 
             al_string_deinit(&nmatch);
@@ -1099,8 +1227,13 @@ vector_al_string SearchDataFiles(const char *match, const char *subdir)
         const char *str, *next;
         char cwdbuf[PATH_MAX];
 
-        // Search CWD
-        if(!getcwd(cwdbuf, sizeof(cwdbuf)))
+        /* Search the app-local directory. */
+        if((str=getenv("ALSOFT_LOCAL_PATH")) && *str != '\0')
+        {
+            strncpy(cwdbuf, str, sizeof(cwdbuf)-1);
+            cwdbuf[sizeof(cwdbuf)-1] = '\0';
+        }
+        else if(!getcwd(cwdbuf, sizeof(cwdbuf)))
             strcpy(cwdbuf, ".");
         RecurseDirectorySearch(cwdbuf, match, &results);
 

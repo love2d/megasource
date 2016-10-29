@@ -42,8 +42,9 @@ typedef enum ALfilterType {
 typedef struct ALfilterState {
     ALfloat x[2]; /* History of two last input samples  */
     ALfloat y[2]; /* History of two last output samples */
-    ALfloat a[3]; /* Transfer function coefficients "a" */
-    ALfloat b[3]; /* Transfer function coefficients "b" */
+    ALfloat a1, a2; /* Transfer function coefficients "a" (a0 is pre-applied) */
+    ALfloat b1, b2; /* Transfer function coefficients "b" (b0 is input_gain) */
+    ALfloat input_gain;
 
     void (*process)(struct ALfilterState *self, ALfloat *restrict dst, const ALfloat *src, ALuint numsamples);
 } ALfilterState;
@@ -68,18 +69,25 @@ inline ALfloat calc_rcpQ_from_bandwidth(ALfloat freq_mult, ALfloat bandwidth)
     return 2.0f*sinhf(logf(2.0f)/2.0f*bandwidth*w0/sinf(w0));
 }
 
-void ALfilterState_clear(ALfilterState *filter);
+inline void ALfilterState_clear(ALfilterState *filter)
+{
+    filter->x[0] = 0.0f;
+    filter->x[1] = 0.0f;
+    filter->y[0] = 0.0f;
+    filter->y[1] = 0.0f;
+}
+
 void ALfilterState_setParams(ALfilterState *filter, ALfilterType type, ALfloat gain, ALfloat freq_mult, ALfloat rcpQ);
 
 inline ALfloat ALfilterState_processSingle(ALfilterState *filter, ALfloat sample)
 {
     ALfloat outsmp;
 
-    outsmp = filter->b[0] * sample +
-             filter->b[1] * filter->x[0] +
-             filter->b[2] * filter->x[1] -
-             filter->a[1] * filter->y[0] -
-             filter->a[2] * filter->y[1];
+    outsmp = filter->input_gain * sample +
+             filter->b1 * filter->x[0] +
+             filter->b2 * filter->x[1] -
+             filter->a1 * filter->y[0] -
+             filter->a2 * filter->y[1];
     filter->x[1] = filter->x[0];
     filter->x[0] = sample;
     filter->y[1] = filter->y[0];
@@ -90,7 +98,23 @@ inline ALfloat ALfilterState_processSingle(ALfilterState *filter, ALfloat sample
 
 void ALfilterState_processC(ALfilterState *filter, ALfloat *restrict dst, const ALfloat *src, ALuint numsamples);
 
-void ALfilterState_processPassthru(ALfilterState *filter, const ALfloat *src, ALuint numsamples);
+inline void ALfilterState_processPassthru(ALfilterState *filter, const ALfloat *src, ALuint numsamples)
+{
+    if(numsamples >= 2)
+    {
+        filter->x[1] = src[numsamples-2];
+        filter->x[0] = src[numsamples-1];
+        filter->y[1] = src[numsamples-2];
+        filter->y[0] = src[numsamples-1];
+    }
+    else if(numsamples == 1)
+    {
+        filter->x[1] = filter->x[0];
+        filter->x[0] = src[0];
+        filter->y[1] = filter->y[0];
+        filter->y[0] = src[0];
+    }
+}
 
 
 typedef struct ALfilter {
