@@ -10,6 +10,7 @@
 #define HAVE_STDINT_H
 #define HAVE_INTTYPES_H
 #define HAVE_STRING_H
+#define HAVE_SYS_STAT_H
 
 #ifdef _M_ARM
 #define ASMALIGN_ARMASM 1
