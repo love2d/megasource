@@ -6,9 +6,9 @@ Prerequisites
 -------------
 
  - Windows.
- - [Visual Studio 2013 (Express)][vs2013] preferably for desktop.
+ - [Visual Studio 2013 (Express)][vs2013] preferably for desktop. VS 2015 and 2017 also work, but their runtime DLLs distributed with love are less portable.
  - [DirectX SDK][dxsdk] required for SDL2. If you encounter **Error Code S1023** you may need to [uninstall some packages][s1023] and reinstall them after installing the DirectX SDK.
- - [CMake 2.8.12][cmake] or greater.
+ - [CMake 3.1][cmake] or greater.
  - [NSIS][nsis] if you want to build the LÖVE installer.
 
 Building
