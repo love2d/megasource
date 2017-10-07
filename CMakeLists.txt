@@ -67,12 +67,15 @@ endfunction()
 
 # Look for dynamic runtime DLLs.
 if(MSVC)
-	if(MSVC_VERSION EQUAL 1910)
+	if((MSVC_VERSION GREATER 1909) AND (MSVC_VERSION LESS 1920))
 		set(VSVERSION "141")
+		set(VCRUNTIMEVERSION "140")
 	elseif(MSVC_VERSION EQUAL 1900)
 		set(VSVERSION "140")
+		set(VCRUNTIMEVERSION "140")
 	elseif(MSVC_VERSION EQUAL 1800)
 		set(VSVERSION "120")
+		set(VCRUNTIMEVERSION "120")
 	elseif(MSVC_VERSION LESS 1800)
 		message(WARNING "Visual Studio 2013 (VS12) or newer is required!")
 	else()
@@ -83,14 +86,26 @@ if(MSVC)
 	set(VSCOMNTOOLS "$ENV{${VSCOMNTOOLSSTRING}}")
 
 	if(VSCOMNTOOLS STREQUAL "")
-		message(WARNING "Environment variable VSCOMNTOOLS not defined. Is Visual Studio properly installed?")
+		set(PROGRAMFILES_X86 "ProgramFiles(x86)")
+		set(VSWHERE_PATH "$ENV{${PROGRAMFILES_X86}}\\Microsoft Visual Studio\\Installer\\vswhere.exe")
+
+		execute_process(COMMAND ${VSWHERE_PATH} "-property" "installationPath" OUTPUT_VARIABLE VS_INSTALL_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+		if(NOT(VS_INSTALL_DIR STREQUAL ""))
+			set(VSCOMNTOOLS "${VS_INSTALL_DIR}\\Common7\\Tools")
+		endif()
+		message(WARNING ${VSCOMNTOOLS})
+	endif()
+
+	if(VSCOMNTOOLS STREQUAL "")
+		message(WARNING "Environment variable VSCOMNTOOLS not defined and vswhere.exe could not be found. Is Visual Studio properly installed?")
 	else()
 		get_filename_component(VS_REDIST_DIR ${VSCOMNTOOLS}/../../VC/redist/${MEGA_ARCH}/Microsoft.VC${VSVERSION}.CRT ABSOLUTE)
-		set(MSVCP_DLL ${VS_REDIST_DIR}/msvcp${VSVERSION}.dll)
+		set(MSVCP_DLL ${VS_REDIST_DIR}/msvcp${VCRUNTIMEVERSION}.dll)
 		if(MSVC_VERSION EQUAL 1800)
-			set(MSVCR_DLL ${VS_REDIST_DIR}/msvcr${VSVERSION}.dll)
+			set(MSVCR_DLL ${VS_REDIST_DIR}/msvcr${VCRUNTIMEVERSION}.dll)
 		else()
-			set(MSVCR_DLL ${VS_REDIST_DIR}/vcruntime${VSVERSION}.dll)
+			set(MSVCR_DLL ${VS_REDIST_DIR}/vcruntime${VCRUNTIMEVERSION}.dll)
 		endif()
 
 		if (EXISTS ${MSVCP_DLL} AND EXISTS ${MSVCR_DLL})
@@ -102,6 +117,10 @@ if(MSVC)
 
 		# Find vcvarsall.bat.
 		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+
+		if(NOT(EXISTS ${VS_VCVARSALL_BAT}))
+			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
+		endif()
 
 		if(EXISTS ${VS_VCVARSALL_BAT})
 			message(STATUS "Found vcvarsall.bat")
@@ -220,16 +239,15 @@ if(MSVC)
 	# we copy it.
 	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION libs)
 
-	set(MEGA_LUAJIT_DIR "LuaJIT")
+	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
 
 	set(MEGA_LUAJIT_BUILD_BAT "
 		@echo off
 		call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
-		cd src
+		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
 		msvcbuild.bat
 	")
 
-	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
 	file(WRITE ${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat ${MEGA_LUAJIT_BUILD_BAT})
 
 	ExternalProject_Add(luajit
