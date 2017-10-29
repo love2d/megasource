@@ -364,7 +364,7 @@ endif ()
 
 if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
   target_include_directories(freetype
-    PUBLIC $<INSTALL_INTERFACE:include/freetype2>)
+    PUBLIC include)
 endif ()
 
 if (CMAKE_VERSION VERSION_LESS 2.8.12)
@@ -392,6 +392,7 @@ if (HARFBUZZ_FOUND)
 endif ()
 
 
+if (NOT MEGA)
 # Installations
 # Note the trailing slash in the argument to the `DIRECTORY' directive
 if (NOT SKIP_INSTALL_HEADERS AND NOT SKIP_INSTALL_ALL)
@@ -421,6 +422,8 @@ if (NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
     FILE freetype-config.cmake
     )
 endif ()
+
+endif() # NOT MEGA
 
 
 # Packaging
