@@ -1,0 +1,4 @@
+repo: 7672c9962ce627edaaa67ff54fe4ad8f9a46dc2b
+node: fa8e38bcc3545000a38704b65b604a2c1b764d10
+branch: stable-3.0
+tag: release-3.0.1

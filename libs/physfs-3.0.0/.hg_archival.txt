@@ -1,6 +1,0 @@
-repo: 7672c9962ce627edaaa67ff54fe4ad8f9a46dc2b
-node: 3d5a84dd1ebe26e4ad4da1051a9153a06b9949a3
-branch: stable-3.0
-latesttag: release-3.0.0
-latesttagdistance: 1
-changessincelatesttag: 1

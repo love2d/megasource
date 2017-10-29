@@ -12,7 +12,7 @@
 cmake_minimum_required(VERSION 2.8.4)
 
 project(PhysicsFS)
-set(PHYSFS_VERSION 3.0.0)
+set(PHYSFS_VERSION 3.0.1)
 
 # Increment this if/when we break backwards compatibility.
 set(PHYSFS_SOVERSION 1)
@@ -164,7 +164,6 @@ if(PHYSFS_BUILD_STATIC)
         set_target_properties(physfs-static PROPERTIES STATIC_LIBRARY_FLAGS "/ignore:4264")
     endif()
 
-    target_include_directories(physfs-static PUBLIC src)
     set(PHYSFS_LIB_TARGET physfs-static)
     set(PHYSFS_INSTALL_TARGETS ${PHYSFS_INSTALL_TARGETS} ";physfs-static")
 endif()
@@ -178,7 +177,6 @@ if(PHYSFS_BUILD_SHARED)
     if(WINRT)
 		set_target_properties(physfs PROPERTIES VS_WINRT_COMPONENT True)
     endif()
-    target_include_directories(physfs PUBLIC src)
     target_link_libraries(physfs ${OPTIONAL_LIBRARY_LIBS} ${OTHER_LDFLAGS})
     set(PHYSFS_LIB_TARGET physfs)
     set(PHYSFS_INSTALL_TARGETS ${PHYSFS_INSTALL_TARGETS} ";physfs")
@@ -215,13 +213,11 @@ if(PHYSFS_BUILD_TEST)
     set(PHYSFS_INSTALL_TARGETS ${PHYSFS_INSTALL_TARGETS} ";test_physfs")
 endif()
 
-if(NOT MEGA)
-    install(TARGETS ${PHYSFS_INSTALL_TARGETS}
-            RUNTIME DESTINATION bin
-            LIBRARY DESTINATION lib${LIB_SUFFIX}
-            ARCHIVE DESTINATION lib${LIB_SUFFIX})
-    install(FILES src/physfs.h DESTINATION include)
-endif()
+install(TARGETS ${PHYSFS_INSTALL_TARGETS}
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib${LIB_SUFFIX}
+        ARCHIVE DESTINATION lib${LIB_SUFFIX})
+install(FILES src/physfs.h DESTINATION include)
 
 find_package(Doxygen)
 if(DOXYGEN_FOUND)

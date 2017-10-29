@@ -139,7 +139,7 @@ endif()
 
 
 set(MEGA_ZLIB_VER "1.2.8")
-set(MEGA_PHYSFS_VER "3.0.0")
+set(MEGA_PHYSFS_VER "3.0.1")
 set(MEGA_LUA51_VER "5.1.5")
 set(MEGA_LUAJIT_VER "2.0.5")
 set(MEGA_LIBOGG_VER "1.3.2")

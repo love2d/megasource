@@ -939,6 +939,10 @@ static int sanitizePlatformIndependentPath(const char *src, char *dst)
     while (*src == '/')  /* skip initial '/' chars... */
         src++;
 
+    /* Make sure the entire string isn't "." or ".." */
+    if ((strcmp(src, ".") == 0) || (strcmp(src, "..") == 0))
+        BAIL(PHYSFS_ERR_BAD_FILENAME, 0);
+
     prev = dst;
     do
     {
@@ -1012,6 +1016,8 @@ static DirHandle *createDirHandle(PHYSFS_Io *io, const char *newDir,
     DirHandle *dirHandle = NULL;
     char *tmpmntpnt = NULL;
 
+    assert(newDir != NULL);  /* should have caught this higher up. */
+
     if (mountPoint != NULL)
     {
         const size_t len = strlen(mountPoint) + 1;
@@ -1025,15 +1031,9 @@ static DirHandle *createDirHandle(PHYSFS_Io *io, const char *newDir,
     dirHandle = openDirectory(io, newDir, forWriting);
     GOTO_IF_ERRPASS(!dirHandle, badDirHandle);
 
-    if (newDir == NULL)
-        dirHandle->dirName = NULL;
-    else
-    {
-        dirHandle->dirName = (char *) allocator.Malloc(strlen(newDir) + 1);
-        if (!dirHandle->dirName)
-            GOTO(PHYSFS_ERR_OUT_OF_MEMORY, badDirHandle);
-        strcpy(dirHandle->dirName, newDir);
-    } /* else */
+    dirHandle->dirName = (char *) allocator.Malloc(strlen(newDir) + 1);
+    GOTO_IF(!dirHandle->dirName, PHYSFS_ERR_OUT_OF_MEMORY, badDirHandle);
+    strcpy(dirHandle->dirName, newDir);
 
     if ((mountPoint != NULL) && (*mountPoint != '\0'))
     {
@@ -1599,7 +1599,7 @@ const char *PHYSFS_getPrefDir(const char *org, const char *app)
     assert(*endstr == dirsep);
     *endstr = '\0';  /* mask out the final dirsep for now. */
 
-    if (!__PHYSFS_platformStat(prefDir, &statbuf))
+    if (!__PHYSFS_platformStat(prefDir, &statbuf, 1))
     {
         for (ptr = strchr(prefDir, dirsep); ptr; ptr = strchr(ptr+1, dirsep))
         {
@@ -1684,21 +1684,20 @@ static int doMount(PHYSFS_Io *io, const char *fname,
     DirHandle *prev = NULL;
     DirHandle *i;
 
+    BAIL_IF(!fname, PHYSFS_ERR_INVALID_ARGUMENT, 0);
+
     if (mountPoint == NULL)
         mountPoint = "/";
 
     __PHYSFS_platformGrabMutex(stateLock);
 
-    if (fname != NULL)
+    for (i = searchPath; i != NULL; i = i->next)
     {
-        for (i = searchPath; i != NULL; i = i->next)
-        {
-            /* already in search path? */
-            if ((i->dirName != NULL) && (strcmp(fname, i->dirName) == 0))
-                BAIL_MUTEX_ERRPASS(stateLock, 1);
-            prev = i;
-        } /* for */
-    } /* if */
+        /* already in search path? */
+        if ((i->dirName != NULL) && (strcmp(fname, i->dirName) == 0))
+            BAIL_MUTEX_ERRPASS(stateLock, 1);
+        prev = i;
+    } /* for */
 
     dh = createDirHandle(io, fname, mountPoint, 0);
     BAIL_IF_MUTEX_ERRPASS(!dh, stateLock, 0);
@@ -1725,6 +1724,7 @@ int PHYSFS_mountIo(PHYSFS_Io *io, const char *fname,
                    const char *mountPoint, int appendToPath)
 {
     BAIL_IF(!io, PHYSFS_ERR_INVALID_ARGUMENT, 0);
+    BAIL_IF(!fname, PHYSFS_ERR_INVALID_ARGUMENT, 0);
     BAIL_IF(io->version != 0, PHYSFS_ERR_UNSUPPORTED, 0);
     return doMount(io, fname, mountPoint, appendToPath);
 } /* PHYSFS_mountIo */
@@ -1738,6 +1738,7 @@ int PHYSFS_mountMemory(const void *buf, PHYSFS_uint64 len, void (*del)(void *),
     PHYSFS_Io *io = NULL;
 
     BAIL_IF(!buf, PHYSFS_ERR_INVALID_ARGUMENT, 0);
+    BAIL_IF(!fname, PHYSFS_ERR_INVALID_ARGUMENT, 0);
 
     io = __PHYSFS_createMemoryIo(buf, len, del);
     BAIL_IF_ERRPASS(!io, 0);
@@ -1760,7 +1761,8 @@ int PHYSFS_mountHandle(PHYSFS_File *file, const char *fname,
     int retval = 0;
     PHYSFS_Io *io = NULL;
 
-    BAIL_IF(file == NULL, PHYSFS_ERR_INVALID_ARGUMENT, 0);
+    BAIL_IF(!file, PHYSFS_ERR_INVALID_ARGUMENT, 0);
+    BAIL_IF(!fname, PHYSFS_ERR_INVALID_ARGUMENT, 0);
 
     io = __PHYSFS_createHandleIo(file);
     BAIL_IF_ERRPASS(!io, 0);
@@ -1785,7 +1787,7 @@ int PHYSFS_mount(const char *newDir, const char *mountPoint, int appendToPath)
 
 int PHYSFS_addToSearchPath(const char *newDir, int appendToPath)
 {
-    return doMount(NULL, newDir, NULL, appendToPath);
+    return PHYSFS_mount(newDir, NULL, appendToPath);
 } /* PHYSFS_addToSearchPath */
 
 
