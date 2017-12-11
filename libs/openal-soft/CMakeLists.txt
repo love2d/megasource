@@ -41,16 +41,16 @@ OPTION(ALSOFT_DLOPEN  "Check for the dlopen API for loading optional libs"  ON)
 
 OPTION(ALSOFT_WERROR  "Treat compile warnings as errors"      OFF)
 
-OPTION(ALSOFT_UTILS          "Build and install utility programs"         ON)
-OPTION(ALSOFT_NO_CONFIG_UTIL "Disable building the alsoft-config utility" OFF)
+OPTION(ALSOFT_UTILS          "Build and install utility programs"         OFF)
+OPTION(ALSOFT_NO_CONFIG_UTIL "Disable building the alsoft-config utility" ON)
 
-OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  ON)
-OPTION(ALSOFT_TESTS     "Build and install test programs"     ON)
+OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  OFF)
+OPTION(ALSOFT_TESTS     "Build and install test programs"     OFF)
 
-OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" ON)
-OPTION(ALSOFT_HRTF_DEFS "Install HRTF definition files" ON)
-OPTION(ALSOFT_AMBDEC_PRESETS "Install AmbDec preset files" ON)
-OPTION(ALSOFT_INSTALL "Install headers and libraries" ON)
+OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" OFF)
+OPTION(ALSOFT_HRTF_DEFS "Install HRTF definition files" OFF)
+OPTION(ALSOFT_AMBDEC_PRESETS "Install AmbDec preset files" OFF)
+OPTION(ALSOFT_INSTALL "Install headers and libraries" OFF)
 
 if(DEFINED SHARE_INSTALL_DIR)
     message(WARNING "SHARE_INSTALL_DIR is deprecated.  Use the variables provided by the GNUInstallDirs module instead")
@@ -1283,9 +1283,12 @@ SET_PROPERTY(TARGET ${IMPL_TARGET} APPEND PROPERTY COMPILE_FLAGS ${EXTRA_CFLAGS}
 SET_PROPERTY(TARGET ${IMPL_TARGET} APPEND_STRING PROPERTY LINK_FLAGS ${EXTRA_LDFLAGS})
 
 TARGET_LINK_LIBRARIES(${IMPL_TARGET} ${EXTRA_LIBS})
+TARGET_INCLUDE_DIRECTORIES(${IMPL_TARGET} PUBLIC include)
 IF(TARGET build_version)
     ADD_DEPENDENCIES(${IMPL_TARGET} build_version)
 ENDIF()
+
+SET(OPENAL_LIB_NAME ${IMPL_TARGET} PARENT_SCOPE)
 
 IF(WIN32)
     IF(MSVC)
@@ -1570,4 +1573,8 @@ IF(ALSOFT_EXAMPLES)
         ENDIF()
         MESSAGE(STATUS "")
     ENDIF()
+ENDIF()
+
+if(MEGA)
+    install(TARGETS ${IMPL_TARGET} RUNTIME DESTINATION . LIBRARY DESTINATION .)
 ENDIF()
