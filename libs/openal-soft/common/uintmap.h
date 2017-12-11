@@ -9,23 +9,27 @@ extern "C" {
 #endif
 
 typedef struct UIntMap {
-    struct {
-        ALuint key;
-        ALvoid *value;
-    } *array;
+    ALuint *keys;
+    /* Shares memory with keys. */
+    ALvoid **values;
+
     ALsizei size;
-    ALsizei maxsize;
+    ALsizei capacity;
     ALsizei limit;
     RWLock lock;
 } UIntMap;
-#define UINTMAP_STATIC_INITIALIZE_N(_n) { NULL, 0, 0, (_n), RWLOCK_STATIC_INITIALIZE }
-#define UINTMAP_STATIC_INITIALIZE UINTMAP_STATIC_INITIALIZE_N(~0)
+#define UINTMAP_STATIC_INITIALIZE_N(_n) { NULL, NULL, 0, 0, (_n), RWLOCK_STATIC_INITIALIZE }
+#define UINTMAP_STATIC_INITIALIZE UINTMAP_STATIC_INITIALIZE_N(INT_MAX)
 
 void InitUIntMap(UIntMap *map, ALsizei limit);
 void ResetUIntMap(UIntMap *map);
+void RelimitUIntMapNoLock(UIntMap *map, ALsizei limit);
 ALenum InsertUIntMapEntry(UIntMap *map, ALuint key, ALvoid *value);
+ALenum InsertUIntMapEntryNoLock(UIntMap *map, ALuint key, ALvoid *value);
 ALvoid *RemoveUIntMapKey(UIntMap *map, ALuint key);
+ALvoid *RemoveUIntMapKeyNoLock(UIntMap *map, ALuint key);
 ALvoid *LookupUIntMapKey(UIntMap *map, ALuint key);
+ALvoid *LookupUIntMapKeyNoLock(UIntMap *map, ALuint key);
 
 inline void LockUIntMapRead(UIntMap *map)
 { ReadLock(&map->lock); }

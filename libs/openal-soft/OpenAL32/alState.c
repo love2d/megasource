@@ -20,12 +20,15 @@
 
 #include "config.h"
 
+#include "version.h"
+
 #include <stdlib.h>
 #include "alMain.h"
 #include "AL/alc.h"
 #include "AL/al.h"
 #include "AL/alext.h"
 #include "alError.h"
+#include "alListener.h"
 #include "alSource.h"
 #include "alAuxEffectSlot.h"
 
@@ -44,6 +47,12 @@ static const ALchar alErrInvalidValue[] = "Invalid Value";
 static const ALchar alErrInvalidOp[] = "Invalid Operation";
 static const ALchar alErrOutOfMemory[] = "Out of Memory";
 
+/* Resampler strings */
+static const ALchar alPointResampler[] = "Nearest";
+static const ALchar alLinearResampler[] = "Linear";
+static const ALchar alSinc4Resampler[] = "4-Point Sinc";
+static const ALchar alBSincResampler[] = "Band-limited Sinc (12/24)";
+
 AL_API ALvoid AL_APIENTRY alEnable(ALenum capability)
 {
     ALCcontext *context;
@@ -51,18 +60,21 @@ AL_API ALvoid AL_APIENTRY alEnable(ALenum capability)
     context = GetContextRef();
     if(!context) return;
 
+    WriteLock(&context->PropLock);
     switch(capability)
     {
     case AL_SOURCE_DISTANCE_MODEL:
         context->SourceDistanceModel = AL_TRUE;
-        ATOMIC_STORE(&context->UpdateSources, AL_TRUE);
         break;
 
     default:
         SET_ERROR_AND_GOTO(context, AL_INVALID_ENUM, done);
     }
+    if(!ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+        UpdateListenerProps(context);
 
 done:
+    WriteUnlock(&context->PropLock);
     ALCcontext_DecRef(context);
 }
 
@@ -73,18 +85,21 @@ AL_API ALvoid AL_APIENTRY alDisable(ALenum capability)
     context = GetContextRef();
     if(!context) return;
 
+    WriteLock(&context->PropLock);
     switch(capability)
     {
     case AL_SOURCE_DISTANCE_MODEL:
         context->SourceDistanceModel = AL_FALSE;
-        ATOMIC_STORE(&context->UpdateSources, AL_TRUE);
         break;
 
     default:
         SET_ERROR_AND_GOTO(context, AL_INVALID_ENUM, done);
     }
+    if(!ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+        UpdateListenerProps(context);
 
 done:
+    WriteUnlock(&context->PropLock);
     ALCcontext_DecRef(context);
 }
 
@@ -143,7 +158,22 @@ AL_API ALboolean AL_APIENTRY alGetBoolean(ALenum pname)
         break;
 
     case AL_DEFERRED_UPDATES_SOFT:
-        value = context->DeferUpdates;
+        if(ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+            value = AL_TRUE;
+        break;
+
+    case AL_GAIN_LIMIT_SOFT:
+        if(GAIN_MIX_MAX/context->GainBoost != 0.0f)
+            value = AL_TRUE;
+        break;
+
+    case AL_NUM_RESAMPLERS_SOFT:
+        /* Always non-0. */
+        value = AL_TRUE;
+        break;
+
+    case AL_DEFAULT_RESAMPLER_SOFT:
+        value = ResamplerDefault ? AL_TRUE : AL_FALSE;
         break;
 
     default:
@@ -183,7 +213,20 @@ AL_API ALdouble AL_APIENTRY alGetDouble(ALenum pname)
         break;
 
     case AL_DEFERRED_UPDATES_SOFT:
-        value = (ALdouble)context->DeferUpdates;
+        if(ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+            value = (ALdouble)AL_TRUE;
+        break;
+
+    case AL_GAIN_LIMIT_SOFT:
+        value = (ALdouble)GAIN_MIX_MAX/context->GainBoost;
+        break;
+
+    case AL_NUM_RESAMPLERS_SOFT:
+        value = (ALdouble)(ResamplerMax + 1);
+        break;
+
+    case AL_DEFAULT_RESAMPLER_SOFT:
+        value = (ALdouble)ResamplerDefault;
         break;
 
     default:
@@ -223,7 +266,20 @@ AL_API ALfloat AL_APIENTRY alGetFloat(ALenum pname)
         break;
 
     case AL_DEFERRED_UPDATES_SOFT:
-        value = (ALfloat)context->DeferUpdates;
+        if(ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+            value = (ALfloat)AL_TRUE;
+        break;
+
+    case AL_GAIN_LIMIT_SOFT:
+        value = GAIN_MIX_MAX/context->GainBoost;
+        break;
+
+    case AL_NUM_RESAMPLERS_SOFT:
+        value = (ALfloat)(ResamplerMax + 1);
+        break;
+
+    case AL_DEFAULT_RESAMPLER_SOFT:
+        value = (ALfloat)ResamplerDefault;
         break;
 
     default:
@@ -263,7 +319,20 @@ AL_API ALint AL_APIENTRY alGetInteger(ALenum pname)
         break;
 
     case AL_DEFERRED_UPDATES_SOFT:
-        value = (ALint)context->DeferUpdates;
+        if(ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+            value = (ALint)AL_TRUE;
+        break;
+
+    case AL_GAIN_LIMIT_SOFT:
+        value = (ALint)(GAIN_MIX_MAX/context->GainBoost);
+        break;
+
+    case AL_NUM_RESAMPLERS_SOFT:
+        value = ResamplerMax + 1;
+        break;
+
+    case AL_DEFAULT_RESAMPLER_SOFT:
+        value = ResamplerDefault;
         break;
 
     default:
@@ -303,7 +372,20 @@ AL_API ALint64SOFT AL_APIENTRY alGetInteger64SOFT(ALenum pname)
         break;
 
     case AL_DEFERRED_UPDATES_SOFT:
-        value = (ALint64SOFT)context->DeferUpdates;
+        if(ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+            value = (ALint64SOFT)AL_TRUE;
+        break;
+
+    case AL_GAIN_LIMIT_SOFT:
+        value = (ALint64SOFT)(GAIN_MIX_MAX/context->GainBoost);
+        break;
+
+    case AL_NUM_RESAMPLERS_SOFT:
+        value = (ALint64SOFT)(ResamplerMax + 1);
+        break;
+
+    case AL_DEFAULT_RESAMPLER_SOFT:
+        value = (ALint64SOFT)ResamplerDefault;
         break;
 
     default:
@@ -329,6 +411,9 @@ AL_API ALvoid AL_APIENTRY alGetBooleanv(ALenum pname, ALboolean *values)
             case AL_DISTANCE_MODEL:
             case AL_SPEED_OF_SOUND:
             case AL_DEFERRED_UPDATES_SOFT:
+            case AL_GAIN_LIMIT_SOFT:
+            case AL_NUM_RESAMPLERS_SOFT:
+            case AL_DEFAULT_RESAMPLER_SOFT:
                 values[0] = alGetBoolean(pname);
                 return;
         }
@@ -362,6 +447,9 @@ AL_API ALvoid AL_APIENTRY alGetDoublev(ALenum pname, ALdouble *values)
             case AL_DISTANCE_MODEL:
             case AL_SPEED_OF_SOUND:
             case AL_DEFERRED_UPDATES_SOFT:
+            case AL_GAIN_LIMIT_SOFT:
+            case AL_NUM_RESAMPLERS_SOFT:
+            case AL_DEFAULT_RESAMPLER_SOFT:
                 values[0] = alGetDouble(pname);
                 return;
         }
@@ -395,6 +483,9 @@ AL_API ALvoid AL_APIENTRY alGetFloatv(ALenum pname, ALfloat *values)
             case AL_DISTANCE_MODEL:
             case AL_SPEED_OF_SOUND:
             case AL_DEFERRED_UPDATES_SOFT:
+            case AL_GAIN_LIMIT_SOFT:
+            case AL_NUM_RESAMPLERS_SOFT:
+            case AL_DEFAULT_RESAMPLER_SOFT:
                 values[0] = alGetFloat(pname);
                 return;
         }
@@ -428,6 +519,9 @@ AL_API ALvoid AL_APIENTRY alGetIntegerv(ALenum pname, ALint *values)
             case AL_DISTANCE_MODEL:
             case AL_SPEED_OF_SOUND:
             case AL_DEFERRED_UPDATES_SOFT:
+            case AL_GAIN_LIMIT_SOFT:
+            case AL_NUM_RESAMPLERS_SOFT:
+            case AL_DEFAULT_RESAMPLER_SOFT:
                 values[0] = alGetInteger(pname);
                 return;
         }
@@ -459,6 +553,9 @@ AL_API void AL_APIENTRY alGetInteger64vSOFT(ALenum pname, ALint64SOFT *values)
             case AL_DISTANCE_MODEL:
             case AL_SPEED_OF_SOUND:
             case AL_DEFERRED_UPDATES_SOFT:
+            case AL_GAIN_LIMIT_SOFT:
+            case AL_NUM_RESAMPLERS_SOFT:
+            case AL_DEFAULT_RESAMPLER_SOFT:
                 values[0] = alGetInteger64SOFT(pname);
                 return;
         }
@@ -547,8 +644,11 @@ AL_API ALvoid AL_APIENTRY alDopplerFactor(ALfloat value)
     if(!(value >= 0.0f && isfinite(value)))
         SET_ERROR_AND_GOTO(context, AL_INVALID_VALUE, done);
 
+    WriteLock(&context->PropLock);
     context->DopplerFactor = value;
-    ATOMIC_STORE(&context->UpdateSources, AL_TRUE);
+    if(!ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+        UpdateListenerProps(context);
+    WriteUnlock(&context->PropLock);
 
 done:
     ALCcontext_DecRef(context);
@@ -564,8 +664,11 @@ AL_API ALvoid AL_APIENTRY alDopplerVelocity(ALfloat value)
     if(!(value >= 0.0f && isfinite(value)))
         SET_ERROR_AND_GOTO(context, AL_INVALID_VALUE, done);
 
+    WriteLock(&context->PropLock);
     context->DopplerVelocity = value;
-    ATOMIC_STORE(&context->UpdateSources, AL_TRUE);
+    if(!ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+        UpdateListenerProps(context);
+    WriteUnlock(&context->PropLock);
 
 done:
     ALCcontext_DecRef(context);
@@ -581,8 +684,11 @@ AL_API ALvoid AL_APIENTRY alSpeedOfSound(ALfloat value)
     if(!(value > 0.0f && isfinite(value)))
         SET_ERROR_AND_GOTO(context, AL_INVALID_VALUE, done);
 
+    WriteLock(&context->PropLock);
     context->SpeedOfSound = value;
-    ATOMIC_STORE(&context->UpdateSources, AL_TRUE);
+    if(!ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+        UpdateListenerProps(context);
+    WriteUnlock(&context->PropLock);
 
 done:
     ALCcontext_DecRef(context);
@@ -601,9 +707,14 @@ AL_API ALvoid AL_APIENTRY alDistanceModel(ALenum value)
          value == AL_NONE))
         SET_ERROR_AND_GOTO(context, AL_INVALID_VALUE, done);
 
+    WriteLock(&context->PropLock);
     context->DistanceModel = value;
     if(!context->SourceDistanceModel)
-        ATOMIC_STORE(&context->UpdateSources, AL_TRUE);
+    {
+        if(!ATOMIC_LOAD(&context->DeferUpdates, almemory_order_acquire))
+            UpdateListenerProps(context);
+    }
+    WriteUnlock(&context->PropLock);
 
 done:
     ALCcontext_DecRef(context);
@@ -632,4 +743,37 @@ AL_API ALvoid AL_APIENTRY alProcessUpdatesSOFT(void)
     ALCcontext_ProcessUpdates(context);
 
     ALCcontext_DecRef(context);
+}
+
+
+AL_API const ALchar* AL_APIENTRY alGetStringiSOFT(ALenum pname, ALsizei index)
+{
+    const char *ResamplerNames[] = {
+        alPointResampler, alLinearResampler,
+        alSinc4Resampler, alBSincResampler,
+    };
+    const ALchar *value = NULL;
+    ALCcontext *context;
+
+    static_assert(COUNTOF(ResamplerNames) == ResamplerMax+1, "Incorrect ResamplerNames list");
+
+    context = GetContextRef();
+    if(!context) return NULL;
+
+    switch(pname)
+    {
+    case AL_RESAMPLER_NAME_SOFT:
+        if(index < 0 || (size_t)index >= COUNTOF(ResamplerNames))
+            SET_ERROR_AND_GOTO(context, AL_INVALID_VALUE, done);
+        value = ResamplerNames[index];
+        break;
+
+    default:
+        SET_ERROR_AND_GOTO(context, AL_INVALID_ENUM, done);
+    }
+
+done:
+    ALCcontext_DecRef(context);
+
+    return value;
 }

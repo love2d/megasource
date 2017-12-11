@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "AL/alc.h"
 #include "AL/al.h"
@@ -38,6 +39,70 @@
 #define ALC_EFX_MAJOR_VERSION                    0x20001
 #define ALC_EFX_MINOR_VERSION                    0x20002
 #define ALC_MAX_AUXILIARY_SENDS                  0x20003
+#endif
+
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+static WCHAR *FromUTF8(const char *str)
+{
+    WCHAR *out = NULL;
+    int len;
+
+    if((len=MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0)) > 0)
+    {
+        out = calloc(sizeof(WCHAR), len);
+        MultiByteToWideChar(CP_UTF8, 0, str, -1, out, len);
+    }
+    return out;
+}
+
+/* Override printf, fprintf, and fwrite so we can print UTF-8 strings. */
+static void al_fprintf(FILE *file, const char *fmt, ...)
+{
+    char str[1024];
+    WCHAR *wstr;
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(str, sizeof(str), fmt, ap);
+    va_end(ap);
+
+    str[sizeof(str)-1] = 0;
+    wstr = FromUTF8(str);
+    if(!wstr)
+        fprintf(file, "<UTF-8 error> %s", str);
+    else
+        fprintf(file, "%ls", wstr);
+    free(wstr);
+}
+#define fprintf al_fprintf
+#define printf(...) al_fprintf(stdout, __VA_ARGS__)
+
+static int al_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *file)
+{
+    char str[1024];
+    WCHAR *wstr;
+    size_t len;
+
+    len = size * nmemb;
+    if(len > sizeof(str)-1)
+        len = sizeof(str)-1;
+    memcpy(str, ptr, len);
+    str[len] = 0;
+
+    wstr = FromUTF8(str);
+    if(!wstr)
+        fprintf(file, "<UTF-8 error> %s", str);
+    else
+        fprintf(file, "%ls", wstr);
+    free(wstr);
+
+    return len / size;
+}
+#define fwrite al_fwrite
 #endif
 
 
@@ -186,6 +251,38 @@ static void printALInfo(void)
     checkALErrors();
 }
 
+static void printResamplerInfo(void)
+{
+    LPALGETSTRINGISOFT alGetStringiSOFT;
+    ALint num_resamplers;
+    ALint def_resampler;
+
+    if(!alIsExtensionPresent("AL_SOFT_source_resampler"))
+    {
+        printf("Resampler info not available\n");
+        return;
+    }
+
+    alGetStringiSOFT = alGetProcAddress("alGetStringiSOFT");
+
+    num_resamplers = alGetInteger(AL_NUM_RESAMPLERS_SOFT);
+    def_resampler = alGetInteger(AL_DEFAULT_RESAMPLER_SOFT);
+
+    if(!num_resamplers)
+        printf("!!! No resamplers found !!!\n");
+    else
+    {
+        ALint i;
+        printf("Available resamplers:\n");
+        for(i = 0;i < num_resamplers;++i)
+        {
+            const ALchar *name = alGetStringiSOFT(AL_RESAMPLER_NAME_SOFT, i);
+            printf("    %s%s\n", name, (i==def_resampler)?" *":"");
+        }
+    }
+    checkALErrors();
+}
+
 static void printEFXInfo(ALCdevice *device)
 {
     ALCint major, minor, sends;
@@ -329,6 +426,7 @@ int main(int argc, char *argv[])
     }
 
     printALInfo();
+    printResamplerInfo();
     printEFXInfo(device);
 
     alcMakeContextCurrent(NULL);

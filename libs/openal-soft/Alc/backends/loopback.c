@@ -41,7 +41,7 @@ static ALCboolean ALCloopback_start(ALCloopback *self);
 static void ALCloopback_stop(ALCloopback *self);
 static DECLARE_FORWARD2(ALCloopback, ALCbackend, ALCenum, captureSamples, void*, ALCuint)
 static DECLARE_FORWARD(ALCloopback, ALCbackend, ALCuint, availableSamples)
-static DECLARE_FORWARD(ALCloopback, ALCbackend, ALint64, getLatency)
+static DECLARE_FORWARD(ALCloopback, ALCbackend, ClockLatency, getClockLatency)
 static DECLARE_FORWARD(ALCloopback, ALCbackend, void, lock)
 static DECLARE_FORWARD(ALCloopback, ALCbackend, void, unlock)
 DECLARE_DEFAULT_ALLOCATORS(ALCloopback)
@@ -59,7 +59,7 @@ static ALCenum ALCloopback_open(ALCloopback *self, const ALCchar *name)
 {
     ALCdevice *device = STATIC_CAST(ALCbackend, self)->mDevice;
 
-    al_string_copy_cstr(&device->DeviceName, name);
+    alstr_copy_cstr(&device->DeviceName, name);
     return ALC_NO_ERROR;
 }
 

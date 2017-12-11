@@ -28,12 +28,13 @@
 #include <assert.h>
 #include <math.h>
 
+#include <SDL_sound.h>
+
 #include "AL/al.h"
 #include "AL/alc.h"
 #include "AL/alext.h"
 
 #include "common/alhelpers.h"
-#include "common/sdl_sound.h"
 
 
 #ifndef M_PI
@@ -44,47 +45,63 @@ static LPALCGETSTRINGISOFT alcGetStringiSOFT;
 static LPALCRESETDEVICESOFT alcResetDeviceSOFT;
 
 /* LoadBuffer loads the named audio file into an OpenAL buffer object, and
- * returns the new buffer ID. */
+ * returns the new buffer ID.
+ */
 static ALuint LoadSound(const char *filename)
 {
-    ALenum err, format, type, channels;
-    ALuint rate, buffer;
-    size_t datalen;
-    void *data;
-    FilePtr sound;
+    Sound_Sample *sample;
+    ALenum err, format;
+    ALuint buffer;
+    Uint32 slen;
 
     /* Open the audio file */
-    sound = openAudioFile(filename, 1000);
-    if(!sound)
+    sample = Sound_NewSampleFromFile(filename, NULL, 65536);
+    if(!sample)
     {
         fprintf(stderr, "Could not open audio in %s\n", filename);
-        closeAudioFile(sound);
         return 0;
     }
 
     /* Get the sound format, and figure out the OpenAL format */
-    if(getAudioInfo(sound, &rate, &channels, &type) != 0)
+    if(sample->actual.channels == 1)
     {
-        fprintf(stderr, "Error getting audio info for %s\n", filename);
-        closeAudioFile(sound);
-        return 0;
+        if(sample->actual.format == AUDIO_U8)
+            format = AL_FORMAT_MONO8;
+        else if(sample->actual.format == AUDIO_S16SYS)
+            format = AL_FORMAT_MONO16;
+        else
+        {
+            fprintf(stderr, "Unsupported sample format: 0x%04x\n", sample->actual.format);
+            Sound_FreeSample(sample);
+            return 0;
+        }
     }
-
-    format = GetFormat(channels, type, NULL);
-    if(format == AL_NONE)
+    else if(sample->actual.channels == 2)
     {
-        fprintf(stderr, "Unsupported format (%s, %s) for %s\n",
-                ChannelsName(channels), TypeName(type), filename);
-        closeAudioFile(sound);
+        if(sample->actual.format == AUDIO_U8)
+            format = AL_FORMAT_STEREO8;
+        else if(sample->actual.format == AUDIO_S16SYS)
+            format = AL_FORMAT_STEREO16;
+        else
+        {
+            fprintf(stderr, "Unsupported sample format: 0x%04x\n", sample->actual.format);
+            Sound_FreeSample(sample);
+            return 0;
+        }
+    }
+    else
+    {
+        fprintf(stderr, "Unsupported channel count: %d\n", sample->actual.channels);
+        Sound_FreeSample(sample);
         return 0;
     }
 
     /* Decode the whole audio stream to a buffer. */
-    data = decodeAudioStream(sound, &datalen);
-    if(!data)
+    slen = Sound_DecodeAll(sample);
+    if(!sample->buffer || slen == 0)
     {
         fprintf(stderr, "Failed to read audio from %s\n", filename);
-        closeAudioFile(sound);
+        Sound_FreeSample(sample);
         return 0;
     }
 
@@ -92,9 +109,8 @@ static ALuint LoadSound(const char *filename)
      * close the file. */
     buffer = 0;
     alGenBuffers(1, &buffer);
-    alBufferData(buffer, format, data, datalen, rate);
-    free(data);
-    closeAudioFile(sound);
+    alBufferData(buffer, format, sample->buffer, slen, sample->actual.rate);
+    Sound_FreeSample(sample);
 
     /* Check if an error occured, and clean up if so. */
     err = alGetError();
@@ -113,6 +129,7 @@ static ALuint LoadSound(const char *filename)
 int main(int argc, char **argv)
 {
     ALCdevice *device;
+    ALboolean has_angle_ext;
     ALuint source, buffer;
     const char *soundname;
     const char *hrtfname;
@@ -121,27 +138,17 @@ int main(int argc, char **argv)
     ALdouble angle;
     ALenum state;
 
-    /* Print out usage if no file was specified */
-    if(argc < 2 || (strcmp(argv[1], "-hrtf") == 0 && argc < 4))
+    /* Print out usage if no arguments were specified */
+    if(argc < 2)
     {
-        fprintf(stderr, "Usage: %s [-hrtf <name>] <soundfile>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [-device <name>] [-hrtf <name>] <soundfile>\n", argv[0]);
         return 1;
     }
 
-    /* Initialize OpenAL with the default device, and check for HRTF support. */
-    if(InitAL() != 0)
+    /* Initialize OpenAL, and check for HRTF support. */
+    argv++; argc--;
+    if(InitAL(&argv, &argc) != 0)
         return 1;
-
-    if(strcmp(argv[1], "-hrtf") == 0)
-    {
-        hrtfname = argv[2];
-        soundname = argv[3];
-    }
-    else
-    {
-        hrtfname = NULL;
-        soundname = argv[1];
-    }
 
     device = alcGetContextsDevice(alcGetCurrentContext());
     if(!alcIsExtensionPresent(device, "ALC_SOFT_HRTF"))
@@ -156,6 +163,24 @@ int main(int argc, char **argv)
     LOAD_PROC(device, alcGetStringiSOFT);
     LOAD_PROC(device, alcResetDeviceSOFT);
 #undef LOAD_PROC
+
+    /* Check for the AL_EXT_STEREO_ANGLES extension to be able to also rotate
+     * stereo sources.
+     */
+    has_angle_ext = alIsExtensionPresent("AL_EXT_STEREO_ANGLES");
+    printf("AL_EXT_STEREO_ANGLES%s found\n", has_angle_ext?"":" not");
+
+    /* Check for user-preferred HRTF */
+    if(strcmp(argv[0], "-hrtf") == 0)
+    {
+        hrtfname = argv[1];
+        soundname = argv[2];
+    }
+    else
+    {
+        hrtfname = NULL;
+        soundname = argv[0];
+    }
 
     /* Enumerate available HRTFs, and reset the device using one. */
     alcGetIntegerv(device, ALC_NUM_HRTF_SPECIFIERS_SOFT, 1, &num_hrtf);
@@ -178,19 +203,22 @@ int main(int argc, char **argv)
                 index = i;
         }
 
+        i = 0;
+        attr[i++] = ALC_HRTF_SOFT;
+        attr[i++] = ALC_TRUE;
         if(index == -1)
         {
             if(hrtfname)
                 printf("HRTF \"%s\" not found\n", hrtfname);
-            index = 0;
+            printf("Using default HRTF...\n");
         }
-        printf("Selecting HRTF %d...\n", index);
-
-        attr[0] = ALC_HRTF_SOFT;
-        attr[1] = ALC_TRUE;
-        attr[2] = ALC_HRTF_ID_SOFT;
-        attr[3] = index;
-        attr[4] = 0;
+        else
+        {
+            printf("Selecting HRTF %d...\n", index);
+            attr[i++] = ALC_HRTF_ID_SOFT;
+            attr[i++] = index;
+        }
+        attr[i] = 0;
 
         if(!alcResetDeviceSOFT(device, attr))
             printf("Failed to reset device: %s\n", alcGetString(device, alcGetError(device)));
@@ -207,10 +235,14 @@ int main(int argc, char **argv)
     }
     fflush(stdout);
 
+    /* Initialize SDL_sound. */
+    Sound_Init();
+
     /* Load the sound into a buffer. */
     buffer = LoadSound(soundname);
     if(!buffer)
     {
+        Sound_Quit();
         CloseAL();
         return 1;
     }
@@ -229,19 +261,33 @@ int main(int argc, char **argv)
     do {
         al_nssleep(10000000);
 
-        /* Rotate the source around the listener by about 1/4 cycle per second.
-         * Only affects mono sounds.
+        /* Rotate the source around the listener by about 1/4 cycle per second,
+         * and keep it within -pi...+pi.
          */
         angle += 0.01 * M_PI * 0.5;
+        if(angle > M_PI)
+            angle -= M_PI*2.0;
+
+        /* This only rotates mono sounds. */
         alSource3f(source, AL_POSITION, (ALfloat)sin(angle), 0.0f, -(ALfloat)cos(angle));
+
+        if(has_angle_ext)
+        {
+            /* This rotates stereo sounds with the AL_EXT_STEREO_ANGLES
+             * extension. Angles are specified counter-clockwise in radians.
+             */
+            ALfloat angles[2] = { (ALfloat)(M_PI/6.0 - angle), (ALfloat)(-M_PI/6.0 - angle) };
+            alSourcefv(source, AL_STEREO_ANGLES, angles);
+        }
 
         alGetSourcei(source, AL_SOURCE_STATE, &state);
     } while(alGetError() == AL_NO_ERROR && state == AL_PLAYING);
 
-    /* All done. Delete resources, and close OpenAL. */
+    /* All done. Delete resources, and close down SDL_sound and OpenAL. */
     alDeleteSources(1, &source);
     alDeleteBuffers(1, &buffer);
 
+    Sound_Quit();
     CloseAL();
 
     return 0;

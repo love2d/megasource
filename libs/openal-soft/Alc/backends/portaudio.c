@@ -145,7 +145,7 @@ static ALCboolean ALCportPlayback_start(ALCportPlayback *self);
 static void ALCportPlayback_stop(ALCportPlayback *self);
 static DECLARE_FORWARD2(ALCportPlayback, ALCbackend, ALCenum, captureSamples, ALCvoid*, ALCuint)
 static DECLARE_FORWARD(ALCportPlayback, ALCbackend, ALCuint, availableSamples)
-static DECLARE_FORWARD(ALCportPlayback, ALCbackend, ALint64, getLatency)
+static DECLARE_FORWARD(ALCportPlayback, ALCbackend, ClockLatency, getClockLatency)
 static DECLARE_FORWARD(ALCportPlayback, ALCbackend, void, lock)
 static DECLARE_FORWARD(ALCportPlayback, ALCbackend, void, unlock)
 DECLARE_DEFAULT_ALLOCATORS(ALCportPlayback)
@@ -177,7 +177,9 @@ static int ALCportPlayback_WriteCallback(const void *UNUSED(inputBuffer), void *
 {
     ALCportPlayback *self = userData;
 
+    ALCportPlayback_lock(self);
     aluMixData(STATIC_CAST(ALCbackend, self)->mDevice, outputBuffer, framesPerBuffer);
+    ALCportPlayback_unlock(self);
     return 0;
 }
 
@@ -243,7 +245,7 @@ retry_open:
         return ALC_INVALID_VALUE;
     }
 
-    al_string_copy_cstr(&device->DeviceName, name);
+    alstr_copy_cstr(&device->DeviceName, name);
 
     return ALC_NO_ERROR;
 
@@ -340,7 +342,7 @@ static ALCboolean ALCportCapture_start(ALCportCapture *self);
 static void ALCportCapture_stop(ALCportCapture *self);
 static ALCenum ALCportCapture_captureSamples(ALCportCapture *self, ALCvoid *buffer, ALCuint samples);
 static ALCuint ALCportCapture_availableSamples(ALCportCapture *self);
-static DECLARE_FORWARD(ALCportCapture, ALCbackend, ALint64, getLatency)
+static DECLARE_FORWARD(ALCportCapture, ALCbackend, ClockLatency, getClockLatency)
 static DECLARE_FORWARD(ALCportCapture, ALCbackend, void, lock)
 static DECLARE_FORWARD(ALCportCapture, ALCbackend, void, unlock)
 DECLARE_DEFAULT_ALLOCATORS(ALCportCapture)
@@ -397,7 +399,7 @@ static ALCenum ALCportCapture_open(ALCportCapture *self, const ALCchar *name)
 
     samples = device->UpdateSize * device->NumUpdates;
     samples = maxu(samples, 100 * device->Frequency / 1000);
-    frame_size = FrameSizeFromDevFmt(device->FmtChans, device->FmtType);
+    frame_size = FrameSizeFromDevFmt(device->FmtChans, device->FmtType, device->AmbiOrder);
 
     self->ring = ll_ringbuffer_create(samples, frame_size);
     if(self->ring == NULL) return ALC_INVALID_VALUE;
@@ -431,7 +433,7 @@ static ALCenum ALCportCapture_open(ALCportCapture *self, const ALCchar *name)
             ERR("%s samples not supported\n", DevFmtTypeString(device->FmtType));
             return ALC_INVALID_VALUE;
     }
-    self->params.channelCount = ChannelsFromDevFmt(device->FmtChans);
+    self->params.channelCount = ChannelsFromDevFmt(device->FmtChans, device->AmbiOrder);
 
     err = Pa_OpenStream(&self->stream, &self->params, NULL,
         device->Frequency, paFramesPerBufferUnspecified, paNoFlag,
@@ -443,7 +445,7 @@ static ALCenum ALCportCapture_open(ALCportCapture *self, const ALCchar *name)
         return ALC_INVALID_VALUE;
     }
 
-    al_string_copy_cstr(&device->DeviceName, name);
+    alstr_copy_cstr(&device->DeviceName, name);
 
     return ALC_NO_ERROR;
 }

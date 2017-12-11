@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 
 #include "AL/al.h"
@@ -53,6 +54,7 @@ enum WaveType {
     WT_Sawtooth,
     WT_Triangle,
     WT_Impulse,
+    WT_WhiteNoise,
 };
 
 static const char *GetWaveTypeName(enum WaveType type)
@@ -64,8 +66,15 @@ static const char *GetWaveTypeName(enum WaveType type)
         case WT_Sawtooth: return "sawtooth";
         case WT_Triangle: return "triangle";
         case WT_Impulse: return "impulse";
+        case WT_WhiteNoise: return "noise";
     }
     return "(unknown)";
+}
+
+static inline ALuint dither_rng(ALuint *seed)
+{
+    *seed = (*seed * 96314165) + 907633515;
+    return *seed;
 }
 
 static void ApplySin(ALfloat *data, ALdouble g, ALuint srate, ALuint freq)
@@ -81,6 +90,7 @@ static void ApplySin(ALfloat *data, ALdouble g, ALuint srate, ALuint freq)
  */
 static ALuint CreateWave(enum WaveType type, ALuint freq, ALuint srate)
 {
+    ALuint seed = 22222;
     ALint data_size;
     ALfloat *data;
     ALuint buffer;
@@ -89,25 +99,44 @@ static ALuint CreateWave(enum WaveType type, ALuint freq, ALuint srate)
 
     data_size = srate * sizeof(ALfloat);
     data = calloc(1, data_size);
-    if(type == WT_Sine)
-        ApplySin(data, 1.0, srate, freq);
-    else if(type == WT_Square)
-        for(i = 1;freq*i < srate/2;i+=2)
-            ApplySin(data, 4.0/M_PI * 1.0/i, srate, freq*i);
-    else if(type == WT_Sawtooth)
-        for(i = 1;freq*i < srate/2;i++)
-            ApplySin(data, 2.0/M_PI * ((i&1)*2 - 1.0) / i, srate, freq*i);
-    else if(type == WT_Triangle)
-        for(i = 1;freq*i < srate/2;i+=2)
-            ApplySin(data, 8.0/(M_PI*M_PI) * (1.0 - (i&2)) / (i*i), srate, freq*i);
-    else if(type == WT_Impulse)
+    switch(type)
     {
-        /* NOTE: Impulse isn't really a waveform, but it can still be useful to
-         * test (other than resampling, the ALSOFT_DEFAULT_REVERB environment
-         * variable can prove useful here to test the reverb response).
-         */
-        for(i = 0;i < srate;i++)
-            data[i] = (i%(srate/freq)) ? 0.0f : 1.0f;
+        case WT_Sine:
+            ApplySin(data, 1.0, srate, freq);
+            break;
+        case WT_Square:
+            for(i = 1;freq*i < srate/2;i+=2)
+                ApplySin(data, 4.0/M_PI * 1.0/i, srate, freq*i);
+            break;
+        case WT_Sawtooth:
+            for(i = 1;freq*i < srate/2;i++)
+                ApplySin(data, 2.0/M_PI * ((i&1)*2 - 1.0) / i, srate, freq*i);
+            break;
+        case WT_Triangle:
+            for(i = 1;freq*i < srate/2;i+=2)
+                ApplySin(data, 8.0/(M_PI*M_PI) * (1.0 - (i&2)) / (i*i), srate, freq*i);
+            break;
+        case WT_Impulse:
+            /* NOTE: Impulse isn't handled using additive synthesis, and is
+             * instead just a non-0 sample at a given rate. This can still be
+             * useful to test (other than resampling, the ALSOFT_DEFAULT_REVERB
+             * environment variable can prove useful here to test the reverb
+             * response).
+             */
+            for(i = 0;i < srate;i++)
+                data[i] = (i%(srate/freq)) ? 0.0f : 1.0f;
+            break;
+        case WT_WhiteNoise:
+            /* NOTE: WhiteNoise is just uniform set of uncorrelated values, and
+             * is not influenced by the waveform frequency.
+             */
+            for(i = 0;i < srate;i++)
+            {
+                ALuint rng0 = dither_rng(&seed);
+                ALuint rng1 = dither_rng(&seed);
+                data[i] = (ALfloat)(rng0*(1.0/UINT_MAX) - rng1*(1.0/UINT_MAX));
+            }
+            break;
     }
 
     /* Buffer the audio data into a new buffer object. */
@@ -133,6 +162,7 @@ static ALuint CreateWave(enum WaveType type, ALuint freq, ALuint srate)
 int main(int argc, char *argv[])
 {
     enum WaveType wavetype = WT_Sine;
+    const char *appname = argv[0];
     ALuint source, buffer;
     ALint last_pos, num_loops;
     ALint max_loops = 4;
@@ -142,23 +172,35 @@ int main(int argc, char *argv[])
     ALenum state;
     int i;
 
-    for(i = 1;i < argc;i++)
+    argv++; argc--;
+    if(InitAL(&argv, &argc) != 0)
+        return 1;
+
+    if(!alIsExtensionPresent("AL_EXT_FLOAT32"))
+    {
+        fprintf(stderr, "Required AL_EXT_FLOAT32 extension not supported on this device!\n");
+        CloseAL();
+        return 1;
+    }
+
+    for(i = 0;i < argc;i++)
     {
         if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
         {
             fprintf(stderr, "OpenAL Tone Generator\n"
 "\n"
-"Usage: %s <options>\n"
+"Usage: %s [-device <name>] <options>\n"
 "\n"
 "Available options:\n"
 "  --help/-h                 This help text\n"
 "  -t <seconds>              Time to play a tone (default 5 seconds)\n"
 "  --waveform/-w <type>      Waveform type: sine (default), square, sawtooth,\n"
-"                                triangle, impulse\n"
+"                                triangle, impulse, noise\n"
 "  --freq/-f <hz>            Tone frequency (default 1000 hz)\n"
 "  --srate/-s <sample rate>  Sampling rate (default output rate)\n",
-                argv[0]
+                appname
             );
+            CloseAL();
             return 1;
         }
         else if(i+1 < argc && strcmp(argv[i], "-t") == 0)
@@ -179,6 +221,8 @@ int main(int argc, char *argv[])
                 wavetype = WT_Triangle;
             else if(strcmp(argv[i], "impulse") == 0)
                 wavetype = WT_Impulse;
+            else if(strcmp(argv[i], "noise") == 0)
+                wavetype = WT_WhiteNoise;
             else
                 fprintf(stderr, "Unhandled waveform: %s\n", argv[i]);
         }
@@ -202,15 +246,6 @@ int main(int argc, char *argv[])
                 srate = 40;
             }
         }
-    }
-
-    InitAL();
-
-    if(!alIsExtensionPresent("AL_EXT_FLOAT32"))
-    {
-        fprintf(stderr, "Required AL_EXT_FLOAT32 extension not supported on this device!\n");
-        CloseAL();
-        return 1;
     }
 
     {

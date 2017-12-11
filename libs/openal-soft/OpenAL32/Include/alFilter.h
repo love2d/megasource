@@ -42,13 +42,11 @@ typedef enum ALfilterType {
 typedef struct ALfilterState {
     ALfloat x[2]; /* History of two last input samples  */
     ALfloat y[2]; /* History of two last output samples */
+    ALfloat b0, b1, b2; /* Transfer function coefficients "b" */
     ALfloat a1, a2; /* Transfer function coefficients "a" (a0 is pre-applied) */
-    ALfloat b1, b2; /* Transfer function coefficients "b" (b0 is input_gain) */
-    ALfloat input_gain;
-
-    void (*process)(struct ALfilterState *self, ALfloat *restrict dst, const ALfloat *src, ALuint numsamples);
 } ALfilterState;
-#define ALfilterState_process(a, ...) ((a)->process((a), __VA_ARGS__))
+/* Currently only a C-based filter process method is implemented. */
+#define ALfilterState_process ALfilterState_processC
 
 /* Calculates the rcpQ (i.e. 1/Q) coefficient for shelving filters, using the
  * reference gain and shelf slope parameter.
@@ -79,26 +77,18 @@ inline void ALfilterState_clear(ALfilterState *filter)
 
 void ALfilterState_setParams(ALfilterState *filter, ALfilterType type, ALfloat gain, ALfloat freq_mult, ALfloat rcpQ);
 
-inline ALfloat ALfilterState_processSingle(ALfilterState *filter, ALfloat sample)
+inline void ALfilterState_copyParams(ALfilterState *restrict dst, const ALfilterState *restrict src)
 {
-    ALfloat outsmp;
-
-    outsmp = filter->input_gain * sample +
-             filter->b1 * filter->x[0] +
-             filter->b2 * filter->x[1] -
-             filter->a1 * filter->y[0] -
-             filter->a2 * filter->y[1];
-    filter->x[1] = filter->x[0];
-    filter->x[0] = sample;
-    filter->y[1] = filter->y[0];
-    filter->y[0] = outsmp;
-
-    return outsmp;
+    dst->b0 = src->b0;
+    dst->b1 = src->b1;
+    dst->b2 = src->b2;
+    dst->a1 = src->a1;
+    dst->a2 = src->a2;
 }
 
-void ALfilterState_processC(ALfilterState *filter, ALfloat *restrict dst, const ALfloat *src, ALuint numsamples);
+void ALfilterState_processC(ALfilterState *filter, ALfloat *restrict dst, const ALfloat *restrict src, ALsizei numsamples);
 
-inline void ALfilterState_processPassthru(ALfilterState *filter, const ALfloat *src, ALuint numsamples)
+inline void ALfilterState_processPassthru(ALfilterState *filter, const ALfloat *restrict src, ALsizei numsamples)
 {
     if(numsamples >= 2)
     {
@@ -151,10 +141,19 @@ typedef struct ALfilter {
 #define ALfilter_GetParamf(x, c, p, v)  ((x)->GetParamf((x),(c),(p),(v)))
 #define ALfilter_GetParamfv(x, c, p, v) ((x)->GetParamfv((x),(c),(p),(v)))
 
+inline void LockFiltersRead(ALCdevice *device)
+{ LockUIntMapRead(&device->FilterMap); }
+inline void UnlockFiltersRead(ALCdevice *device)
+{ UnlockUIntMapRead(&device->FilterMap); }
+inline void LockFiltersWrite(ALCdevice *device)
+{ LockUIntMapWrite(&device->FilterMap); }
+inline void UnlockFiltersWrite(ALCdevice *device)
+{ UnlockUIntMapWrite(&device->FilterMap); }
+
 inline struct ALfilter *LookupFilter(ALCdevice *device, ALuint id)
-{ return (struct ALfilter*)LookupUIntMapKey(&device->FilterMap, id); }
+{ return (struct ALfilter*)LookupUIntMapKeyNoLock(&device->FilterMap, id); }
 inline struct ALfilter *RemoveFilter(ALCdevice *device, ALuint id)
-{ return (struct ALfilter*)RemoveUIntMapKey(&device->FilterMap, id); }
+{ return (struct ALfilter*)RemoveUIntMapKeyNoLock(&device->FilterMap, id); }
 
 ALvoid ReleaseALFilters(ALCdevice *device);
 
