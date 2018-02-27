@@ -82,12 +82,14 @@ if(MSVC)
 		message(WARNING "Cannot determine Visual Studio version!")
 	endif()
 
+	set(PROGRAMFILES_X86_STR "ProgramFiles(x86)")
+	set(PROGRAMFILES_X86 "$ENV{${PROGRAMFILES_X86_STR}}")
+
 	set(VSCOMNTOOLSSTRING "VS${VSVERSION}COMNTOOLS")
 	set(VSCOMNTOOLS "$ENV{${VSCOMNTOOLSSTRING}}")
 
 	if(VSCOMNTOOLS STREQUAL "")
-		set(PROGRAMFILES_X86 "ProgramFiles(x86)")
-		set(VSWHERE_PATH "$ENV{${PROGRAMFILES_X86}}\\Microsoft Visual Studio\\Installer\\vswhere.exe")
+		set(VSWHERE_PATH "${PROGRAMFILES_X86}\\Microsoft Visual Studio\\Installer\\vswhere.exe")
 
 		execute_process(COMMAND ${VSWHERE_PATH} "-property" "installationPath" OUTPUT_VARIABLE VS_INSTALL_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
 
@@ -113,6 +115,17 @@ if(MSVC)
 			set(MEGA_MSVC_DLLS ${MSVCP_DLL} ${MSVCR_DLL})
 		else()
 			message(WARNING "Could not find Visual C and C++ runtime .dll files")
+		endif()
+
+		if(NOT(MSVC_VERSION LESS 1900))
+			get_filename_component(UCRT_DIR "${PROGRAMFILES_X86}/Windows Kits/10/Redist/ucrt/DLLs/${MEGA_ARCH}" ABSOLUTE)
+			if(EXISTS ${UCRT_DIR})
+				message(STATUS "Found universal C runtime system component directory")
+				file(GLOB UCRT_FILES "${UCRT_DIR}/*.dll")
+				set(MEGA_MSVC_DLLS ${MEGA_MSVC_DLLS} ${UCRT_FILES})
+			else()
+				message(STATUS "Could not find universal C runtime system component directory")
+			endif()
 		endif()
 
 		# Find vcvarsall.bat.
@@ -148,7 +161,7 @@ set(MEGA_LIBTHEORA_VER "1.1.1")
 set(MEGA_MPG123_VER "1.25.6")
 set(MEGA_FREETYPE_VER "2.8.1")
 set(MEGA_SDL2_VER "2.0.7-2088cd828335")
-set(MEGA_OPENAL_VER "1.17.0")
+set(MEGA_OPENAL_VER "1.18.2")
 set(MEGA_MODPLUG_VER "0.8.8.4")
 
 set(SKIP_INSTALL_ALL TRUE)
