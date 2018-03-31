@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -47,6 +47,7 @@
 /* Initialization/Query functions */
 static int Android_VideoInit(_THIS);
 static void Android_VideoQuit(_THIS);
+int Android_GetDisplayDPI(_THIS, SDL_VideoDisplay * display, float * ddpi, float * hdpi, float * vdpi);
 
 #include "../SDL_egl_c.h"
 #define Android_GLES_GetProcAddress SDL_EGL_GetProcAddress
@@ -115,8 +116,11 @@ Android_CreateDevice(int devindex)
     device->VideoQuit = Android_VideoQuit;
     device->PumpEvents = Android_PumpEvents;
 
+    device->GetDisplayDPI = Android_GetDisplayDPI;
+
     device->CreateSDLWindow = Android_CreateWindow;
     device->SetWindowTitle = Android_SetWindowTitle;
+    device->SetWindowFullscreen = Android_SetWindowFullscreen;
     device->DestroyWindow = Android_DestroyWindow;
     device->GetWindowWMInfo = Android_GetWindowWMInfo;
 
@@ -198,6 +202,12 @@ Android_VideoQuit(_THIS)
     Android_QuitTouch();
 }
 
+int
+Android_GetDisplayDPI(_THIS, SDL_VideoDisplay * display, float * ddpi, float * hdpi, float * vdpi)
+{
+    return Android_JNI_GetDisplayDPI(ddpi, hdpi, vdpi);
+}
+
 void
 Android_SetScreenResolution(int width, int height, Uint32 format, float rate)
 {
@@ -211,7 +221,7 @@ Android_SetScreenResolution(int width, int height, Uint32 format, float rate)
     /*
       Update the resolution of the desktop mode, so that the window
       can be properly resized. The screen resolution change can for
-      example happen when the Activity enters or exists immersive mode,
+      example happen when the Activity enters or exits immersive mode,
       which can happen after VideoInit().
     */
     device = SDL_GetVideoDevice();
@@ -225,16 +235,17 @@ Android_SetScreenResolution(int width, int height, Uint32 format, float rate)
     }
 
     if (Android_Window) {
-        SDL_SendWindowEvent(Android_Window, SDL_WINDOWEVENT_RESIZED, width, height);
-
         /* Force the current mode to match the resize otherwise the SDL_WINDOWEVENT_RESTORED event
          * will fall back to the old mode */
         display = SDL_GetDisplayForWindow(Android_Window);
 
-        display->current_mode.format = format;
-        display->current_mode.w = width;
-        display->current_mode.h = height;
-        display->current_mode.refresh_rate = rate;
+        display->display_modes[0].format = format;
+        display->display_modes[0].w = width;
+        display->display_modes[0].h = height;
+        display->display_modes[0].refresh_rate = rate;
+        display->current_mode = display->display_modes[0];
+
+        SDL_SendWindowEvent(Android_Window, SDL_WINDOWEVENT_RESIZED, width, height);
     }
 }
 

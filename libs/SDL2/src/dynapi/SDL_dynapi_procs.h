@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -69,12 +69,12 @@ SDL_DYNAPI_PROC(int,SDL_Direct3D9GetAdapterIndex,(int a),(a),return)
 SDL_DYNAPI_PROC(IDirect3DDevice9*,SDL_RenderGetD3D9Device,(SDL_Renderer *a),(a),return)
 #endif
 
-#if defined(__IPHONEOS__) && __IPHONEOS__
+#ifdef __IPHONEOS__
 SDL_DYNAPI_PROC(int,SDL_iPhoneSetAnimationCallback,(SDL_Window *a, int b, void c, void *d),(a,b,c,d),return)
 SDL_DYNAPI_PROC(void,SDL_iPhoneSetEventPump,(SDL_bool a),(a),)
 #endif
 
-#if defined(__ANDROID__) && __ANDROID__
+#ifdef __ANDROID__
 SDL_DYNAPI_PROC(void*,SDL_AndroidGetJNIEnv,(void),(),return)
 SDL_DYNAPI_PROC(void*,SDL_AndroidGetActivity,(void),(),return)
 SDL_DYNAPI_PROC(const char*,SDL_AndroidGetInternalStoragePath,(void),(),return)
@@ -681,3 +681,30 @@ SDL_DYNAPI_PROC(void,SDL_AudioStreamClear,(SDL_AudioStream *a),(a),)
 SDL_DYNAPI_PROC(int,SDL_AudioStreamAvailable,(SDL_AudioStream *a),(a),return)
 SDL_DYNAPI_PROC(void,SDL_FreeAudioStream,(SDL_AudioStream *a),(a),)
 SDL_DYNAPI_PROC(int,SDL_AudioStreamFlush,(SDL_AudioStream *a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_acosf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_asinf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_atanf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_atan2f,(float a, float b),(a,b),return)
+SDL_DYNAPI_PROC(float,SDL_ceilf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_copysignf,(float a, float b),(a,b),return)
+SDL_DYNAPI_PROC(float,SDL_fabsf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_floorf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_logf,(float a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_powf,(float a, float b),(a,b),return)
+SDL_DYNAPI_PROC(float,SDL_scalbnf,(float a, int b),(a,b),return)
+SDL_DYNAPI_PROC(double,SDL_fmod,(double a, double b),(a,b),return)
+SDL_DYNAPI_PROC(float,SDL_fmodf,(float a, float b),(a,b),return)
+SDL_DYNAPI_PROC(void,SDL_SetYUVConversionMode,(SDL_YUV_CONVERSION_MODE a),(a),)
+SDL_DYNAPI_PROC(SDL_YUV_CONVERSION_MODE,SDL_GetYUVConversionMode,(void),(),return)
+SDL_DYNAPI_PROC(SDL_YUV_CONVERSION_MODE,SDL_GetYUVConversionModeForResolution,(int a, int b),(a,b),return)
+SDL_DYNAPI_PROC(void*,SDL_RenderGetMetalLayer,(SDL_Renderer *a),(a),return)
+SDL_DYNAPI_PROC(void*,SDL_RenderGetMetalCommandEncoder,(SDL_Renderer *a),(a),return)
+#ifdef __WINRT__
+SDL_DYNAPI_PROC(SDL_WinRT_DeviceFamily,SDL_WinRTGetDeviceFamily,(void),(),return)
+#endif
+#ifdef __ANDROID__
+SDL_DYNAPI_PROC(SDL_bool,SDL_IsAndroidTV,(void),(),return)
+#endif
+SDL_DYNAPI_PROC(double,SDL_log10,(double a),(a),return)
+SDL_DYNAPI_PROC(float,SDL_log10f,(float a),(a),return)
+SDL_DYNAPI_PROC(char*,SDL_GameControllerMappingForDeviceIndex,(int a),(a),return)

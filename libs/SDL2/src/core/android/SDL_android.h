@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -34,6 +34,7 @@ extern "C" {
 
 /* Interface from the SDL library into the Android Java activity */
 extern void Android_JNI_SetActivityTitle(const char *title);
+extern void Android_JNI_SetWindowStyle(SDL_bool fullscreen);
 extern void Android_JNI_SetOrientation(int w, int h, int resizable, const char *hint);
 
 extern SDL_bool Android_JNI_GetAccelerometerValues(float values[3]);
@@ -41,6 +42,8 @@ extern void Android_JNI_ShowTextInput(SDL_Rect *inputRect);
 extern void Android_JNI_HideTextInput(void);
 extern SDL_bool Android_JNI_IsScreenKeyboardShown(void);
 extern ANativeWindow* Android_JNI_GetNativeWindow(void);
+
+extern int Android_JNI_GetDisplayDPI(float *ddpi, float *xdpi, float *ydpi);
 
 /* Audio support */
 extern int Android_JNI_OpenAudioDevice(int iscapture, int sampleRate, int is16Bit, int channelCount, int desiredBufferFrames);
@@ -58,6 +61,9 @@ Sint64 Android_JNI_FileSeek(SDL_RWops* ctx, Sint64 offset, int whence);
 size_t Android_JNI_FileRead(SDL_RWops* ctx, void* buffer, size_t size, size_t maxnum);
 size_t Android_JNI_FileWrite(SDL_RWops* ctx, const void* buffer, size_t size, size_t num);
 int Android_JNI_FileClose(SDL_RWops* ctx);
+
+/* Environment support */
+void Android_JNI_GetManifestEnvironmentVariables(void);
 
 /* Clipboard support */
 int Android_JNI_SetClipboardText(const char* text);
@@ -95,6 +101,11 @@ JNIEXPORT void JNICALL SDL_Android_Init(JNIEnv* mEnv, jclass cls);
 /* MessageBox */
 #include "SDL_messagebox.h"
 int Android_JNI_ShowMessageBox(const SDL_MessageBoxData *messageboxdata, int *buttonid);
+
+/* Cursor support */
+int Android_JNI_CreateCustomCursor(SDL_Surface *surface, int hot_x, int hot_y);
+SDL_bool Android_JNI_SetCustomCursor(int cursorID);
+SDL_bool Android_JNI_SetSystemCursor(int cursorID);
 
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus

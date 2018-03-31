@@ -846,6 +846,7 @@ enable_video_x11_xshape
 enable_video_x11_vm
 enable_video_vivante
 enable_video_cocoa
+enable_render_metal
 enable_video_directfb
 enable_directfb_shared
 enable_video_kmsdrm
@@ -1571,7 +1572,7 @@ Optional Features:
                           QtWayland server support for Wayland video driver
                           [[default=yes]]
   --enable-wayland-shared dynamically load Wayland support [[default=maybe]]
-  --enable-video-mir      use Mir video driver [[default=yes]]
+  --enable-video-mir      use Mir video driver [[default=no]]
   --enable-mir-shared     dynamically load Mir support [[default=maybe]]
   --enable-video-rpi      use Raspberry Pi video driver [[default=yes]]
   --enable-video-x11      use X11 video driver [[default=yes]]
@@ -1594,6 +1595,7 @@ Optional Features:
   --enable-video-x11-vm   use X11 VM extension for fullscreen [[default=yes]]
   --enable-video-vivante  use Vivante EGL video driver [[default=yes]]
   --enable-video-cocoa    use Cocoa video driver [[default=yes]]
+  --enable-render-metal   enable the Metal render driver [[default=yes]]
   --enable-video-directfb use DirectFB video driver [[default=no]]
   --enable-directfb-shared
                           dynamically load directfb support [[default=yes]]
@@ -2710,9 +2712,9 @@ orig_CFLAGS="$CFLAGS"
 #
 SDL_MAJOR_VERSION=2
 SDL_MINOR_VERSION=0
-SDL_MICRO_VERSION=7
+SDL_MICRO_VERSION=8
 SDL_INTERFACE_AGE=0
-SDL_BINARY_AGE=7
+SDL_BINARY_AGE=8
 SDL_VERSION=$SDL_MAJOR_VERSION.$SDL_MINOR_VERSION.$SDL_MICRO_VERSION
 
 
@@ -16688,7 +16690,7 @@ if test "x$ac_cv_lib_m_pow" = xyes; then :
   LIBS="$LIBS -lm"; EXTRA_LDFLAGS="$EXTRA_LDFLAGS -lm"
 fi
 
-    for ac_func in atan atan2 acos asin ceil copysign cos cosf fabs floor log pow scalbn sin sinf sqrt sqrtf tan tanf
+    for ac_func in acos acosf asin asinf atan atanf atan2 atan2f ceil ceilf copysign copysignf cos cosf fabs fabsf floor floorf fmod fmodf log logf log10 log10f pow powf scalbn scalbnf sin sinf sqrt sqrtf tan tanf
 do :
   as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
 ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
@@ -16874,6 +16876,7 @@ SOURCES="$SOURCES $srcdir/src/stdlib/*.c"
 SOURCES="$SOURCES $srcdir/src/thread/*.c"
 SOURCES="$SOURCES $srcdir/src/timer/*.c"
 SOURCES="$SOURCES $srcdir/src/video/*.c"
+SOURCES="$SOURCES $srcdir/src/video/yuv2rgb/*.c"
 
 
 # Check whether --enable-atomic was given.
@@ -17391,6 +17394,20 @@ $as_echo "$have_gcc_sse3" >&6; }
             EXTRA_CFLAGS="$EXTRA_CFLAGS $sse3_CFLAGS"
             SUMMARY_math="${SUMMARY_math} sse3"
         fi
+    fi
+
+    ac_fn_c_check_header_mongrel "$LINENO" "immintrin.h" "ac_cv_header_immintrin_h" "$ac_includes_default"
+if test "x$ac_cv_header_immintrin_h" = xyes; then :
+  have_immintrin_h_hdr=yes
+else
+  have_immintrin_h_hdr=no
+fi
+
+
+    if test x$have_immintrin_h_hdr = xyes; then
+
+$as_echo "#define HAVE_IMMINTRIN_H 1" >>confdefs.h
+
     fi
 
     # Check whether --enable-altivec was given.
@@ -19203,7 +19220,7 @@ $as_echo "#define SDL_VIDEO_DRIVER_WAYLAND_QT_TOUCH 1" >>confdefs.h
 
             fi
 
-            WAYLAND_PROTOCOLS_UNSTABLE="relative-pointer-unstable-v1 pointer-constraints-unstable-v1"
+            WAYLAND_PROTOCOLS_UNSTABLE="relative-pointer-unstable-v1 pointer-constraints-unstable-v1 xdg-shell-unstable-v6"
 
             SOURCES="$SOURCES $srcdir/src/video/wayland/*.c"
             EXTRA_CFLAGS="$EXTRA_CFLAGS $WAYLAND_CFLAGS -I\$(gen)"
@@ -19283,7 +19300,7 @@ CheckMir()
 if test "${enable_video_mir+set}" = set; then :
   enableval=$enable_video_mir;
 else
-  enable_video_mir=yes
+  enable_video_mir=no
 fi
 
 
@@ -19485,12 +19502,56 @@ else
 fi
 
     if test x$enable_video = xyes -a x$enable_video_rpi = xyes; then
-        if test x$ARCH = xnetbsd; then
+        # Extract the first word of "pkg-config", so it can be a program name with args.
+set dummy pkg-config; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_PKG_CONFIG+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $PKG_CONFIG in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_PKG_CONFIG="$PKG_CONFIG" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_PKG_CONFIG="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_PKG_CONFIG" && ac_cv_path_PKG_CONFIG="no"
+  ;;
+esac
+fi
+PKG_CONFIG=$ac_cv_path_PKG_CONFIG
+if test -n "$PKG_CONFIG"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PKG_CONFIG" >&5
+$as_echo "$PKG_CONFIG" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+        if test x$PKG_CONFIG != xno && $PKG_CONFIG --exists bcm_host; then
+            RPI_CFLAGS=`$PKG_CONFIG --cflags bcm_host brcmegl`
+            RPI_LDFLAGS=`$PKG_CONFIG --libs bcm_host brcmegl`
+        elif test x$ARCH = xnetbsd; then
             RPI_CFLAGS="-I/usr/pkg/include -I/usr/pkg/include/interface/vcos/pthreads -I/usr/pkg/include/interface/vmcs_host/linux"
             RPI_LDFLAGS="-Wl,-R/usr/pkg/lib -L/usr/pkg/lib -lbcm_host"
         else
             RPI_CFLAGS="-I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux"
-            RPI_LDFLAGS="-L/opt/vc/lib -lbcm_host"
+            RPI_LDFLAGS="-Wl,-rpath,/opt/vc/lib -L/opt/vc/lib -lbcm_host"
         fi
 
         # Save the original compiler flags and libraries
@@ -21203,6 +21264,63 @@ $as_echo "#define SDL_VIDEO_DRIVER_COCOA 1" >>confdefs.h
     fi
 }
 
+CheckMETAL()
+{
+    # Check whether --enable-render-metal was given.
+if test "${enable_render_metal+set}" = set; then :
+  enableval=$enable_render_metal;
+else
+  enable_render_metal=yes
+fi
+
+    if test x$enable_render = xyes -a x$enable_render_metal = xyes; then
+        save_CFLAGS="$CFLAGS"
+                CFLAGS="$CFLAGS -x objective-c"
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Metal framework" >&5
+$as_echo_n "checking for Metal framework... " >&6; }
+        have_metal=no
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+          #import <Cocoa/Cocoa.h>
+          #import <Metal/Metal.h>
+          #import <QuartzCore/CAMetalLayer.h>
+
+          #if !TARGET_CPU_X86_64
+          #error Metal doesn't work on this configuration
+          #endif
+
+int
+main ()
+{
+
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+        have_metal=yes
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+        CFLAGS="$save_CFLAGS"
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: $have_metal" >&5
+$as_echo "$have_metal" >&6; }
+        if test x$have_metal = xyes; then
+
+$as_echo "#define SDL_VIDEO_RENDER_METAL 1" >>confdefs.h
+
+            SOURCES="$SOURCES $srcdir/src/render/metal/*.m"
+            SUMMARY_video="${SUMMARY_video} metal"
+        else
+            enable_render_metal=no
+        fi
+    fi
+}
+
+
 CheckDirectFB()
 {
     # Check whether --enable-video-directfb was given.
@@ -21356,9 +21474,6 @@ fi
 
 
 $as_echo "#define SDL_VIDEO_DRIVER_DIRECTFB 1" >>confdefs.h
-
-
-$as_echo "#define SDL_VIDEO_RENDER_DIRECTFB 1" >>confdefs.h
 
             SOURCES="$SOURCES $srcdir/src/video/directfb/*.c"
             EXTRA_CFLAGS="$EXTRA_CFLAGS $DIRECTFB_CFLAGS"
@@ -21903,6 +22018,24 @@ $as_echo "#define SDL_VIDEO_RENDER_OGL 1" >>confdefs.h
     fi
 }
 
+CheckMacGLES()
+{
+    if test x$enable_video = xyes -a x$enable_video_opengles = xyes; then
+        video_opengl_egl=yes
+
+$as_echo "#define SDL_VIDEO_OPENGL_EGL 1" >>confdefs.h
+
+        video_opengles_v2=yes
+
+$as_echo "#define SDL_VIDEO_OPENGL_ES2 1" >>confdefs.h
+
+
+$as_echo "#define SDL_VIDEO_RENDER_OGL_ES2 1" >>confdefs.h
+
+        SUMMARY_video="${SUMMARY_video} opengl_es2"
+    fi
+}
+
 CheckEmscriptenGLES()
 {
     if test x$enable_video = xyes -a x$enable_video_opengles = xyes; then
@@ -21987,7 +22120,7 @@ CheckVulkan()
 {
     if test x$enable_video = xyes -a x$enable_video_vulkan = xyes; then
         case "$host" in
-            *-*-androideabi*)
+            *-*-android*)
                 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -22515,7 +22648,7 @@ else
 fi
 
     case "$host" in
-         *-*-androideabi*)
+         *-*-android*)
             pthread_cflags="-D_REENTRANT -D_THREAD_SAFE"
             pthread_lib=""
             ;;
@@ -22994,12 +23127,6 @@ fi
         ac_fn_c_check_header_mongrel "$LINENO" "dxgi.h" "ac_cv_header_dxgi_h" "$ac_includes_default"
 if test "x$ac_cv_header_dxgi_h" = xyes; then :
   have_dxgi=yes
-fi
-
-
-        ac_fn_c_check_header_mongrel "$LINENO" "xaudio2.h" "ac_cv_header_xaudio2_h" "$ac_includes_default"
-if test "x$ac_cv_header_xaudio2_h" = xyes; then :
-  have_xaudio2=yes
 fi
 
 
@@ -23722,7 +23849,7 @@ CheckWarnAll
 case "$host" in
     *-*-linux*|*-*-uclinux*|*-*-gnu*|*-*-k*bsd*-gnu|*-*-bsdi*|*-*-freebsd*|*-*-dragonfly*|*-*-netbsd*|*-*-openbsd*|*-*-sysv5*|*-*-solaris*|*-*-hpux*|*-*-aix*|*-*-minix*|*-*-nto*)
         case "$host" in
-            *-*-androideabi*)
+            *-*-android*)
                 # Android
                 ARCH=android
                 ANDROID_CFLAGS="-DGL_GLEXT_PROTOTYPES"
@@ -23867,17 +23994,24 @@ $as_echo "#define SDL_JOYSTICK_ANDROID 1" >>confdefs.h
         fi
         # Set up files for the haptic library
         if test x$enable_haptic = xyes; then
-           if test x$use_input_events = xyes; then
-             case $ARCH in
-               linux)
+          case $ARCH in
+            linux)
+                if test x$use_input_events = xyes; then
 
 $as_echo "#define SDL_HAPTIC_LINUX 1" >>confdefs.h
 
-                   SOURCES="$SOURCES $srcdir/src/haptic/linux/*.c"
-                   have_haptic=yes
-               ;;
-             esac
-           fi
+                    SOURCES="$SOURCES $srcdir/src/haptic/linux/*.c"
+                    have_haptic=yes
+                fi
+            ;;
+            android)
+
+$as_echo "#define SDL_HAPTIC_ANDROID 1" >>confdefs.h
+
+                SOURCES="$SOURCES $srcdir/src/haptic/android/*.c"
+                have_haptic=yes
+            ;;
+          esac
         fi
         # Set up files for the power library
         if test x$enable_power = xyes; then
@@ -23996,12 +24130,6 @@ $as_echo "#define SDL_AUDIO_DRIVER_WINMM 1" >>confdefs.h
 $as_echo "#define SDL_AUDIO_DRIVER_DSOUND 1" >>confdefs.h
 
                 SOURCES="$SOURCES $srcdir/src/audio/directsound/*.c"
-            fi
-            if test x$have_xaudio2 = xyes; then
-
-$as_echo "#define SDL_AUDIO_DRIVER_XAUDIO2 1" >>confdefs.h
-
-                SOURCES="$SOURCES $srcdir/src/audio/xaudio2/*.c"
             fi
             if test x$have_wasapi = xyes; then
 
@@ -24240,8 +24368,9 @@ fi
         CheckDiskAudio
         CheckDummyAudio
         CheckDLOPEN
-        CheckPTHREAD
+        CheckMETAL
         CheckVulkan
+        CheckPTHREAD
 
         # Set up files for the audio library
         if test x$enable_audio = xyes; then
@@ -24325,6 +24454,10 @@ $as_echo "#define SDL_VIDEO_RENDER_OGL_ES2 1" >>confdefs.h
         EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,OpenGLES"
         EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,QuartzCore"
         EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,UIKit"
+
+        if test x$enable_render = xyes -a x$enable_render_metal = xyes; then
+            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,Metal"
+        fi
         ;;
     *-*-darwin* )
         # This could be either full "Mac OS X", or plain "Darwin" which is
@@ -24343,8 +24476,10 @@ $as_echo "#define SDL_VIDEO_RENDER_OGL_ES2 1" >>confdefs.h
         CheckDummyAudio
         CheckDLOPEN
         CheckCOCOA
+        CheckMETAL
         CheckX11
         CheckMacGL
+        CheckMacGLES
         CheckOpenGLX11
         CheckVulkan
         CheckPTHREAD
@@ -24412,6 +24547,10 @@ $as_echo "#define SDL_TIMER_UNIX 1" >>confdefs.h
         EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,Cocoa"
         EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,Carbon"
         EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-framework,IOKit"
+
+        if test x$enable_render = xyes -a x$enable_render_metal = xyes; then
+            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -Wl,-weak_framework,QuartzCore -Wl,-weak_framework,Metal"
+        fi
         ;;
     *-nacl|*-pnacl)
         ARCH=nacl

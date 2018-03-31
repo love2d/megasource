@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -63,6 +63,7 @@ struct _SDL_Joystick
     int ref_count;              /* Reference count for multiple opens */
 
     SDL_bool is_game_controller;
+    SDL_bool delayed_guide_button; /* SDL_TRUE if this device has the guide button event delayed */
     SDL_bool force_recentering; /* SDL_TRUE if this device needs to have its state reset to 0 */
     SDL_JoystickPowerLevel epowerlevel; /* power level of this joystick, SDL_JOYSTICK_POWER_UNKNOWN if not supported */
     struct _SDL_Joystick *next; /* pointer to next joystick we have allocated */
@@ -120,11 +121,6 @@ extern SDL_JoystickGUID SDL_SYS_JoystickGetDeviceGUID(int device_index);
 
 /* Function to return the stable GUID for a opened joystick */
 extern SDL_JoystickGUID SDL_SYS_JoystickGetGUID(SDL_Joystick * joystick);
-
-#if SDL_JOYSTICK_XINPUT
-/* Function returns SDL_TRUE if this device is an XInput gamepad */
-extern SDL_bool SDL_SYS_IsXInputGamepad_DeviceIndex(int device_index);
-#endif
 
 #endif /* SDL_sysjoystick_h_ */
 

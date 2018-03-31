@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -105,6 +105,23 @@ SDL_NumJoysticks(void)
 }
 
 /*
+ * Perform any needed fixups for joystick names
+ */
+static const char *
+SDL_FixupJoystickName(const char *name)
+{
+    if (name) {
+        const char *skip_prefix = "NVIDIA Corporation ";
+
+        if (SDL_strncmp(name, skip_prefix, SDL_strlen(skip_prefix)) == 0) {
+            name += SDL_strlen(skip_prefix);
+        }
+    }
+    return name;
+}
+
+
+/*
  * Get the implementation dependent name of a joystick
  */
 const char *
@@ -114,7 +131,7 @@ SDL_JoystickNameForIndex(int device_index)
         SDL_SetError("There are %d joysticks available", SDL_NumJoysticks());
         return (NULL);
     }
-    return (SDL_SYS_JoystickNameForDeviceIndex(device_index));
+    return SDL_FixupJoystickName(SDL_SYS_JoystickNameForDeviceIndex(device_index));
 }
 
 /*
@@ -481,7 +498,7 @@ SDL_JoystickName(SDL_Joystick * joystick)
         return (NULL);
     }
 
-    return (joystick->name);
+    return SDL_FixupJoystickName(joystick->name);
 }
 
 /*
@@ -856,6 +873,10 @@ SDL_JoystickUpdate(void)
 
     for (joystick = SDL_joysticks; joystick; joystick = joystick->next) {
         SDL_SYS_JoystickUpdate(joystick);
+
+        if (joystick->delayed_guide_button) {
+            SDL_GameControllerHandleDelayedGuideButton(joystick);
+        }
 
         if (joystick->force_recentering) {
             int i;

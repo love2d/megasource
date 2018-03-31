@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -41,6 +41,9 @@ extern SDL_bool SDL_IsGameControllerNameAndGUID(const char *name, SDL_JoystickGU
 
 /* Function to return whether a game controller should be ignored */
 extern SDL_bool SDL_ShouldIgnoreGameController(const char *name, SDL_JoystickGUID guid);
+
+/* Handle delayed guide button on a game controller */
+extern void SDL_GameControllerHandleDelayedGuideButton(SDL_Joystick *joystick);
 
 /* Internal event queueing functions */
 extern void SDL_PrivateJoystickAdded(int device_index);

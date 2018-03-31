@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -508,6 +508,16 @@ SDL_Convert_U16_to_F32_SSE2(SDL_AudioCVT *cvt, SDL_AudioFormat format)
         cvt->filters[cvt->filter_index](cvt, AUDIO_F32SYS);
     }
 }
+
+#if defined(__GNUC__) && (__GNUC__ < 4)
+/* these were added as of gcc-4.0: http://gcc.gnu.org/bugzilla/show_bug.cgi?id=19418 */
+static inline __m128 _mm_castsi128_ps(__m128i __A) {
+  return (__m128) __A;
+}
+static inline __m128i _mm_castps_si128(__m128 __A) {
+  return (__m128i) __A;
+}
+#endif
 
 static void SDLCALL
 SDL_Convert_S32_to_F32_SSE2(SDL_AudioCVT *cvt, SDL_AudioFormat format)

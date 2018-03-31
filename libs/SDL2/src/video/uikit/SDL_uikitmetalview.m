@@ -1,6 +1,6 @@
 /*
  Simple DirectMedia Layer
- Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+ Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
  
  This software is provided 'as-is', without any express or implied
  warranty.  In no event will the authors be held liable for any damages
@@ -28,7 +28,7 @@
 
 #include "../../SDL_internal.h"
 
-#if SDL_VIDEO_VULKAN && SDL_VIDEO_DRIVER_UIKIT
+#if SDL_VIDEO_DRIVER_UIKIT && (SDL_VIDEO_RENDER_METAL || SDL_VIDEO_VULKAN)
 
 #import "../SDL_sysvideo.h"
 #import "SDL_uikitwindow.h"
@@ -46,17 +46,12 @@
 
 - (instancetype)initWithFrame:(CGRect)frame
                         scale:(CGFloat)scale
-                          tag:(int)tag
 {
     if ((self = [super initWithFrame:frame])) {
-        /* Resize properly when rotated. */
-        self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-
-        /* Set the appropriate scale (for retina display support) */
-        self.contentScaleFactor = scale;
-        self.tag = tag;
-
-        [self updateDrawableSize];
+        self.tag = METALVIEW_TAG;
+        /* Set the desired scale. The default drawableSize of a CAMetalLayer
+         * is its bounds x its scale so nothing further needs to be done. */
+        self.layer.contentsScale = scale;
     }
 
     return self;
@@ -65,17 +60,14 @@
 /* Set the size of the metal drawables when the view is resized. */
 - (void)layoutSubviews
 {
+    CGSize bounds;
+
     [super layoutSubviews];
-    [self updateDrawableSize];
-}
 
-- (void)updateDrawableSize
-{
-    CGSize size  = self.bounds.size;
-    size.width  *= self.contentScaleFactor;
-    size.height *= self.contentScaleFactor;
-
-    ((CAMetalLayer *) self.layer).drawableSize = size;
+    bounds = [self bounds].size;
+    bounds.width *= self.layer.contentsScale;
+    bounds.height *= self.layer.contentsScale;
+    ((CAMetalLayer *) self.layer).drawableSize = bounds;
 }
 
 @end
@@ -87,10 +79,15 @@ UIKit_Mtl_AddMetalView(SDL_Window* window)
     SDL_uikitview *view = (SDL_uikitview*)data.uiwindow.rootViewController.view;
     CGFloat scale = 1.0;
 
+    if ([view isKindOfClass:[SDL_uikitmetalview class]]) {
+        return (SDL_uikitmetalview *)view;
+    }
+
     if (window->flags & SDL_WINDOW_ALLOW_HIGHDPI) {
-        /* Set the scale to the natural scale factor of the screen - the
-         * backing dimensions of the Metal view will match the pixel
-         * dimensions of the screen rather than the dimensions in points.
+        /* Set the scale to the natural scale factor of the screen - then
+         * the backing dimensions of the Metal view will match the pixel
+         * dimensions of the screen rather than the dimensions in points
+         * yielding high resolution on retine displays.
          */
 #ifdef __IPHONE_8_0
         if ([data.uiwindow.screen respondsToSelector:@selector(nativeScale)]) {
@@ -103,21 +100,8 @@ UIKit_Mtl_AddMetalView(SDL_Window* window)
     }
     SDL_uikitmetalview *metalview
          = [[SDL_uikitmetalview alloc] initWithFrame:view.frame
-                                          scale:scale
-                                            tag:METALVIEW_TAG];
-#if 1
-    [view addSubview:metalview];
-#else
-    /* Sets this view as the controller's view, and adds the view to
-     * the window hierarchy.
-     *
-     * Left here for information. Not used because I suspect that for correct
-     * operation it will be necesary to copy everything from the window's
-     * current SDL_uikitview instance to the SDL_uikitview portion of the
-     * SDL_metalview. The latter would be derived from SDL_uikitview rather
-     * than UIView. */
+                                               scale:scale];
     [metalview setSDLWindow:window];
-#endif
 
     return metalview;
 }
@@ -144,4 +128,4 @@ UIKit_Mtl_GetDrawableSize(SDL_Window * window, int * w, int * h)
     }
 }
 
-#endif
+#endif /* SDL_VIDEO_DRIVER_UIKIT && (SDL_VIDEO_RENDER_METAL || SDL_VIDEO_VULKAN) */

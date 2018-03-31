@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -174,6 +174,14 @@ extern DECLSPEC SDL_bool SDLCALL SDL_IsGameController(int joystick_index);
  *  If no name can be found, this function returns NULL.
  */
 extern DECLSPEC const char *SDLCALL SDL_GameControllerNameForIndex(int joystick_index);
+
+/**
+ *  Get the mapping of a game controller.
+ *  This can be called before any controllers are opened.
+ *
+ *  \return the mapping string.  Must be freed with SDL_free().  Returns NULL if no mapping is available
+ */
+extern DECLSPEC char *SDLCALL SDL_GameControllerMappingForDeviceIndex(int joystick_index);
 
 /**
  *  Open a game controller for use.

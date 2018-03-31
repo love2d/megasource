@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -453,7 +453,7 @@ SDL_GetPlatform()
 
 #if defined(__WIN32__)
 
-#if !defined(HAVE_LIBC) || (defined(__WATCOMC__) && defined(BUILD_DLL))
+#if (!defined(HAVE_LIBC) || defined(__WATCOMC__)) && !defined(SDL_STATIC_LIB)
 /* Need to include DllMain() on Watcom C for some reason.. */
 
 BOOL APIENTRY
@@ -469,7 +469,7 @@ _DllMainCRTStartup(HANDLE hModule,
     }
     return TRUE;
 }
-#endif /* building DLL with Watcom C */
+#endif /* Building DLL */
 
 #endif /* __WIN32__ */
 

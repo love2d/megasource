@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -97,11 +97,11 @@ static VideoBootStrap *bootstrap[] = {
 #if SDL_VIDEO_DRIVER_PSP
     &PSP_bootstrap,
 #endif
-#if SDL_VIDEO_DRIVER_RPI
-    &RPI_bootstrap,
-#endif 
 #if SDL_VIDEO_DRIVER_KMSDRM
     &KMSDRM_bootstrap,
+#endif
+#if SDL_VIDEO_DRIVER_RPI
+    &RPI_bootstrap,
 #endif
 #if SDL_VIDEO_DRIVER_NACL
     &NACL_bootstrap,
@@ -3774,6 +3774,8 @@ SDL_ShowMessageBox(const SDL_MessageBoxData *messageboxdata, int *buttonid)
 
     if (!messageboxdata) {
         return SDL_InvalidParamError("messageboxdata");
+    } else if (messageboxdata->numbuttons < 0) {
+        return SDL_SetError("Invalid number of buttons");
     }
 
     current_window = SDL_GetKeyboardFocus();
@@ -4001,6 +4003,7 @@ void *SDL_Vulkan_GetVkGetInstanceProcAddr(void)
     }
     if (!_this->vulkan_config.loader_loaded) {
         SDL_SetError("No Vulkan loader has been loaded");
+        return NULL;
     }
     return _this->vulkan_config.vkGetInstanceProcAddr;
 }

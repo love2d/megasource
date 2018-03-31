@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -365,8 +365,8 @@ struct SDL_VideoDevice
     /* Data used by the Vulkan drivers */
     struct
     {
-        void *vkGetInstanceProcAddr;
-        void *vkEnumerateInstanceExtensionProperties;
+        PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+        PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
         int loader_loaded;
         char loader_path[256];
         void *loader_handle;

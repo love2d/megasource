@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -50,6 +50,21 @@ SDL_AppleTVControllerUIHintChanged(void *userdata, const char *name, const char 
 }
 #endif
 
+#if !TARGET_OS_TV
+static void SDLCALL
+SDL_HideHomeIndicatorHintChanged(void *userdata, const char *name, const char *oldValue, const char *hint)
+{
+    @autoreleasepool {
+        SDL_uikitviewcontroller *viewcontroller = (__bridge SDL_uikitviewcontroller *) userdata;
+        viewcontroller.homeIndicatorHidden = (hint && *hint) ? SDL_atoi(hint) : -1;
+        if (@available(iOS 11.0, *)) {
+            [viewcontroller setNeedsUpdateOfHomeIndicatorAutoHidden];
+            [viewcontroller setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
+        }
+    }
+}
+#endif
+
 @implementation SDL_uikitviewcontroller {
     CADisplayLink *displayLink;
     int animationInterval;
@@ -79,6 +94,12 @@ SDL_AppleTVControllerUIHintChanged(void *userdata, const char *name, const char 
                             SDL_AppleTVControllerUIHintChanged,
                             (__bridge void *) self);
 #endif
+
+#if !TARGET_OS_TV
+        SDL_AddHintCallback(SDL_HINT_IOS_HIDE_HOME_INDICATOR,
+                            SDL_HideHomeIndicatorHintChanged,
+                            (__bridge void *) self);
+#endif
     }
     return self;
 }
@@ -92,6 +113,12 @@ SDL_AppleTVControllerUIHintChanged(void *userdata, const char *name, const char 
 #if TARGET_OS_TV
     SDL_DelHintCallback(SDL_HINT_APPLE_TV_CONTROLLER_UI_EVENTS,
                         SDL_AppleTVControllerUIHintChanged,
+                        (__bridge void *) self);
+#endif
+
+#if !TARGET_OS_TV
+    SDL_DelHintCallback(SDL_HINT_IOS_HIDE_HOME_INDICATOR,
+                        SDL_HideHomeIndicatorHintChanged,
                         (__bridge void *) self);
 #endif
 }
@@ -179,7 +206,35 @@ SDL_AppleTVControllerUIHintChanged(void *userdata, const char *name, const char 
 
 - (BOOL)prefersStatusBarHidden
 {
-    return (window->flags & (SDL_WINDOW_FULLSCREEN|SDL_WINDOW_BORDERLESS)) != 0;
+    BOOL hidden = (window->flags & (SDL_WINDOW_FULLSCREEN|SDL_WINDOW_BORDERLESS)) != 0;
+    return hidden;
+}
+
+- (BOOL)prefersHomeIndicatorAutoHidden
+{
+    BOOL hidden = NO;
+    if (self.homeIndicatorHidden == 1) {
+        hidden = YES;
+    }
+    return hidden;
+}
+
+- (UIRectEdge)preferredScreenEdgesDeferringSystemGestures
+{
+    if (self.homeIndicatorHidden >= 0) {
+        if (self.homeIndicatorHidden == 2) {
+            return UIRectEdgeAll;
+        } else {
+            return UIRectEdgeNone;
+        }
+    }
+
+    /* By default, fullscreen and borderless windows get all screen gestures */
+    if ((window->flags & (SDL_WINDOW_FULLSCREEN|SDL_WINDOW_BORDERLESS)) != 0) {
+        return UIRectEdgeAll;
+    } else {
+        return UIRectEdgeNone;
+    }
 }
 #endif
 
@@ -387,7 +442,9 @@ SDL_AppleTVControllerUIHintChanged(void *userdata, const char *name, const char 
 {
     SDL_SendKeyboardKey(SDL_PRESSED, SDL_SCANCODE_RETURN);
     SDL_SendKeyboardKey(SDL_RELEASED, SDL_SCANCODE_RETURN);
-    SDL_StopTextInput();
+    if (SDL_GetHintBoolean(SDL_HINT_RETURN_KEY_HIDES_IME, SDL_FALSE)) {
+         SDL_StopTextInput();
+    }
     return YES;
 }
 

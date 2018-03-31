@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -24,6 +24,10 @@
 #define SDL_cocoawindow_h_
 
 #import <Cocoa/Cocoa.h>
+
+#if SDL_VIDEO_OPENGL_EGL
+#include "../SDL_egl_c.h"
+#endif
 
 typedef struct SDL_WindowData SDL_WindowData;
 
@@ -114,6 +118,9 @@ struct SDL_WindowData
     SDL_bool inWindowMove;
     Cocoa_WindowListener *listener;
     struct SDL_VideoData *videodata;
+#if SDL_VIDEO_OPENGL_EGL
+    EGLSurface egl_surface;
+#endif
 };
 
 extern int Cocoa_CreateWindow(_THIS, SDL_Window * window);

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -646,7 +646,6 @@ SDL_GetGlobalMouseState(int *x, int *y)
     *x = *y = 0;
 
     if (!mouse->GetGlobalMouseState) {
-        SDL_assert(0 && "This should really be implemented for every target.");
         return 0;
     }
 

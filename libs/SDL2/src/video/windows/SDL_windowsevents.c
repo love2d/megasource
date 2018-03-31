@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -359,6 +359,11 @@ ShouldGenerateWindowCloseOnAltF4(void)
     return !SDL_GetHintBoolean(SDL_HINT_WINDOWS_NO_CLOSE_ON_ALT_F4, SDL_FALSE);
 }
 
+/* Win10 "Fall Creators Update" introduced the bug that SetCursorPos() (as used by SDL_WarpMouseInWindow())
+   doesn't reliably generate WM_MOUSEMOVE events anymore (see #3931) which breaks relative mouse mode via warping.
+   This is used to implement a workaround.. */
+static SDL_bool isWin10FCUorNewer = SDL_FALSE;
+
 LRESULT CALLBACK
 WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -415,6 +420,11 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             POINT cursorPos;
             BOOL minimized;
+
+            /* Don't mark the window as shown if it's activated before being shown */
+            if (!IsWindowVisible(hwnd)) {
+                break;
+            }
 
             minimized = HIWORD(wParam);
             if (!minimized && (LOWORD(wParam) != WA_INACTIVE)) {
@@ -476,6 +486,17 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (!mouse->relative_mode || mouse->relative_mode_warp) {
                 SDL_MouseID mouseID = (((GetMessageExtraInfo() & MOUSEEVENTF_FROMTOUCH) == MOUSEEVENTF_FROMTOUCH) ? SDL_TOUCH_MOUSEID : 0);
                 SDL_SendMouseMotion(data->window, mouseID, 0, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+                if (isWin10FCUorNewer && mouseID != SDL_TOUCH_MOUSEID && mouse->relative_mode_warp) {
+                    /* To work around #3931, Win10 bug introduced in Fall Creators Update, where
+                       SetCursorPos() (SDL_WarpMouseInWindow()) doesn't reliably generate mouse events anymore,
+                       after each windows mouse event generate a fake event for the middle of the window
+                       if relative_mode_warp is used */
+                    int center_x = 0, center_y = 0;
+                    SDL_GetWindowSize(data->window, &center_x, &center_y);
+                    center_x /= 2;
+                    center_y /= 2;
+                    SDL_SendMouseMotion(data->window, mouseID, 0, center_x, center_y);
+                }
             }
         }
         /* don't break here, fall through to check the wParam like the button presses */
@@ -681,8 +702,6 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int w, h;
             int min_w, min_h;
             int max_w, max_h;
-            int style;
-            BOOL menu;
             BOOL constrain_max_size;
 
             if (SDL_IsShapedWindow(data->window))
@@ -715,21 +734,23 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 constrain_max_size = FALSE;
             }
 
-            size.top = 0;
-            size.left = 0;
-            size.bottom = h;
-            size.right = w;
+            if (!(SDL_GetWindowFlags(data->window) & SDL_WINDOW_BORDERLESS)) {
+                LONG style = GetWindowLong(hwnd, GWL_STYLE);
+                /* DJM - according to the docs for GetMenu(), the
+                   return value is undefined if hwnd is a child window.
+                   Apparently it's too difficult for MS to check
+                   inside their function, so I have to do it here.
+                 */
+                BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
+                size.top = 0;
+                size.left = 0;
+                size.bottom = h;
+                size.right = w;
 
-            style = GetWindowLong(hwnd, GWL_STYLE);
-            /* DJM - according to the docs for GetMenu(), the
-               return value is undefined if hwnd is a child window.
-               Apparently it's too difficult for MS to check
-               inside their function, so I have to do it here.
-             */
-            menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
-            AdjustWindowRectEx(&size, style, menu, 0);
-            w = size.right - size.left;
-            h = size.bottom - size.top;
+                AdjustWindowRectEx(&size, style, menu, 0);
+                w = size.right - size.left;
+                h = size.bottom - size.top;
+            }
 
             /* Fix our size to the current size */
             info = (MINMAXINFO *) lParam;
@@ -951,9 +972,19 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_NCCALCSIZE:
         {
-            // When borderless, need to tell windows that the size of the non-client area is 0
-            if ( wParam == TRUE && SDL_GetWindowFlags( data->window ) & SDL_WINDOW_BORDERLESS )
+            Uint32 window_flags = SDL_GetWindowFlags(data->window);
+            if (wParam == TRUE && (window_flags & SDL_WINDOW_BORDERLESS) && !(window_flags & SDL_WINDOW_FULLSCREEN)) {
+                /* When borderless, need to tell windows that the size of the non-client area is 0 */
+                if (!(window_flags & SDL_WINDOW_RESIZABLE)) {
+                    int w, h;
+                    NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *)lParam;
+                    w = data->window->windowed.w;
+                    h = data->window->windowed.h;
+                    params->rgrc[0].right = params->rgrc[0].left + w;
+                    params->rgrc[0].bottom = params->rgrc[0].top + h;
+                }
                 return 0;
+            }
         }
         break;
 
@@ -1043,6 +1074,43 @@ WIN_PumpEvents(_THIS)
     }
 }
 
+/* to work around #3931, a bug introduced in Win10 Fall Creators Update (build nr. 16299)
+   we need to detect the windows version. this struct and the function below does that.
+   usually this struct and the corresponding function (RtlGetVersion) are in <Ntddk.h>
+   but here we just load it dynamically */
+struct SDL_WIN_OSVERSIONINFOW {
+    ULONG dwOSVersionInfoSize;
+    ULONG dwMajorVersion;
+    ULONG dwMinorVersion;
+    ULONG dwBuildNumber;
+    ULONG dwPlatformId;
+    WCHAR szCSDVersion[128];
+};
+
+static SDL_bool
+IsWin10FCUorNewer(void)
+{
+    HMODULE handle = GetModuleHandleW(L"ntdll.dll");
+    if (handle) {
+        typedef LONG(WINAPI* RtlGetVersionPtr)(struct SDL_WIN_OSVERSIONINFOW*);
+        RtlGetVersionPtr getVersionPtr = (RtlGetVersionPtr)GetProcAddress(handle, "RtlGetVersion");
+        if (getVersionPtr != NULL) {
+            struct SDL_WIN_OSVERSIONINFOW info;
+            SDL_zero(info);
+            info.dwOSVersionInfoSize = sizeof(info);
+            if (getVersionPtr(&info) == 0) { /* STATUS_SUCCESS == 0 */
+                if (   (info.dwMajorVersion == 10 && info.dwMinorVersion == 0 && info.dwBuildNumber >= 16299)
+                    || (info.dwMajorVersion == 10 && info.dwMinorVersion > 0)
+                    || (info.dwMajorVersion > 10) )
+                {
+                    return SDL_TRUE;
+                }
+            }
+        }
+    }
+    return SDL_FALSE;
+}
+
 static int app_registered = 0;
 LPTSTR SDL_Appname = NULL;
 Uint32 SDL_Appstyle = 0;
@@ -1106,6 +1174,8 @@ SDL_RegisterApp(char *name, Uint32 style, void *hInst)
     if (!RegisterClassEx(&wcex)) {
         return SDL_SetError("Couldn't register application class");
     }
+
+    isWin10FCUorNewer = IsWin10FCUorNewer();
 
     app_registered = 1;
     return 0;

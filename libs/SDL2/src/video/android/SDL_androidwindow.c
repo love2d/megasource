@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2017 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -53,7 +53,6 @@ Android_CreateWindow(_THIS, SDL_Window * window)
     window->h = Android_ScreenHeight;
 
     window->flags &= ~SDL_WINDOW_RESIZABLE;     /* window is NEVER resizeable */
-    window->flags |= SDL_WINDOW_FULLSCREEN;     /* window is always fullscreen */
     window->flags &= ~SDL_WINDOW_HIDDEN;
     window->flags |= SDL_WINDOW_SHOWN;          /* only one window on Android */
     window->flags |= SDL_WINDOW_INPUT_FOCUS;    /* always has input focus */
@@ -96,6 +95,12 @@ void
 Android_SetWindowTitle(_THIS, SDL_Window * window)
 {
     Android_JNI_SetActivityTitle(window->title);
+}
+
+void
+Android_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, SDL_bool fullscreen)
+{
+    Android_JNI_SetWindowStyle(fullscreen);
 }
 
 void
