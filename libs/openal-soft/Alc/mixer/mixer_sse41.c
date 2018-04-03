@@ -1,9 +1,6 @@
 /**
- * OpenAL cross platform audio library, SSE3 mixer functions
- *
+ * OpenAL cross platform audio library
  * Copyright (C) 2014 by Timothy Arceri <t_arceri@yahoo.com.au>.
- * Copyright (C) 2015 by Chris Robinson <chris.kcat@gmail.com>.
- *
  * This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
  *  License as published by the Free Software Foundation; either
@@ -25,17 +22,18 @@
 
 #include <xmmintrin.h>
 #include <emmintrin.h>
-#include <pmmintrin.h>
+#include <smmintrin.h>
 
 #include "alu.h"
-#include "mixer_defs.h"
+#include "defs.h"
 
 
-const ALfloat *Resample_fir4_32_SSE3(const InterpState* UNUSED(state),
+const ALfloat *Resample_lerp_SSE41(const InterpState* UNUSED(state),
   const ALfloat *restrict src, ALsizei frac, ALint increment,
   ALfloat *restrict dst, ALsizei numsamples)
 {
     const __m128i increment4 = _mm_set1_epi32(increment*4);
+    const __m128 fracOne4 = _mm_set1_ps(1.0f/FRACTIONONE);
     const __m128i fracMask4 = _mm_set1_epi32(FRACTIONMASK);
     union { alignas(16) ALint i[4]; float f[4]; } pos_;
     union { alignas(16) ALsizei i[4]; float f[4]; } frac_;
@@ -48,26 +46,15 @@ const ALfloat *Resample_fir4_32_SSE3(const InterpState* UNUSED(state),
     frac4 = _mm_castps_si128(_mm_load_ps(frac_.f));
     pos4 = _mm_castps_si128(_mm_load_ps(pos_.f));
 
-    --src;
     for(i = 0;numsamples-i > 3;i += 4)
     {
-        const __m128 val0 = _mm_loadu_ps(&src[pos_.i[0]]);
-        const __m128 val1 = _mm_loadu_ps(&src[pos_.i[1]]);
-        const __m128 val2 = _mm_loadu_ps(&src[pos_.i[2]]);
-        const __m128 val3 = _mm_loadu_ps(&src[pos_.i[3]]);
-        __m128 k0 = _mm_load_ps(sinc4Tab[frac_.i[0]]);
-        __m128 k1 = _mm_load_ps(sinc4Tab[frac_.i[1]]);
-        __m128 k2 = _mm_load_ps(sinc4Tab[frac_.i[2]]);
-        __m128 k3 = _mm_load_ps(sinc4Tab[frac_.i[3]]);
-        __m128 out;
+        const __m128 val1 = _mm_setr_ps(src[pos_.i[0]], src[pos_.i[1]], src[pos_.i[2]], src[pos_.i[3]]);
+        const __m128 val2 = _mm_setr_ps(src[pos_.i[0]+1], src[pos_.i[1]+1], src[pos_.i[2]+1], src[pos_.i[3]+1]);
 
-        k0 = _mm_mul_ps(k0, val0);
-        k1 = _mm_mul_ps(k1, val1);
-        k2 = _mm_mul_ps(k2, val2);
-        k3 = _mm_mul_ps(k3, val3);
-        k0 = _mm_hadd_ps(k0, k1);
-        k2 = _mm_hadd_ps(k2, k3);
-        out = _mm_hadd_ps(k0, k2);
+        /* val1 + (val2-val1)*mu */
+        const __m128 r0 = _mm_sub_ps(val2, val1);
+        const __m128 mu = _mm_mul_ps(_mm_cvtepi32_ps(frac4), fracOne4);
+        const __m128 out = _mm_add_ps(val1, _mm_mul_ps(mu, r0));
 
         _mm_store_ps(&dst[i], out);
 
@@ -75,19 +62,21 @@ const ALfloat *Resample_fir4_32_SSE3(const InterpState* UNUSED(state),
         pos4 = _mm_add_epi32(pos4, _mm_srli_epi32(frac4, FRACTIONBITS));
         frac4 = _mm_and_si128(frac4, fracMask4);
 
-        _mm_store_ps(pos_.f, _mm_castsi128_ps(pos4));
-        _mm_store_ps(frac_.f, _mm_castsi128_ps(frac4));
+        pos_.i[0] = _mm_extract_epi32(pos4, 0);
+        pos_.i[1] = _mm_extract_epi32(pos4, 1);
+        pos_.i[2] = _mm_extract_epi32(pos4, 2);
+        pos_.i[3] = _mm_extract_epi32(pos4, 3);
     }
 
     /* NOTE: These four elements represent the position *after* the last four
      * samples, so the lowest element is the next position to resample.
      */
     pos = pos_.i[0];
-    frac = frac_.i[0];
+    frac = _mm_cvtsi128_si32(frac4);
 
     for(;i < numsamples;i++)
     {
-        dst[i] = resample_fir4(src[pos], src[pos+1], src[pos+2], src[pos+3], frac);
+        dst[i] = lerp(src[pos], src[pos+1], frac * (1.0f/FRACTIONONE));
 
         frac += increment;
         pos  += frac>>FRACTIONBITS;

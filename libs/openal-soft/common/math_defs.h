@@ -6,6 +6,10 @@
 #include <float.h>
 #endif
 
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif
+
 #define F_PI    (3.14159265358979323846f)
 #define F_PI_2  (1.57079632679489661923f)
 #define F_TAU   (6.28318530717958647692f)
@@ -26,6 +30,13 @@ static const union msvc_inf_hack {
 static inline float log2f(float f)
 {
     return logf(f) / logf(2.0f);
+}
+#endif
+
+#ifndef HAVE_CBRTF
+static inline float cbrtf(float f)
+{
+    return powf(f, 1.0f/3.0f);
 }
 #endif
 

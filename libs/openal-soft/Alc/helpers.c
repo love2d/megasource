@@ -39,6 +39,9 @@
 #ifdef HAVE_DIRENT_H
 #include <dirent.h>
 #endif
+#ifdef HAVE_PROC_PIDPATH
+#include <libproc.h>
+#endif
 
 #ifdef __FreeBSD__
 #include <sys/types.h>
@@ -66,7 +69,7 @@ DEFINE_GUID(IID_IAudioClient,         0x1cb9ad4c, 0xdbfa, 0x4c32, 0xb1,0x78, 0xc
 DEFINE_GUID(IID_IAudioRenderClient,   0xf294acfc, 0x3146, 0x4483, 0xa7,0xbf, 0xad,0xdc,0xa7,0xc2,0x60,0xe2);
 DEFINE_GUID(IID_IAudioCaptureClient,  0xc8adbd64, 0xe71e, 0x48a0, 0xa4,0xde, 0x18,0x5c,0x39,0x5c,0xd3,0x17);
 
-#ifdef HAVE_MMDEVAPI
+#ifdef HAVE_WASAPI
 #include <wtypes.h>
 #include <devpropdef.h>
 #include <propkeydef.h>
@@ -108,6 +111,8 @@ DEFINE_PROPERTYKEY(PKEY_AudioEndpoint_GUID, 0x1da5d803, 0xd492, 0x4edd, 0x8c, 0x
 
 #include "alMain.h"
 #include "alu.h"
+#include "cpu_caps.h"
+#include "fpu_modes.h"
 #include "atomic.h"
 #include "uintmap.h"
 #include "vector.h"
@@ -118,18 +123,24 @@ DEFINE_PROPERTYKEY(PKEY_AudioEndpoint_GUID, 0x1da5d803, 0xd492, 0x4edd, 0x8c, 0x
 
 extern inline ALuint NextPowerOf2(ALuint value);
 extern inline size_t RoundUp(size_t value, size_t r);
-extern inline ALuint64 ScaleRound(ALuint64 val, ALuint64 new_scale, ALuint64 old_scale);
-extern inline ALuint64 ScaleFloor(ALuint64 val, ALuint64 new_scale, ALuint64 old_scale);
-extern inline ALuint64 ScaleCeil(ALuint64 val, ALuint64 new_scale, ALuint64 old_scale);
 extern inline ALint fastf2i(ALfloat f);
+#ifndef __GNUC__
+#if defined(HAVE_BITSCANFORWARD64_INTRINSIC)
+extern inline int msvc64_ctz64(ALuint64 v);
+#elif defined(HAVE_BITSCANFORWARD_INTRINSIC)
+extern inline int msvc_ctz64(ALuint64 v);
+#else
+extern inline int fallback_popcnt64(ALuint64 v);
+extern inline int fallback_ctz64(ALuint64 value);
+#endif
+#endif
 
 
-ALuint CPUCapFlags = 0;
+int CPUCapFlags = 0;
 
-
-void FillCPUCaps(ALuint capfilter)
+void FillCPUCaps(int capfilter)
 {
-    ALuint caps = 0;
+    int caps = 0;
 
 /* FIXME: We really should get this for all available CPUs in case different
  * CPUs have different caps (is that possible on one machine?). */
@@ -295,7 +306,7 @@ void FillCPUCaps(ALuint capfilter)
 void SetMixerFPUMode(FPUCtl *ctl)
 {
 #ifdef HAVE_FENV_H
-    fegetenv(STATIC_CAST(fenv_t, ctl));
+    fegetenv(&ctl->flt_env);
 #ifdef _WIN32
     /* HACK: A nasty bug in MinGW-W64 causes fegetenv and fesetenv to not save
      * and restore the FPU rounding mode, so we have to do it manually. Don't
@@ -348,7 +359,7 @@ void SetMixerFPUMode(FPUCtl *ctl)
 void RestoreFPUMode(const FPUCtl *ctl)
 {
 #ifdef HAVE_FENV_H
-    fesetenv(STATIC_CAST(fenv_t, ctl));
+    fesetenv(&ctl->flt_env);
 #ifdef _WIN32
     fesetround(ctl->round_mode);
 #endif
@@ -392,9 +403,8 @@ static WCHAR *strrchrW(WCHAR *str, WCHAR ch)
     return ret;
 }
 
-al_string GetProcPath(void)
+void GetProcBinary(al_string *path, al_string *fname)
 {
-    al_string ret = AL_STRING_INIT_STATIC();
     WCHAR *pathname, *sep;
     DWORD pathlen;
     DWORD len;
@@ -411,23 +421,34 @@ al_string GetProcPath(void)
     {
         free(pathname);
         ERR("Failed to get process name: error %lu\n", GetLastError());
-        return ret;
+        return;
     }
 
     pathname[len] = 0;
-    if((sep = strrchrW(pathname, '\\')))
+    if((sep=strrchrW(pathname, '\\')) != NULL)
     {
-        WCHAR *sep2 = strrchrW(pathname, '/');
-        if(sep2) *sep2 = 0;
-        else *sep = 0;
+        WCHAR *sep2 = strrchrW(sep+1, '/');
+        if(sep2) sep = sep2;
     }
-    else if((sep = strrchrW(pathname, '/')))
-        *sep = 0;
-    alstr_copy_wcstr(&ret, pathname);
+    else
+        sep = strrchrW(pathname, '/');
+
+    if(sep)
+    {
+        if(path) alstr_copy_wrange(path, pathname, sep);
+        if(fname) alstr_copy_wcstr(fname, sep+1);
+    }
+    else
+    {
+        if(path) alstr_clear(path);
+        if(fname) alstr_copy_wcstr(fname, pathname);
+    }
     free(pathname);
 
-    TRACE("Got: %s\n", alstr_get_cstr(ret));
-    return ret;
+    if(path && fname)
+        TRACE("Got: %s, %s\n", alstr_get_cstr(*path), alstr_get_cstr(*fname));
+    else if(path) TRACE("Got path: %s\n", alstr_get_cstr(*path));
+    else if(fname) TRACE("Got filename: %s\n", alstr_get_cstr(*fname));
 }
 
 
@@ -634,7 +655,7 @@ vector_al_string SearchDataFiles(const char *ext, const char *subdir)
         /* Search the local and global data dirs. */
         for(i = 0;i < COUNTOF(ids);i++)
         {
-            WCHAR buffer[PATH_MAX];
+            WCHAR buffer[MAX_PATH];
             if(SHGetSpecialFolderPathW(NULL, buffer, ids[i], FALSE) != FALSE)
             {
                 alstr_copy_wcstr(&path, buffer);
@@ -721,64 +742,103 @@ void UnmapFileMem(const struct FileMapping *mapping)
 
 #else
 
-al_string GetProcPath(void)
+void GetProcBinary(al_string *path, al_string *fname)
 {
-    al_string ret = AL_STRING_INIT_STATIC();
-    char *pathname, *sep;
+    char *pathname = NULL;
     size_t pathlen;
 
 #ifdef __FreeBSD__
-    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
-    mib[3] = getpid();
-    if (sysctl(mib, 4, NULL, &pathlen, NULL, 0) == -1) {
-        WARN("Failed to sysctl kern.proc.pathname.%d: %s\n", mib[3], strerror(errno));
-        return ret;
-    }
-
-    pathname = malloc(pathlen + 1);
-    sysctl(mib, 4, (void*)pathname, &pathlen, NULL, 0);
-    pathname[pathlen] = 0;
-#else
-    const char *fname;
-    ssize_t len;
-
-    pathlen = 256;
-    pathname = malloc(pathlen);
-
-    fname = "/proc/self/exe";
-    len = readlink(fname, pathname, pathlen);
-    if(len == -1 && errno == ENOENT)
-    {
-        fname = "/proc/self/file";
-        len = readlink(fname, pathname, pathlen);
-    }
-
-    while(len > 0 && (size_t)len == pathlen)
-    {
-        free(pathname);
-        pathlen <<= 1;
-        pathname = malloc(pathlen);
-        len = readlink(fname, pathname, pathlen);
-    }
-    if(len <= 0)
-    {
-        free(pathname);
-        WARN("Failed to readlink %s: %s\n", fname, strerror(errno));
-        return ret;
-    }
-
-    pathname[len] = 0;
-#endif
-
-    sep = strrchr(pathname, '/');
-    if(sep)
-        alstr_copy_range(&ret, pathname, sep);
+    int mib[4] = { CTL_KERN, KERN_PROC_ARGS, getpid() };
+    if(sysctl(mib, 3, NULL, &pathlen, NULL, 0) == -1)
+        WARN("Failed to sysctl kern.procargs.%d: %s\n", mib[2], strerror(errno));
     else
-        alstr_copy_cstr(&ret, pathname);
+    {
+        pathname = malloc(pathlen + 1);
+        sysctl(mib, 3, (void*)pathname, &pathlen, NULL, 0);
+        pathname[pathlen] = 0;
+    }
+#endif
+#ifdef HAVE_PROC_PIDPATH
+    if(!pathname)
+    {
+        const pid_t pid = getpid();
+        char procpath[PROC_PIDPATHINFO_MAXSIZE];
+        int ret;
+
+        ret = proc_pidpath(pid, procpath, sizeof(procpath));
+        if(ret < 1)
+        {
+            WARN("proc_pidpath(%d, ...) failed: %s\n", pid, strerror(errno));
+            free(pathname);
+            pathname = NULL;
+        }
+        else
+        {
+            pathlen = strlen(procpath);
+            pathname = strdup(procpath);
+        }
+    }
+#endif
+    if(!pathname)
+    {
+        const char *selfname;
+        ssize_t len;
+
+        pathlen = 256;
+        pathname = malloc(pathlen);
+
+        selfname = "/proc/self/exe";
+        len = readlink(selfname, pathname, pathlen);
+        if(len == -1 && errno == ENOENT)
+        {
+            selfname = "/proc/self/file";
+            len = readlink(selfname, pathname, pathlen);
+        }
+        if(len == -1 && errno == ENOENT)
+        {
+            selfname = "/proc/curproc/exe";
+            len = readlink(selfname, pathname, pathlen);
+        }
+        if(len == -1 && errno == ENOENT)
+        {
+            selfname = "/proc/curproc/file";
+            len = readlink(selfname, pathname, pathlen);
+        }
+
+        while(len > 0 && (size_t)len == pathlen)
+        {
+            free(pathname);
+            pathlen <<= 1;
+            pathname = malloc(pathlen);
+            len = readlink(selfname, pathname, pathlen);
+        }
+        if(len <= 0)
+        {
+            free(pathname);
+            WARN("Failed to readlink %s: %s\n", selfname, strerror(errno));
+            return;
+        }
+
+        pathname[len] = 0;
+    }
+
+    char *sep = strrchr(pathname, '/');
+    if(sep)
+    {
+        if(path) alstr_copy_range(path, pathname, sep);
+        if(fname) alstr_copy_cstr(fname, sep+1);
+    }
+    else
+    {
+        if(path) alstr_clear(path);
+        if(fname) alstr_copy_cstr(fname, pathname);
+    }
     free(pathname);
 
-    TRACE("Got: %s\n", alstr_get_cstr(ret));
-    return ret;
+    if(path && fname)
+        TRACE("Got: %s, %s\n", alstr_get_cstr(*path), alstr_get_cstr(*fname));
+    else if(path) TRACE("Got path: %s\n", alstr_get_cstr(*path));
+    else if(fname) TRACE("Got filename: %s\n", alstr_get_cstr(*fname));
 }
 
 
@@ -881,15 +941,32 @@ vector_al_string SearchDataFiles(const char *ext, const char *subdir)
     {
         al_string path = AL_STRING_INIT_STATIC();
         const char *str, *next;
-        char cwdbuf[PATH_MAX];
 
         /* Search the app-local directory. */
         if((str=getenv("ALSOFT_LOCAL_PATH")) && *str != '\0')
             DirectorySearch(str, ext, &results);
-        else if(getcwd(cwdbuf, sizeof(cwdbuf)))
-            DirectorySearch(cwdbuf, ext, &results);
         else
-            DirectorySearch(".", ext, &results);
+        {
+            size_t cwdlen = 256;
+            char *cwdbuf = malloc(cwdlen);
+            while(!getcwd(cwdbuf, cwdlen))
+            {
+                free(cwdbuf);
+                cwdbuf = NULL;
+                if(errno != ERANGE)
+                    break;
+                cwdlen <<= 1;
+                cwdbuf = malloc(cwdlen);
+            }
+            if(!cwdbuf)
+                DirectorySearch(".", ext, &results);
+            else
+            {
+                DirectorySearch(cwdbuf, ext, &results);
+                free(cwdbuf);
+                cwdbuf = NULL;
+            }
+        }
 
         // Search local data dir
         if((str=getenv("XDG_DATA_HOME")) != NULL && str[0] != '\0')
@@ -1148,6 +1225,17 @@ void alstr_append_wcstr(al_string *str, const wchar_t *from)
         VECTOR_RESIZE(*str, base+len-1, base+len);
         WideCharToMultiByte(CP_UTF8, 0, from, -1, &VECTOR_ELEM(*str, base), len, NULL, NULL);
         VECTOR_ELEM(*str, base+len-1) = 0;
+    }
+}
+
+void alstr_copy_wrange(al_string *str, const wchar_t *from, const wchar_t *to)
+{
+    int len;
+    if((len=WideCharToMultiByte(CP_UTF8, 0, from, (int)(to-from), NULL, 0, NULL, NULL)) > 0)
+    {
+        VECTOR_RESIZE(*str, len, len+1);
+        WideCharToMultiByte(CP_UTF8, 0, from, (int)(to-from), &VECTOR_FRONT(*str), len+1, NULL, NULL);
+        VECTOR_ELEM(*str, len) = 0;
     }
 }
 

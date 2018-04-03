@@ -7,10 +7,10 @@
 #include "alMain.h"
 #include "alu.h"
 #include "hrtf.h"
-#include "mixer_defs.h"
+#include "defs.h"
 
 
-const ALfloat *Resample_lerp32_Neon(const InterpState* UNUSED(state),
+const ALfloat *Resample_lerp_Neon(const InterpState* UNUSED(state),
   const ALfloat *restrict src, ALsizei frac, ALint increment,
   ALfloat *restrict dst, ALsizei numsamples)
 {
@@ -66,84 +66,15 @@ const ALfloat *Resample_lerp32_Neon(const InterpState* UNUSED(state),
     return dst;
 }
 
-const ALfloat *Resample_fir4_32_Neon(const InterpState* UNUSED(state),
-  const ALfloat *restrict src, ALsizei frac, ALint increment,
-  ALfloat *restrict dst, ALsizei numsamples)
-{
-    const int32x4_t increment4 = vdupq_n_s32(increment*4);
-    const int32x4_t fracMask4 = vdupq_n_s32(FRACTIONMASK);
-    alignas(16) ALint pos_[4];
-    alignas(16) ALsizei frac_[4];
-    int32x4_t pos4;
-    int32x4_t frac4;
-    ALsizei i;
-
-    InitiatePositionArrays(frac, increment, frac_, pos_, 4);
-
-    frac4 = vld1q_s32(frac_);
-    pos4 = vld1q_s32(pos_);
-
-    --src;
-    for(i = 0;numsamples-i > 3;i += 4)
-    {
-        const float32x4_t val0 = vld1q_f32(&src[pos_[0]]);
-        const float32x4_t val1 = vld1q_f32(&src[pos_[1]]);
-        const float32x4_t val2 = vld1q_f32(&src[pos_[2]]);
-        const float32x4_t val3 = vld1q_f32(&src[pos_[3]]);
-        float32x4_t k0 = vld1q_f32(sinc4Tab[frac_[0]]);
-        float32x4_t k1 = vld1q_f32(sinc4Tab[frac_[1]]);
-        float32x4_t k2 = vld1q_f32(sinc4Tab[frac_[2]]);
-        float32x4_t k3 = vld1q_f32(sinc4Tab[frac_[3]]);
-        float32x4_t out;
-
-        k0 = vmulq_f32(k0, val0);
-        k1 = vmulq_f32(k1, val1);
-        k2 = vmulq_f32(k2, val2);
-        k3 = vmulq_f32(k3, val3);
-        k0 = vcombine_f32(vpadd_f32(vget_low_f32(k0), vget_high_f32(k0)),
-                          vpadd_f32(vget_low_f32(k1), vget_high_f32(k1)));
-        k2 = vcombine_f32(vpadd_f32(vget_low_f32(k2), vget_high_f32(k2)),
-                          vpadd_f32(vget_low_f32(k3), vget_high_f32(k3)));
-        out = vcombine_f32(vpadd_f32(vget_low_f32(k0), vget_high_f32(k0)),
-                           vpadd_f32(vget_low_f32(k2), vget_high_f32(k2)));
-
-        vst1q_f32(&dst[i], out);
-
-        frac4 = vaddq_s32(frac4, increment4);
-        pos4 = vaddq_s32(pos4, vshrq_n_s32(frac4, FRACTIONBITS));
-        frac4 = vandq_s32(frac4, fracMask4);
-
-        vst1q_s32(pos_, pos4);
-        vst1q_s32(frac_, frac4);
-    }
-
-    if(i < numsamples)
-    {
-        /* NOTE: These four elements represent the position *after* the last
-         * four samples, so the lowest element is the next position to
-         * resample.
-         */
-        ALint pos = pos_[0];
-        frac = frac_[0];
-        do {
-            dst[i] = resample_fir4(src[pos], src[pos+1], src[pos+2], src[pos+3], frac);
-
-            frac += increment;
-            pos  += frac>>FRACTIONBITS;
-            frac &= FRACTIONMASK;
-        } while(++i < numsamples);
-    }
-    return dst;
-}
-
-const ALfloat *Resample_bsinc32_Neon(const InterpState *state,
+const ALfloat *Resample_bsinc_Neon(const InterpState *state,
   const ALfloat *restrict src, ALsizei frac, ALint increment,
   ALfloat *restrict dst, ALsizei dstlen)
 {
+    const ALfloat *const filter = state->bsinc.filter;
     const float32x4_t sf4 = vdupq_n_f32(state->bsinc.sf);
     const ALsizei m = state->bsinc.m;
-    const ALfloat *fil, *scd, *phd, *spd;
-    ALsizei pi, i, j;
+    const float32x4_t *fil, *scd, *phd, *spd;
+    ALsizei pi, i, j, offset;
     float32x4_t r4;
     ALfloat pf;
 
@@ -156,23 +87,22 @@ const ALfloat *Resample_bsinc32_Neon(const InterpState *state,
         pf = (frac & ((1<<FRAC_PHASE_BITDIFF)-1)) * (1.0f/(1<<FRAC_PHASE_BITDIFF));
 #undef FRAC_PHASE_BITDIFF
 
-        fil = ASSUME_ALIGNED(state->bsinc.coeffs[pi].filter, 16);
-        scd = ASSUME_ALIGNED(state->bsinc.coeffs[pi].scDelta, 16);
-        phd = ASSUME_ALIGNED(state->bsinc.coeffs[pi].phDelta, 16);
-        spd = ASSUME_ALIGNED(state->bsinc.coeffs[pi].spDelta, 16);
+        offset = m*pi*4;
+        fil = ASSUME_ALIGNED(filter + offset, 16); offset += m;
+        scd = ASSUME_ALIGNED(filter + offset, 16); offset += m;
+        phd = ASSUME_ALIGNED(filter + offset, 16); offset += m;
+        spd = ASSUME_ALIGNED(filter + offset, 16);
 
         // Apply the scale and phase interpolated filter.
         r4 = vdupq_n_f32(0.0f);
         {
             const float32x4_t pf4 = vdupq_n_f32(pf);
-            for(j = 0;j < m;j+=4)
+            for(j = 0;j < m;j+=4,fil++,scd++,phd++,spd++)
             {
                 /* f = ((fil + sf*scd) + pf*(phd + sf*spd)) */
-                const float32x4_t f4 = vmlaq_f32(vmlaq_f32(vld1q_f32(&fil[j]),
-                                                           sf4, vld1q_f32(&scd[j])),
-                    pf4, vmlaq_f32(vld1q_f32(&phd[j]),
-                        sf4, vld1q_f32(&spd[j])
-                    )
+                const float32x4_t f4 = vmlaq_f32(
+                    vmlaq_f32(*fil, sf4, *scd),
+                    pf4, vmlaq_f32(*phd, sf4, *spd)
                 );
                 /* r += f*src */
                 r4 = vmlaq_f32(r4, f4, vld1q_f32(&src[j]));
@@ -223,7 +153,7 @@ static inline void ApplyCoeffs(ALsizei Offset, ALfloat (*restrict Values)[2],
 #define MixHrtf MixHrtf_Neon
 #define MixHrtfBlend MixHrtfBlend_Neon
 #define MixDirectHrtf MixDirectHrtf_Neon
-#include "mixer_inc.c"
+#include "hrtf_inc.c"
 #undef MixHrtf
 
 

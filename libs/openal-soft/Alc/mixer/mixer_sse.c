@@ -9,17 +9,18 @@
 
 #include "alSource.h"
 #include "alAuxEffectSlot.h"
-#include "mixer_defs.h"
+#include "defs.h"
 
 
-const ALfloat *Resample_bsinc32_SSE(const InterpState *state, const ALfloat *restrict src,
-                                    ALsizei frac, ALint increment, ALfloat *restrict dst,
-                                    ALsizei dstlen)
+const ALfloat *Resample_bsinc_SSE(const InterpState *state, const ALfloat *restrict src,
+                                  ALsizei frac, ALint increment, ALfloat *restrict dst,
+                                  ALsizei dstlen)
 {
+    const ALfloat *const filter = state->bsinc.filter;
     const __m128 sf4 = _mm_set1_ps(state->bsinc.sf);
     const ALsizei m = state->bsinc.m;
-    const ALfloat *fil, *scd, *phd, *spd;
-    ALsizei pi, i, j;
+    const __m128 *fil, *scd, *phd, *spd;
+    ALsizei pi, i, j, offset;
     ALfloat pf;
     __m128 r4;
 
@@ -32,30 +33,28 @@ const ALfloat *Resample_bsinc32_SSE(const InterpState *state, const ALfloat *res
         pf = (frac & ((1<<FRAC_PHASE_BITDIFF)-1)) * (1.0f/(1<<FRAC_PHASE_BITDIFF));
 #undef FRAC_PHASE_BITDIFF
 
-        fil = ASSUME_ALIGNED(state->bsinc.coeffs[pi].filter, 16);
-        scd = ASSUME_ALIGNED(state->bsinc.coeffs[pi].scDelta, 16);
-        phd = ASSUME_ALIGNED(state->bsinc.coeffs[pi].phDelta, 16);
-        spd = ASSUME_ALIGNED(state->bsinc.coeffs[pi].spDelta, 16);
+        offset = m*pi*4;
+        fil = (const __m128*)ASSUME_ALIGNED(filter + offset, 16); offset += m;
+        scd = (const __m128*)ASSUME_ALIGNED(filter + offset, 16); offset += m;
+        phd = (const __m128*)ASSUME_ALIGNED(filter + offset, 16); offset += m;
+        spd = (const __m128*)ASSUME_ALIGNED(filter + offset, 16);
 
         // Apply the scale and phase interpolated filter.
         r4 = _mm_setzero_ps();
         {
             const __m128 pf4 = _mm_set1_ps(pf);
-#define LD4(x) _mm_load_ps(x)
-#define ULD4(x) _mm_loadu_ps(x)
 #define MLA4(x, y, z) _mm_add_ps(x, _mm_mul_ps(y, z))
-            for(j = 0;j < m;j+=4)
+            for(j = 0;j < m;j+=4,fil++,scd++,phd++,spd++)
             {
                 /* f = ((fil + sf*scd) + pf*(phd + sf*spd)) */
-                const __m128 f4 = MLA4(MLA4(LD4(&fil[j]), sf4, LD4(&scd[j])),
-                    pf4, MLA4(LD4(&phd[j]), sf4, LD4(&spd[j]))
+                const __m128 f4 = MLA4(
+                    MLA4(*fil, sf4, *scd),
+                    pf4, MLA4(*phd, sf4, *spd)
                 );
                 /* r += f*src */
-                r4 = MLA4(r4, f4, ULD4(&src[j]));
+                r4 = MLA4(r4, f4, _mm_loadu_ps(&src[j]));
             }
 #undef MLA4
-#undef ULD4
-#undef LD4
         }
         r4 = _mm_add_ps(r4, _mm_shuffle_ps(r4, r4, _MM_SHUFFLE(0, 1, 2, 3)));
         r4 = _mm_add_ps(r4, _mm_movehl_ps(r4, r4));
@@ -126,7 +125,7 @@ static inline void ApplyCoeffs(ALsizei Offset, ALfloat (*restrict Values)[2],
 #define MixHrtf MixHrtf_SSE
 #define MixHrtfBlend MixHrtfBlend_SSE
 #define MixDirectHrtf MixDirectHrtf_SSE
-#include "mixer_inc.c"
+#include "hrtf_inc.c"
 #undef MixHrtf
 
 

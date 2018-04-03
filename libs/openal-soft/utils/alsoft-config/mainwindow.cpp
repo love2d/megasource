@@ -44,8 +44,8 @@ static const struct {
 #ifdef HAVE_QSA
     { "qsa", "QSA" },
 #endif
-#ifdef HAVE_MMDEVAPI
-    { "mmdevapi", "MMDevAPI" },
+#ifdef HAVE_WASAPI
+    { "wasapi", "WASAPI" },
 #endif
 #ifdef HAVE_DSOUND
     { "dsound", "DirectSound" },
@@ -74,7 +74,7 @@ static const struct NameValuePair {
     { "Autodetect", "" },
     { "Mono", "mono" },
     { "Stereo", "stereo" },
-    { "Quadrophonic", "quad" },
+    { "Quadraphonic", "quad" },
     { "5.1 Surround (Side)", "surround51" },
     { "5.1 Surround (Rear)", "surround51rear" },
     { "6.1 Surround", "surround61" },
@@ -100,8 +100,9 @@ static const struct NameValuePair {
     { "Point", "point" },
     { "Linear", "linear" },
     { "Default (Linear)", "" },
-    { "4-Point Sinc", "sinc4" },
-    { "Band-limited Sinc", "bsinc" },
+    { "Cubic Spline", "cubic" },
+    { "11th order Sinc", "bsinc12" },
+    { "23rd order Sinc", "bsinc24" },
 
     { "", "" }
 }, stereoModeList[] = {
@@ -369,7 +370,6 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->backendCheckBox, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
 
     connect(ui->defaultReverbComboBox, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(enableApplyButton()));
-    connect(ui->emulateEaxCheckBox, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
     connect(ui->enableEaxReverbCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
     connect(ui->enableStdReverbCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
     connect(ui->enableChorusCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
@@ -380,6 +380,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->enableFlangerCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
     connect(ui->enableModulatorCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
     connect(ui->enableDedicatedCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
+    connect(ui->enablePitchShifterCheck, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
 
     connect(ui->pulseAutospawnCheckBox, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
     connect(ui->pulseAllowMovesCheckBox, SIGNAL(stateChanged(int)), this, SLOT(enableApplyButton()));
@@ -610,6 +611,9 @@ void MainWindow::loadConfig(const QString &fname)
      */
     if(resampler == "cubic" || resampler == "sinc8")
         resampler = "sinc4";
+    /* The "bsinc" resampler name is an alias for "bsinc12". */
+    else if(resampler == "bsinc")
+        resampler = "bsinc12";
     for(int i = 0;resamplerList[i].name[0];i++)
     {
         if(resampler == resamplerList[i].value)
@@ -771,7 +775,16 @@ void MainWindow::loadConfig(const QString &fname)
         if(drivers.size() == 1)
             drivers = drivers[0].split(QChar(','));
         for(QStringList::iterator iter = drivers.begin();iter != drivers.end();iter++)
+        {
             *iter = iter->trimmed();
+            /* Convert "mmdevapi" references to "wasapi" for backwards
+             * compatibility.
+             */
+            if(*iter == "-mmdevapi")
+                *iter = "-wasapi";
+            else if(*iter == "mmdevapi")
+                *iter = "wasapi";
+        }
 
         bool lastWasEmpty = false;
         foreach(const QString &backend, drivers)
@@ -818,8 +831,6 @@ void MainWindow::loadConfig(const QString &fname)
         }
     }
 
-    ui->emulateEaxCheckBox->setChecked(settings.value("reverb/emulate-eax", false).toBool());
-
     QStringList excludefx = settings.value("excludefx").toStringList();
     if(excludefx.size() == 1)
         excludefx = excludefx[0].split(QChar(','));
@@ -835,6 +846,7 @@ void MainWindow::loadConfig(const QString &fname)
     ui->enableFlangerCheck->setChecked(!excludefx.contains("flanger", Qt::CaseInsensitive));
     ui->enableModulatorCheck->setChecked(!excludefx.contains("modulator", Qt::CaseInsensitive));
     ui->enableDedicatedCheck->setChecked(!excludefx.contains("dedicated", Qt::CaseInsensitive));
+    ui->enablePitchShifterCheck->setChecked(!excludefx.contains("pshifter", Qt::CaseInsensitive));
 
     ui->pulseAutospawnCheckBox->setChecked(settings.value("pulse/spawn-server", true).toBool());
     ui->pulseAllowMovesCheckBox->setChecked(settings.value("pulse/allow-moves", false).toBool());
@@ -1027,11 +1039,6 @@ void MainWindow::saveConfig(const QString &fname) const
         settings.setValue("default-reverb", str);
     }
 
-    if(ui->emulateEaxCheckBox->isChecked())
-        settings.setValue("reverb/emulate-eax", "true");
-    else
-        settings.remove("reverb/emulate-eax"/*, "false"*/);
-
     strlist.clear();
     if(!ui->enableEaxReverbCheck->isChecked())
         strlist.append("eaxreverb");
@@ -1053,6 +1060,8 @@ void MainWindow::saveConfig(const QString &fname) const
         strlist.append("modulator");
     if(!ui->enableDedicatedCheck->isChecked())
         strlist.append("dedicated");
+    if(!ui->enablePitchShifterCheck->isChecked())
+        strlist.append("pshifter");
     settings.setValue("excludefx", strlist.join(QChar(',')));
 
     settings.setValue("pulse/spawn-server",
@@ -1162,7 +1171,7 @@ void MainWindow::updatePeriodCountSlider()
 
 
 void MainWindow::selectQuadDecoderFile()
-{ selectDecoderFile(ui->decoderQuadLineEdit, "Select Quadrophonic Decoder");}
+{ selectDecoderFile(ui->decoderQuadLineEdit, "Select Quadraphonic Decoder");}
 void MainWindow::select51DecoderFile()
 { selectDecoderFile(ui->decoder51LineEdit, "Select 5.1 Surround Decoder");}
 void MainWindow::select61DecoderFile()

@@ -52,6 +52,9 @@
       <height>401</height>
      </rect>
     </property>
+    <property name="currentIndex">
+     <number>5</number>
+    </property>
     <widget class="QWidget" name="tab_3">
      <attribute name="title">
       <string>Playback</string>
@@ -128,8 +131,8 @@ to stereo output.</string>
        <rect>
         <x>380</x>
         <y>20</y>
-        <width>91</width>
-        <height>29</height>
+        <width>80</width>
+        <height>20</height>
        </rect>
       </property>
       <property name="toolTip">
@@ -691,7 +694,7 @@ configuration file.</string>
         </rect>
        </property>
        <property name="text">
-        <string>Quadrophonic:</string>
+        <string>Quadraphonic:</string>
        </property>
        <property name="alignment">
         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1924,34 +1927,13 @@ be useful for preventing those extensions from being used.</string>
      <attribute name="title">
       <string>Effects</string>
      </attribute>
-     <widget class="QCheckBox" name="emulateEaxCheckBox">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>60</y>
-        <width>161</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <property name="toolTip">
-       <string>Uses a simpler reverb method to emulate the EAX reverb
-effect. This may slightly improve performance at the cost of
-some quality.</string>
-      </property>
-      <property name="layoutDirection">
-       <enum>Qt::RightToLeft</enum>
-      </property>
-      <property name="text">
-       <string>Emulate EAX Reverb:</string>
-      </property>
-     </widget>
      <widget class="QGroupBox" name="groupBox_5">
       <property name="geometry">
        <rect>
         <x>10</x>
         <y>100</y>
         <width>511</width>
-        <height>191</height>
+        <height>231</height>
        </rect>
       </property>
       <property name="toolTip">
@@ -2126,6 +2108,22 @@ added by the ALC_EXT_DEDICATED extension.</string>
         <bool>true</bool>
        </property>
       </widget>
+      <widget class="QCheckBox" name="enablePitchShifterCheck">
+       <property name="geometry">
+        <rect>
+         <x>70</x>
+         <y>180</y>
+         <width>131</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Pitch Shifter</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
      </widget>
      <widget class="QLabel" name="label_13">
       <property name="geometry">
@@ -2148,8 +2146,8 @@ added by the ALC_EXT_DEDICATED extension.</string>
        <rect>
         <x>160</x>
         <y>20</y>
-        <width>123</width>
-        <height>29</height>
+        <width>108</width>
+        <height>20</height>
        </rect>
       </property>
       <property name="sizeAdjustPolicy">
@@ -2318,7 +2316,7 @@ added by the ALC_EXT_DEDICATED extension.</string>
      <x>0</x>
      <y>0</y>
      <width>564</width>
-     <height>27</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
