@@ -52,6 +52,8 @@ typedef struct
 /* Last known Android mouse button state (includes all buttons) */
 static int last_state;
 
+/* Blank cursor */
+static SDL_Cursor *empty_cursor;
 
 static SDL_Cursor *
 Android_WrapCursor(int custom_cursor, int system_cursor)
@@ -115,9 +117,35 @@ Android_FreeCursor(SDL_Cursor * cursor)
     SDL_free(cursor);
 }
 
+static SDL_Cursor *
+Android_CreateEmptyCursor()
+{
+    if (!empty_cursor) {
+        SDL_Surface *empty_surface = SDL_CreateRGBSurfaceWithFormat(0, 1, 1, 32, SDL_PIXELFORMAT_ARGB8888);
+        if (empty_surface) {
+            SDL_memset(empty_surface->pixels, 0, empty_surface->h * empty_surface->pitch);
+            empty_cursor = Android_CreateCursor(empty_surface, 0, 0);
+            SDL_FreeSurface(empty_surface);
+        }
+    }
+    return empty_cursor;
+}
+
+static void
+Android_DestroyEmptyCursor()
+{
+    if (empty_cursor) {
+        Android_FreeCursor(empty_cursor);
+        empty_cursor = NULL;
+    }
+}
+
 static int
 Android_ShowCursor(SDL_Cursor * cursor)
 {
+    if (!cursor) {
+        cursor = Android_CreateEmptyCursor();
+    }
     if (cursor) {
         SDL_AndroidCursorData *data = (SDL_AndroidCursorData*)cursor->driverdata;
         if (data->custom_cursor) {
@@ -129,11 +157,24 @@ Android_ShowCursor(SDL_Cursor * cursor)
                 return SDL_Unsupported();
             }
         }
+        return 0;
     } else {
-        if (!Android_JNI_SetSystemCursor(-1)) {
-            return SDL_Unsupported();
-        }
+        /* SDL error set inside Android_CreateEmptyCursor() */
+        return -1;
     }
+}
+
+static int
+Android_SetRelativeMouseMode(SDL_bool enabled)
+{
+    if (!Android_JNI_SupportsRelativeMouse()) {
+        return SDL_Unsupported();
+    }
+
+    if (!Android_JNI_SetRelativeMouseEnabled(enabled)) {
+        return SDL_Unsupported();
+    }
+
     return 0;
 }
 
@@ -146,10 +187,17 @@ Android_InitMouse(void)
     mouse->CreateSystemCursor = Android_CreateSystemCursor;
     mouse->ShowCursor = Android_ShowCursor;
     mouse->FreeCursor = Android_FreeCursor;
+    mouse->SetRelativeMouseMode = Android_SetRelativeMouseMode;
 
     SDL_SetDefaultCursor(Android_CreateDefaultCursor());
 
     last_state = 0;
+}
+
+void
+Android_QuitMouse(void)
+{
+    Android_DestroyEmptyCursor();
 }
 
 /* Translate Android mouse button state to SDL mouse button */
@@ -172,7 +220,7 @@ TranslateButton(int state)
 }
 
 void
-Android_OnMouse(int state, int action, float x, float y)
+Android_OnMouse(int state, int action, float x, float y, SDL_bool relative)
 {
     int changes;
     Uint8 button;
@@ -186,7 +234,7 @@ Android_OnMouse(int state, int action, float x, float y)
             changes = state & ~last_state;
             button = TranslateButton(changes);
             last_state = state;
-            SDL_SendMouseMotion(Android_Window, 0, 0, x, y);
+            SDL_SendMouseMotion(Android_Window, 0, relative, (int)x, (int)y);
             SDL_SendMouseButton(Android_Window, 0, SDL_PRESSED, button);
             break;
 
@@ -194,13 +242,13 @@ Android_OnMouse(int state, int action, float x, float y)
             changes = last_state & ~state;
             button = TranslateButton(changes);
             last_state = state;
-            SDL_SendMouseMotion(Android_Window, 0, 0, x, y);
+            SDL_SendMouseMotion(Android_Window, 0, relative, (int)x, (int)y);
             SDL_SendMouseButton(Android_Window, 0, SDL_RELEASED, button);
             break;
 
         case ACTION_MOVE:
         case ACTION_HOVER_MOVE:
-            SDL_SendMouseMotion(Android_Window, 0, 0, x, y);
+            SDL_SendMouseMotion(Android_Window, 0, relative, (int)x, (int)y);
             break;
 
         case ACTION_SCROLL:

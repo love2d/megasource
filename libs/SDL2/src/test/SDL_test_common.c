@@ -999,7 +999,7 @@ SDLTest_CommonInit(SDLTest_CommonState * state)
                 }
                 if (state->logical_w && state->logical_h) {
                     SDL_RenderSetLogicalSize(state->renderers[i], state->logical_w, state->logical_h);
-                } else if (state->scale) {
+                } else if (state->scale != 0.) {
                     SDL_RenderSetScale(state->renderers[i], state->scale, state->scale);
                 }
                 if (state->verbose & VERBOSE_RENDER) {
@@ -1046,6 +1046,22 @@ SDLTest_CommonInit(SDLTest_CommonState * state)
     }
 
     return SDL_TRUE;
+}
+
+static const char *
+DisplayOrientationName(int orientation)
+{
+    switch (orientation)
+    {
+#define CASE(X) case SDL_ORIENTATION_##X: return #X
+        CASE(UNKNOWN);
+        CASE(LANDSCAPE);
+        CASE(LANDSCAPE_FLIPPED);
+        CASE(PORTRAIT);
+        CASE(PORTRAIT_FLIPPED);
+#undef CASE
+default: return "???";
+    }
 }
 
 static const char *
@@ -1102,6 +1118,17 @@ SDLTest_PrintEvent(SDL_Event * event)
     }
 
     switch (event->type) {
+    case SDL_DISPLAYEVENT:
+        switch (event->display.event) {
+        case SDL_DISPLAYEVENT_ORIENTATION:
+            SDL_Log("SDL EVENT: Display %d changed orientation to %s", event->display.display, DisplayOrientationName(event->display.data1));
+            break;
+        default:
+            SDL_Log("SDL EVENT: Display %d got unknown event 0x%4.4x",
+                    event->display.display, event->display.event);
+            break;
+        }
+        break;
     case SDL_WINDOWEVENT:
         switch (event->window.event) {
         case SDL_WINDOWEVENT_SHOWN:
@@ -1349,7 +1376,18 @@ SDLTest_PrintEvent(SDL_Event * event)
     case SDL_APP_DIDENTERFOREGROUND:
         SDL_Log("SDL EVENT: App entered the foreground");
         break;
-
+    case SDL_DROPBEGIN:
+        SDL_Log("SDL EVENT: Drag and drop beginning");
+        break;
+    case SDL_DROPFILE:
+        SDL_Log("SDL EVENT: Drag and drop file: '%s'", event->drop.file);
+        break;
+    case SDL_DROPTEXT:
+        SDL_Log("SDL EVENT: Drag and drop text: '%s'", event->drop.file);
+        break;
+    case SDL_DROPCOMPLETE:
+        SDL_Log("SDL EVENT: Drag and drop ending");
+        break;
     case SDL_QUIT:
         SDL_Log("SDL EVENT: Quit requested");
         break;
@@ -1743,6 +1781,11 @@ SDLTest_CommonEvent(SDLTest_CommonState * state, SDL_Event * event, int *done)
         break;
     case SDL_MOUSEMOTION:
         lastEvent = event->motion;
+        break;
+
+    case SDL_DROPFILE:
+    case SDL_DROPTEXT:
+        SDL_free(event->drop.file);
         break;
     }
 }

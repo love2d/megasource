@@ -224,6 +224,10 @@ static void ConvertNSRect(NSScreen *screen, BOOL fullscreen, NSRect *r)
 static void
 ScheduleContextUpdates(SDL_WindowData *data)
 {
+    if (!data || !data->nscontexts) {
+        return;
+    }
+
     NSOpenGLContext *currentContext = [NSOpenGLContext currentContext];
     NSMutableArray *contexts = data->nscontexts;
     @synchronized (contexts) {
@@ -241,7 +245,7 @@ ScheduleContextUpdates(SDL_WindowData *data)
 static int
 GetHintCtrlClickEmulateRightClick()
 {
-	return SDL_GetHintBoolean(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, SDL_FALSE);
+    return SDL_GetHintBoolean(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, SDL_FALSE);
 }
 
 static NSUInteger
@@ -908,7 +912,7 @@ SetWindowStyle(SDL_Window * window, NSUInteger style)
     switch ([theEvent buttonNumber]) {
     case 0:
         if (([theEvent modifierFlags] & NSEventModifierFlagControl) &&
-		    GetHintCtrlClickEmulateRightClick()) {
+            GetHintCtrlClickEmulateRightClick()) {
             wasCtrlLeft = YES;
             button = SDL_BUTTON_RIGHT;
         } else {
@@ -1103,7 +1107,17 @@ SetWindowStyle(SDL_Window * window, NSUInteger style)
 
     for (NSTouch *touch in touches) {
         const SDL_TouchID touchId = (SDL_TouchID)(intptr_t)[touch device];
-        if (SDL_AddTouch(touchId, "") < 0) {
+        SDL_TouchDeviceType devtype = SDL_TOUCH_DEVICE_INDIRECT_ABSOLUTE;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101202 /* Added in the 10.12.2 SDK. */
+        if ([touch respondsToSelector:@selector(type)]) {
+            if ([touch type] == NSTouchTypeDirect) {
+                devtype = SDL_TOUCH_DEVICE_DIRECT;
+            }
+        }
+#endif
+
+        if (SDL_AddTouch(touchId, devtype, "") < 0) {
             return;
         }
 
@@ -1143,14 +1157,18 @@ SetWindowStyle(SDL_Window * window, NSUInteger style)
 - (BOOL)mouseDownCanMoveWindow;
 - (void)drawRect:(NSRect)dirtyRect;
 - (BOOL)acceptsFirstMouse:(NSEvent *)theEvent;
+- (BOOL)wantsUpdateLayer;
+- (void)updateLayer;
 @end
 
 @implementation SDLView
+
 - (void)setSDLWindow:(SDL_Window*)window
 {
     _sdlWindow = window;
 }
 
+/* this is used on older macOS revisions. 10.8 and later use updateLayer. */
 - (void)drawRect:(NSRect)dirtyRect
 {
     /* Force the graphics context to clear to black so we don't get a flash of
@@ -1158,6 +1176,21 @@ SetWindowStyle(SDL_Window * window, NSUInteger style)
        only gets called for window creation and other extraordinary events. */
     [[NSColor blackColor] setFill];
     NSRectFill(dirtyRect);
+    SDL_SendWindowEvent(_sdlWindow, SDL_WINDOWEVENT_EXPOSED, 0, 0);
+}
+
+-(BOOL) wantsUpdateLayer
+{
+    return YES;
+}
+
+-(void) updateLayer
+{
+    /* Force the graphics context to clear to black so we don't get a flash of
+       white until the app is ready to draw. In practice on modern macOS, this
+       only gets called for window creation and other extraordinary events. */
+    self.layer.backgroundColor = CGColorGetConstantColor(kCGColorBlack);
+    ScheduleContextUpdates((SDL_WindowData *) _sdlWindow->driverdata);
     SDL_SendWindowEvent(_sdlWindow, SDL_WINDOWEVENT_EXPOSED, 0, 0);
 }
 
@@ -1323,6 +1356,13 @@ Cocoa_CreateWindow(_THIS, SDL_Window * window)
         return SDL_SetError("%s", [[e reason] UTF8String]);
     }
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200 /* Added in the 10.12.0 SDK. */
+    /* By default, don't allow users to make our window tabbed in 10.12 or later */
+    if ([nswindow respondsToSelector:@selector(setTabbingMode:)]) {
+        [nswindow setTabbingMode:NSWindowTabbingModeDisallowed];
+    }
+#endif
+
     if (videodata->allow_spaces) {
         SDL_assert(floor(NSAppKitVersionNumber) > NSAppKitVersionNumber10_6);
         SDL_assert([nswindow respondsToSelector:@selector(toggleFullScreen:)]);
@@ -1343,6 +1383,7 @@ Cocoa_CreateWindow(_THIS, SDL_Window * window)
             [contentView setWantsBestResolutionOpenGLSurface:YES];
         }
     }
+
 #if SDL_VIDEO_OPENGL_ES2
 #if SDL_VIDEO_OPENGL_EGL
     if ((window->flags & SDL_WINDOW_OPENGL) &&
@@ -1353,9 +1394,6 @@ Cocoa_CreateWindow(_THIS, SDL_Window * window)
 #endif /* SDL_VIDEO_OPENGL_ES2 */
     [nswindow setContentView:contentView];
     [contentView release];
-
-    /* Allow files and folders to be dragged onto the window by users */
-    [nswindow registerForDraggedTypes:[NSArray arrayWithObject:(NSString *)kUTTypeFileURL]];
 
     if (SetupWindowData(_this, window, nswindow, SDL_TRUE) < 0) {
         [nswindow release];
@@ -1862,6 +1900,17 @@ int
 Cocoa_SetWindowHitTest(SDL_Window * window, SDL_bool enabled)
 {
     return 0;  /* just succeed, the real work is done elsewhere. */
+}
+
+void
+Cocoa_AcceptDragAndDrop(SDL_Window * window, SDL_bool accept)
+{
+    SDL_WindowData *data = (SDL_WindowData *) window->driverdata;
+    if (accept) {
+        [data->nswindow registerForDraggedTypes:[NSArray arrayWithObject:(NSString *)kUTTypeFileURL]];
+    } else {
+        [data->nswindow unregisterDraggedTypes];
+    }
 }
 
 int

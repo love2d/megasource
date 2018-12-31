@@ -181,6 +181,9 @@ SDL_SYS_HapticInit(void)
         SDL_UDEV_Quit();
         return SDL_SetError("Could not setup haptic <-> udev callback");
     }
+
+    /* Force a scan to build the initial device list */
+    SDL_UDEV_Scan();
 #endif /* SDL_USE_LIBUDEV */
 
     return numhaptics;
@@ -905,9 +908,9 @@ SDL_SYS_ToFFEffect(struct ff_effect *dest, SDL_HapticEffect * src)
         dest->trigger.button = 0;
         dest->trigger.interval = 0;
 
-        /* Rumble */
-        dest->u.rumble.strong_magnitude = leftright->large_magnitude;
-        dest->u.rumble.weak_magnitude = leftright->small_magnitude;
+        /* Rumble (Linux expects 0-65535, so multiply by 2) */
+        dest->u.rumble.strong_magnitude = CLAMP(leftright->large_magnitude) * 2;
+        dest->u.rumble.weak_magnitude = CLAMP(leftright->small_magnitude) * 2;
 
         break;
 
