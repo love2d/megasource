@@ -41,16 +41,16 @@ OPTION(ALSOFT_DLOPEN  "Check for the dlopen API for loading optional libs"  ON)
 
 OPTION(ALSOFT_WERROR  "Treat compile warnings as errors"      OFF)
 
-OPTION(ALSOFT_UTILS          "Build and install utility programs"         OFF)
-OPTION(ALSOFT_NO_CONFIG_UTIL "Disable building the alsoft-config utility" ON)
+OPTION(ALSOFT_UTILS          "Build and install utility programs"         ON)
+OPTION(ALSOFT_NO_CONFIG_UTIL "Disable building the alsoft-config utility" OFF)
 
-OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  OFF)
-OPTION(ALSOFT_TESTS     "Build and install test programs"     OFF)
+OPTION(ALSOFT_EXAMPLES  "Build and install example programs"  ON)
+OPTION(ALSOFT_TESTS     "Build and install test programs"     ON)
 
-OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" OFF)
-OPTION(ALSOFT_HRTF_DEFS "Install HRTF definition files" OFF)
-OPTION(ALSOFT_AMBDEC_PRESETS "Install AmbDec preset files" OFF)
-OPTION(ALSOFT_INSTALL "Install headers and libraries" OFF)
+OPTION(ALSOFT_CONFIG "Install alsoft.conf sample configuration file" ON)
+OPTION(ALSOFT_HRTF_DEFS "Install HRTF definition files" ON)
+OPTION(ALSOFT_AMBDEC_PRESETS "Install AmbDec preset files" ON)
+OPTION(ALSOFT_INSTALL "Install headers and libraries" ON)
 
 if(DEFINED SHARE_INSTALL_DIR)
     message(WARNING "SHARE_INSTALL_DIR is deprecated.  Use the variables provided by the GNUInstallDirs module instead")
@@ -102,8 +102,8 @@ IF(NOT LIBTYPE)
 ENDIF()
 
 SET(LIB_MAJOR_VERSION "1")
-SET(LIB_MINOR_VERSION "18")
-SET(LIB_REVISION "2")
+SET(LIB_MINOR_VERSION "19")
+SET(LIB_REVISION "1")
 SET(LIB_VERSION "${LIB_MAJOR_VERSION}.${LIB_MINOR_VERSION}.${LIB_REVISION}")
 
 SET(EXPORT_DECL "")
@@ -432,6 +432,48 @@ IF(HAVE_MFPU_NEON_SWITCH)
     SET(FPU_NEON_SWITCH "-mfpu=neon")
 ENDIF()
 
+SET(FPMATH_SET "0")
+IF(CMAKE_SIZEOF_VOID_P MATCHES "4")
+    IF(SSE_SWITCH OR MSVC)
+        OPTION(ALSOFT_ENABLE_SSE_CODEGEN "Enable SSE code generation instead of x87 for 32-bit targets." TRUE)
+    ENDIF()
+    IF(SSE2_SWITCH OR MSVC)
+        OPTION(ALSOFT_ENABLE_SSE2_CODEGEN "Enable SSE2 code generation instead of x87 for 32-bit targets." TRUE)
+    ENDIF()
+
+    IF(ALSOFT_ENABLE_SSE2_CODEGEN)
+        IF(SSE2_SWITCH)
+            CHECK_C_COMPILER_FLAG("${SSE2_SWITCH} -mfpmath=sse" HAVE_MFPMATH_SSE_2)
+            IF(HAVE_MFPMATH_SSE_2)
+                SET(C_FLAGS ${C_FLAGS} ${SSE2_SWITCH} -mfpmath=sse)
+                SET(FPMATH_SET 2)
+            ENDIF()
+        ELSEIF(MSVC)
+            CHECK_C_COMPILER_FLAG("/arch:SSE2" HAVE_ARCH_SSE2)
+            IF(HAVE_ARCH_SSE2)
+                SET(C_FLAGS ${C_FLAGS} "/arch:SSE2")
+                SET(FPMATH_SET 2)
+            ENDIF()
+        ENDIF()
+    ENDIF()
+    IF(ALSOFT_ENABLE_SSE_CODEGEN AND NOT FPMATH_SET)
+        IF(SSE_SWITCH)
+            CHECK_C_COMPILER_FLAG("${SSE_SWITCH} -mfpmath=sse" HAVE_MFPMATH_SSE)
+            IF(HAVE_MFPMATH_SSE)
+                SET(C_FLAGS ${C_FLAGS} ${SSE_SWITCH} -mfpmath=sse)
+                SET(FPMATH_SET 1)
+            ENDIF()
+        ELSEIF(MSVC)
+            CHECK_C_COMPILER_FLAG("/arch:SSE" HAVE_ARCH_SSE)
+            IF(HAVE_ARCH_SSE)
+                SET(C_FLAGS ${C_FLAGS} "/arch:SSE")
+                SET(FPMATH_SET 1)
+            ENDIF()
+        ENDIF()
+    ENDIF()
+ENDIF()
+
+
 CHECK_C_SOURCE_COMPILES("int foo(const char *str, ...) __attribute__((format(printf, 1, 2)));
                          int main() {return 0;}" HAVE_GCC_FORMAT)
 
@@ -512,6 +554,7 @@ CHECK_SYMBOL_EXISTS(lrintf math.h HAVE_LRINTF)
 CHECK_SYMBOL_EXISTS(modff  math.h HAVE_MODFF)
 CHECK_SYMBOL_EXISTS(log2f  math.h HAVE_LOG2F)
 CHECK_SYMBOL_EXISTS(cbrtf  math.h HAVE_CBRTF)
+CHECK_SYMBOL_EXISTS(copysignf math.h HAVE_COPYSIGNF)
 
 IF(HAVE_FLOAT_H)
     CHECK_SYMBOL_EXISTS(_controlfp float.h HAVE__CONTROLFP)
@@ -699,51 +742,100 @@ IF(NOT HAVE_STDINT_H)
 ENDIF()
 
 
-SET(COMMON_OBJS  common/almalloc.c
-                 common/atomic.c
-                 common/rwlock.c
-                 common/threads.c
-                 common/uintmap.c
+SET(COMMON_OBJS
+    common/alcomplex.c
+    common/alcomplex.h
+    common/align.h
+    common/almalloc.c
+    common/almalloc.h
+    common/atomic.c
+    common/atomic.h
+    common/bool.h
+    common/math_defs.h
+    common/rwlock.c
+    common/rwlock.h
+    common/static_assert.h
+    common/threads.c
+    common/threads.h
+    common/uintmap.c
+    common/uintmap.h
 )
-SET(OPENAL_OBJS  OpenAL32/alAuxEffectSlot.c
-                 OpenAL32/alBuffer.c
-                 OpenAL32/alEffect.c
-                 OpenAL32/alError.c
-                 OpenAL32/alExtension.c
-                 OpenAL32/alFilter.c
-                 OpenAL32/alListener.c
-                 OpenAL32/alSource.c
-                 OpenAL32/alState.c
-                 OpenAL32/event.c
-                 OpenAL32/sample_cvt.c
+SET(OPENAL_OBJS
+    OpenAL32/Include/bs2b.h
+    OpenAL32/Include/alMain.h
+    OpenAL32/Include/alu.h
+
+    OpenAL32/Include/alAuxEffectSlot.h
+    OpenAL32/alAuxEffectSlot.c
+    OpenAL32/Include/alBuffer.h
+    OpenAL32/alBuffer.c
+    OpenAL32/Include/alEffect.h
+    OpenAL32/alEffect.c
+    OpenAL32/Include/alError.h
+    OpenAL32/alError.c
+    OpenAL32/alExtension.c
+    OpenAL32/Include/alFilter.h
+    OpenAL32/alFilter.c
+    OpenAL32/Include/alListener.h
+    OpenAL32/alListener.c
+    OpenAL32/Include/alSource.h
+    OpenAL32/alSource.c
+    OpenAL32/alState.c
+    OpenAL32/event.c
+    OpenAL32/Include/sample_cvt.h
+    OpenAL32/sample_cvt.c
 )
-SET(ALC_OBJS  Alc/ALc.c
-              Alc/ALu.c
-              Alc/alconfig.c
-              Alc/bs2b.c
-              Alc/converter.c
-              Alc/mastering.c
-              Alc/ringbuffer.c
-              Alc/effects/chorus.c
-              Alc/effects/compressor.c
-              Alc/effects/dedicated.c
-              Alc/effects/distortion.c
-              Alc/effects/echo.c
-              Alc/effects/equalizer.c
-              Alc/effects/modulator.c
-              Alc/effects/null.c
-              Alc/effects/pshifter.c
-              Alc/effects/reverb.c
-              Alc/filters/filter.c
-              Alc/filters/nfc.c
-              Alc/helpers.c
-              Alc/hrtf.c
-              Alc/uhjfilter.c
-              Alc/ambdec.c
-              Alc/bformatdec.c
-              Alc/panning.c
-              Alc/mixvoice.c
-              Alc/mixer/mixer_c.c
+SET(ALC_OBJS
+    Alc/ALc.c
+    Alc/ALu.c
+    Alc/alconfig.c
+    Alc/alconfig.h
+    Alc/bs2b.c
+    Alc/converter.c
+    Alc/converter.h
+    Alc/inprogext.h
+    Alc/mastering.c
+    Alc/mastering.h
+    Alc/ringbuffer.c
+    Alc/ringbuffer.h
+    Alc/effects/autowah.c
+    Alc/effects/chorus.c
+    Alc/effects/compressor.c
+    Alc/effects/dedicated.c
+    Alc/effects/distortion.c
+    Alc/effects/echo.c
+    Alc/effects/equalizer.c
+    Alc/effects/fshifter.c
+    Alc/effects/modulator.c
+    Alc/effects/null.c
+    Alc/effects/pshifter.c
+    Alc/effects/reverb.c
+    Alc/filters/defs.h
+    Alc/filters/filter.c
+    Alc/filters/nfc.c
+    Alc/filters/nfc.h
+    Alc/filters/splitter.c
+    Alc/filters/splitter.h
+    Alc/helpers.c
+    Alc/alstring.h
+    Alc/compat.h
+    Alc/cpu_caps.h
+    Alc/fpu_modes.h
+    Alc/logging.h
+    Alc/vector.h
+    Alc/hrtf.c
+    Alc/hrtf.h
+    Alc/uhjfilter.c
+    Alc/uhjfilter.h
+    Alc/ambdec.c
+    Alc/ambdec.h
+    Alc/bformatdec.c
+    Alc/bformatdec.h
+    Alc/panning.c
+    Alc/polymorphism.h
+    Alc/mixvoice.c
+    Alc/mixer/defs.h
+    Alc/mixer/mixer_c.c
 )
 
 
@@ -810,7 +902,7 @@ IF(ALSOFT_REQUIRE_SSE2 AND NOT HAVE_SSE2)
     MESSAGE(FATAL_ERROR "Failed to enable required SSE2 CPU extensions")
 ENDIF()
 
-OPTION(ALSOFT_REQUIRE_SSE2 "Require SSE3 support" OFF)
+OPTION(ALSOFT_REQUIRE_SSE3 "Require SSE3 support" OFF)
 CHECK_INCLUDE_FILE(pmmintrin.h HAVE_PMMINTRIN_H "${SSE3_SWITCH}")
 IF(HAVE_EMMINTRIN_H)
     OPTION(ALSOFT_CPUEXT_SSE3 "Enable SSE3 support" ON)
@@ -883,10 +975,11 @@ ENDIF()
 
 SET(BACKENDS "")
 SET(ALC_OBJS  ${ALC_OBJS}
-              Alc/backends/base.c
-              # Default backends, always available
-              Alc/backends/loopback.c
-              Alc/backends/null.c
+    Alc/backends/base.c
+    Alc/backends/base.h
+    # Default backends, always available
+    Alc/backends/loopback.c
+    Alc/backends/null.c
 )
 
 # Check ALSA backend
@@ -1209,7 +1302,7 @@ ADD_CUSTOM_TARGET(native-tools
     VERBATIM
 )
 
-option(ALSOFT_EMBED_HRTF_DATA "Embed the HRTF data files (increases library footprint)" OFF)
+option(ALSOFT_EMBED_HRTF_DATA "Embed the HRTF data files (increases library footprint)" ON)
 if(ALSOFT_EMBED_HRTF_DATA)
     MACRO(make_hrtf_header FILENAME VARNAME)
         SET(infile  "${OpenAL_SOURCE_DIR}/hrtf/${FILENAME}")
@@ -1319,7 +1412,7 @@ ELSE()
     ENDIF()
 
     IF(WIN32 AND ALSOFT_BUILD_ROUTER)
-        ADD_LIBRARY(OpenAL SHARED router/router.c router/alc.c router/al.c)
+        ADD_LIBRARY(OpenAL SHARED router/router.c router/router.h router/alc.c router/al.c)
         TARGET_COMPILE_DEFINITIONS(OpenAL
             PRIVATE AL_BUILD_LIBRARY AL_ALEXT_PROTOTYPES ${CPP_DEFS})
         TARGET_COMPILE_OPTIONS(OpenAL PRIVATE ${C_FLAGS})
@@ -1351,12 +1444,9 @@ TARGET_INCLUDE_DIRECTORIES(${IMPL_TARGET}
 TARGET_COMPILE_OPTIONS(${IMPL_TARGET} PRIVATE ${C_FLAGS})
 TARGET_LINK_LIBRARIES(${IMPL_TARGET}
     PRIVATE ${LINKER_FLAGS} ${COMMON_LIB} ${EXTRA_LIBS} ${MATH_LIB})
-TARGET_INCLUDE_DIRECTORIES(${IMPL_TARGET} PUBLIC include)
 IF(TARGET build_version)
     ADD_DEPENDENCIES(${IMPL_TARGET} build_version)
 ENDIF()
-
-SET(OPENAL_LIB_NAME ${IMPL_TARGET} PARENT_SCOPE)
 
 IF(WIN32 AND MINGW AND ALSOFT_BUILD_IMPORT_LIB AND NOT LIBTYPE STREQUAL "STATIC")
     FIND_PROGRAM(SED_EXECUTABLE NAMES sed DOC "sed executable")
@@ -1425,6 +1515,10 @@ MESSAGE(STATUS "")
 MESSAGE(STATUS "Building with support for CPU extensions:")
 MESSAGE(STATUS "    ${CPU_EXTS}")
 MESSAGE(STATUS "")
+IF(FPMATH_SET)
+    MESSAGE(STATUS "Building with SSE${FPMATH_SET} codegen")
+    MESSAGE(STATUS "")
+ENDIF()
 
 IF(WIN32)
     IF(NOT HAVE_DSOUND)
@@ -1480,7 +1574,7 @@ IF(ALSOFT_UTILS)
 
     SET(MAKEHRTF_SRCS  utils/makehrtf.c)
     IF(NOT HAVE_GETOPT)
-        SET(MAKEHRTF_SRCS  ${MAKEHRTF_SRCS} utils/getopt.c)
+        SET(MAKEHRTF_SRCS  ${MAKEHRTF_SRCS} utils/getopt.c utils/getopt.h)
     ENDIF()
     ADD_EXECUTABLE(makehrtf ${MAKEHRTF_SRCS})
     TARGET_COMPILE_DEFINITIONS(makehrtf PRIVATE ${CPP_DEFS})
@@ -1652,7 +1746,8 @@ IF(ALSOFT_EXAMPLES)
                 PRIVATE ${SDL2_INCLUDE_DIR} ${FFMPEG_INCLUDE_DIRS})
             TARGET_COMPILE_OPTIONS(alffplay PRIVATE ${C_FLAGS})
             TARGET_LINK_LIBRARIES(alffplay
-                PRIVATE ${LINKER_FLAGS} ${SDL2_LIBRARY} ${FFMPEG_LIBRARIES} common OpenAL)
+                PRIVATE ${LINKER_FLAGS} ${SDL2_LIBRARY} ${FFMPEG_LIBRARIES} ex-common common
+                        OpenAL)
 
             IF(ALSOFT_INSTALL)
                 INSTALL(TARGETS alffplay
@@ -1665,8 +1760,4 @@ IF(ALSOFT_EXAMPLES)
         ENDIF()
         MESSAGE(STATUS "")
     ENDIF()
-ENDIF()
-
-if(MEGA)
-    install(TARGETS ${IMPL_TARGET} RUNTIME DESTINATION . LIBRARY DESTINATION .)
 ENDIF()

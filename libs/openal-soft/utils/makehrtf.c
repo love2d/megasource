@@ -988,46 +988,30 @@ static Complex *CreateComplexes(size_t n)
     return a;
 }
 
-/* Fast Fourier transform routines.  The number of points must be a power of
- * two.  In-place operation is possible only if both the real and imaginary
- * parts are in-place together.
+/* Fast Fourier transform routines. The number of points must be a power of
+ * two.
  */
 
 // Performs bit-reversal ordering.
-static void FftArrange(const uint n, const Complex *in, Complex *out)
+static void FftArrange(const uint n, Complex *inout)
 {
     uint rk, k, m;
 
-    if(in == out)
+    // Handle in-place arrangement.
+    rk = 0;
+    for(k = 0;k < n;k++)
     {
-        // Handle in-place arrangement.
-        rk = 0;
-        for(k = 0;k < n;k++)
+        if(rk > k)
         {
-            if(rk > k)
-            {
-                Complex temp = in[rk];
-                out[rk] = in[k];
-                out[k] = temp;
-            }
-            m = n;
-            while(rk&(m >>= 1))
-                rk &= ~m;
-            rk |= m;
+            Complex temp = inout[rk];
+            inout[rk] = inout[k];
+            inout[k] = temp;
         }
-    }
-    else
-    {
-        // Handle copy arrangement.
-        rk = 0;
-        for(k = 0;k < n;k++)
-        {
-            out[rk] = in[k];
-            m = n;
-            while(rk&(m >>= 1))
-                rk &= ~m;
-            rk |= m;
-        }
+
+        m = n;
+        while(rk&(m >>= 1))
+            rk &= ~m;
+        rk |= m;
     }
 }
 
@@ -1061,23 +1045,23 @@ static void FftSummation(const int n, const double s, Complex *cplx)
 }
 
 // Performs a forward FFT.
-static void FftForward(const uint n, const Complex *in, Complex *out)
+static void FftForward(const uint n, Complex *inout)
 {
-    FftArrange(n, in, out);
-    FftSummation(n, 1.0, out);
+    FftArrange(n, inout);
+    FftSummation(n, 1.0, inout);
 }
 
 // Performs an inverse FFT.
-static void FftInverse(const uint n, const Complex *in, Complex *out)
+static void FftInverse(const uint n, Complex *inout)
 {
     double f;
     uint i;
 
-    FftArrange(n, in, out);
-    FftSummation(n, -1.0, out);
+    FftArrange(n, inout);
+    FftSummation(n, -1.0, inout);
     f = 1.0 / n;
     for(i = 0;i < n;i++)
-        out[i] = c_muls(out[i], f);
+        inout[i] = c_muls(inout[i], f);
 }
 
 /* Calculate the complex helical sequence (or discrete-time analytical signal)
@@ -1085,30 +1069,22 @@ static void FftInverse(const uint n, const Complex *in, Complex *out)
  * of a signal's magnitude response, the imaginary components can be used as
  * the angles for minimum-phase reconstruction.
  */
-static void Hilbert(const uint n, const Complex *in, Complex *out)
+static void Hilbert(const uint n, Complex *inout)
 {
     uint i;
 
-    if(in == out)
-    {
-        // Handle in-place operation.
-        for(i = 0;i < n;i++)
-            out[i].Imag = 0.0;
-    }
-    else
-    {
-        // Handle copy operation.
-        for(i = 0;i < n;i++)
-            out[i] = MakeComplex(in[i].Real, 0.0);
-    }
-    FftInverse(n, out, out);
+    // Handle in-place operation.
+    for(i = 0;i < n;i++)
+        inout[i].Imag = 0.0;
+
+    FftInverse(n, inout);
     for(i = 1;i < (n+1)/2;i++)
-        out[i] = c_muls(out[i], 2.0);
+        inout[i] = c_muls(inout[i], 2.0);
     /* Increment i if n is even. */
     i += (n&1)^1;
     for(;i < n;i++)
-        out[i] = MakeComplex(0.0, 0.0);
-    FftForward(n, out, out);
+        inout[i] = MakeComplex(0.0, 0.0);
+    FftForward(n, inout);
 }
 
 /* Calculate the magnitude response of the given input.  This is used in
@@ -1175,7 +1151,7 @@ static void MinimumPhase(const uint n, const double *in, Complex *out)
         mags[i] = mags[n - i];
         out[i] = out[n - i];
     }
-    Hilbert(n, out, out);
+    Hilbert(n, out);
     // Remove any DC offset the filter has.
     mags[0] = EPSILON;
     for(i = 0;i < n;i++)
@@ -2073,7 +2049,7 @@ static void AverageHrirMagnitude(const uint points, const uint n, const double *
         h[i] = MakeComplex(hrir[i], 0.0);
     for(;i < n;i++)
         h[i] = MakeComplex(0.0, 0.0);
-    FftForward(n, h, h);
+    FftForward(n, h);
     MagnitudeResponse(n, h, r);
     for(i = 0;i < m;i++)
         mag[i] = Lerp(mag[i], r[i], f);
@@ -2194,16 +2170,16 @@ static void DiffuseFieldEqualize(const uint channels, const uint m, const double
 {
     uint ti, fi, ei, ai, i;
 
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        for(ei = hData->mFds[fi].mEvStart;ei < hData->mFds[fi].mEvCount;ei++)
         {
-            for(ei = hData->mFds[fi].mEvStart;ei < hData->mFds[fi].mEvCount;ei++)
+            for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
             {
-                for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
-                {
-                    HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
+                HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
 
+                for(ti = 0;ti < channels;ti++)
+                {
                     for(i = 0;i < m;i++)
                         azd->mIrs[ti][i] /= dfa[(ti * m) + i];
                 }
@@ -2232,18 +2208,18 @@ static void ReconstructHrirs(const HrirDataT *hData)
     count = pcdone = lastpc = 0;
     printf("%3d%% done.", pcdone);
     fflush(stdout);
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        for(ei = hData->mFds[fi].mEvStart;ei < hData->mFds[fi].mEvCount;ei++)
         {
-            for(ei = hData->mFds[fi].mEvStart;ei < hData->mFds[fi].mEvCount;ei++)
+            for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
             {
-                for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
-                {
-                    HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
+                HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
 
+                for(ti = 0;ti < channels;ti++)
+                {
                     MinimumPhase(n, azd->mIrs[ti], h);
-                    FftInverse(n, h, h);
+                    FftInverse(n, h);
                     for(i = 0;i < hData->mIrPoints;i++)
                         azd->mIrs[ti][i] = h[i].Real;
                     pcdone = ++count * 100 / total;
@@ -2270,18 +2246,16 @@ static void ResampleHrirs(const uint rate, HrirDataT *hData)
     ResamplerT rs;
 
     ResamplerSetup(&rs, hData->mIrRate, rate);
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        for(ei = hData->mFds[fi].mEvStart;ei < hData->mFds[fi].mEvCount;ei++)
         {
-            for(ei = hData->mFds[fi].mEvStart;ei < hData->mFds[fi].mEvCount;ei++)
+            for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
             {
-                for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
-                {
-                    HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
+                HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
 
+                for(ti = 0;ti < channels;ti++)
                     ResamplerRun(&rs, n, azd->mIrs[ti], n, azd->mIrs[ti]);
-                }
             }
         }
     }
@@ -2313,13 +2287,14 @@ static void SynthesizeOnsets(HrirDataT *hData)
     uint ti, fi, oi, ai, ei, a0, a1;
     double t, of, af;
 
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        if(hData->mFds[fi].mEvStart <= 0)
+            continue;
+        oi = hData->mFds[fi].mEvStart;
+
+        for(ti = 0;ti < channels;ti++)
         {
-            if(hData->mFds[fi].mEvStart <= 0)
-                continue;
-            oi = hData->mFds[fi].mEvStart;
             t = 0.0;
             for(ai = 0;ai < hData->mFds[fi].mEvs[oi].mAzCount;ai++)
                 t += hData->mFds[fi].mEvs[oi].mAzs[ai].mDelays[ti];
@@ -2330,7 +2305,12 @@ static void SynthesizeOnsets(HrirDataT *hData)
                 for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
                 {
                     CalcAzIndices(hData, fi, oi, hData->mFds[fi].mEvs[ei].mAzs[ai].mAzimuth, &a0, &a1, &af);
-                    hData->mFds[fi].mEvs[ei].mAzs[ai].mDelays[ti] = Lerp(hData->mFds[fi].mEvs[0].mAzs[0].mDelays[ti], Lerp(hData->mFds[fi].mEvs[oi].mAzs[a0].mDelays[ti], hData->mFds[fi].mEvs[oi].mAzs[a1].mDelays[ti], af), of);
+                    hData->mFds[fi].mEvs[ei].mAzs[ai].mDelays[ti] = Lerp(
+                        hData->mFds[fi].mEvs[0].mAzs[0].mDelays[ti],
+                        Lerp(hData->mFds[fi].mEvs[oi].mAzs[a0].mDelays[ti],
+                             hData->mFds[fi].mEvs[oi].mAzs[a1].mDelays[ti], af),
+                        of
+                    );
                 }
             }
         }
@@ -2421,16 +2401,16 @@ static void NormalizeHrirs(const HrirDataT *hData)
     uint ti, fi, ei, ai, i;
     double maxLevel = 0.0;
 
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
         {
-            for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
+            for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
             {
-                for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
-                {
-                    HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
+                HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
 
+                for(ti = 0;ti < channels;ti++)
+                {
                     for(i = 0;i < n;i++)
                         maxLevel = fmax(fabs(azd->mIrs[ti][i]), maxLevel);
                 }
@@ -2438,16 +2418,16 @@ static void NormalizeHrirs(const HrirDataT *hData)
         }
     }
     maxLevel = 1.01 * maxLevel;
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
         {
-            for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
+            for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
             {
-                for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
-                {
-                    HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
+                HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
 
+                for(ti = 0;ti < channels;ti++)
+                {
                     for(i = 0;i < n;i++)
                         azd->mIrs[ti][i] /= maxLevel;
                 }
@@ -2481,16 +2461,16 @@ static void CalculateHrtds(const HeadModelT model, const double radius, HrirData
 
     if(model == HM_DATASET)
     {
-        for(ti = 0;ti < channels;ti++)
+        for(fi = 0;fi < hData->mFdCount;fi++)
         {
-            for(fi = 0;fi < hData->mFdCount;fi++)
+            for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
             {
-                for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
+                for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
                 {
-                    for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
-                    {
-                        HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
+                    HrirAzT *azd = &hData->mFds[fi].mEvs[ei].mAzs[ai];
 
+                    for(ti = 0;ti < channels;ti++)
+                    {
                         t = azd->mDelays[ti] * radius / hData->mRadius;
                         azd->mDelays[ti] = t;
                         maxHrtd = fmax(t, maxHrtd);
@@ -2502,18 +2482,18 @@ static void CalculateHrtds(const HeadModelT model, const double radius, HrirData
     }
     else
     {
-        for(ti = 0;ti < channels;ti++)
+        for(fi = 0;fi < hData->mFdCount;fi++)
         {
-            for(fi = 0;fi < hData->mFdCount;fi++)
+            for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
             {
-                for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
+                HrirEvT *evd = &hData->mFds[fi].mEvs[ei];
+
+                for(ai = 0;ai < evd->mAzCount;ai++)
                 {
-                    HrirEvT *evd = &hData->mFds[fi].mEvs[ei];
+                    HrirAzT *azd = &evd->mAzs[ai];
 
-                    for(ai = 0;ai < evd->mAzCount;ai++)
+                    for(ti = 0;ti < channels;ti++)
                     {
-                        HrirAzT *azd = &evd->mAzs[ai];
-
                         t = CalcLTD(evd->mElevation, azd->mAzimuth, radius, hData->mFds[fi].mDistance);
                         azd->mDelays[ti] = t;
                         maxHrtd = fmax(t, maxHrtd);
@@ -2523,11 +2503,11 @@ static void CalculateHrtds(const HeadModelT model, const double radius, HrirData
             }
         }
     }
-    for(ti = 0;ti < channels;ti++)
+    for(fi = 0;fi < hData->mFdCount;fi++)
     {
-        for(fi = 0;fi < hData->mFdCount;fi++)
+        for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
         {
-            for(ei = 0;ei < hData->mFds[fi].mEvCount;ei++)
+            for(ti = 0;ti < channels;ti++)
             {
                 for(ai = 0;ai < hData->mFds[fi].mEvs[ei].mAzCount;ai++)
                     hData->mFds[fi].mEvs[ei].mAzs[ai].mDelays[ti] -= minHrtd;
@@ -2618,8 +2598,7 @@ static void FreeHrirData(HrirDataT *hData)
         {
             if(hData->mFds[0].mEvs[0].mAzs)
             {
-                if(hData->mFds[0].mEvs[0].mAzs[0].mIrs[0] != NULL)
-                    free(hData->mFds[0].mEvs[0].mAzs[0].mIrs[0]);
+                free(hData->mFds[0].mEvs[0].mAzs[0].mIrs[0]);
                 free(hData->mFds[0].mEvs[0].mAzs);
             }
             free(hData->mFds[0].mEvs);
