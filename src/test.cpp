@@ -5,7 +5,6 @@
 #include <functional>
 
 #include <zlib.h>
-#include <physfs.h>
 #include <ogg/ogg.h>
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
@@ -39,19 +38,6 @@ int main(int argc, char **argv)
 		c << ZLIB_VERSION;
 		l << zlibVersion();
 		return "zlib";
-	};
-
-	vfunc physfs = [](strs &c, strs &l)
-	{
-		PHYSFS_Version compiled;
-		PHYSFS_Version linked;
-
-		PHYSFS_VERSION(&compiled);
-		PHYSFS_getLinkedVersion(&linked);
-
-		c << (int)compiled.major << "." << (int)compiled.minor << "." << (int)compiled.patch;
-		l << (int)linked.major << "." << (int)linked.minor << "." << (int)linked.patch;
-		return "PhysicsFS";
 	};
 
 	vfunc lua = [](strs &c, strs &l)
@@ -138,7 +124,6 @@ int main(int argc, char **argv)
 
 	std::vector<vfunc> funcs;
 	funcs.push_back(zlib);
-	funcs.push_back(physfs);
 	funcs.push_back(lua);
 	funcs.push_back(ogg);
 	funcs.push_back(vorbis);
