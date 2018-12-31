@@ -152,7 +152,6 @@ endif()
 
 
 set(MEGA_ZLIB_VER "1.2.8")
-set(MEGA_PHYSFS_VER "3.0.1")
 set(MEGA_LUA51_VER "5.1.5")
 set(MEGA_LUAJIT_VER "2.0.5")
 set(MEGA_LIBOGG_VER "1.3.2")
@@ -177,12 +176,6 @@ message(STATUS "Configuring: zlib ${MEGA_ZLIB_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/zlib-${MEGA_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
 set(MEGA_ZLIB zlibstatic)
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: physfs ${MEGA_PHYSFS_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/physfs-${MEGA_PHYSFS_VER}" ${CMAKE_BINARY_DIR}/physfs)
-set(MEGA_PHYSFS physfs-static)
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: lua ${MEGA_LUA51_VER}")
@@ -280,7 +273,6 @@ endif()
 
 set(MEGA_3P
 	${MEGA_ZLIB}
-	${MEGA_PHYSFS}
 	${MEGA_LUA51}
 	${MEGA_LIBOGG}
 	${MEGA_LIBVORBIS}
