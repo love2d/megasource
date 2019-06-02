@@ -165,7 +165,7 @@ if(MSVC)
 endif()
 
 
-set(MEGA_ZLIB_VER "1.2.8")
+set(MEGA_ZLIB_VER "1.2.11")
 set(MEGA_LUA51_VER "5.1.5")
 set(MEGA_LUAJIT_VER "2.0.5")
 set(MEGA_LIBOGG_VER "1.3.2")
