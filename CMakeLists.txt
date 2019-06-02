@@ -65,17 +65,16 @@ function(disable_warnings ARG_TARGET)
 	set_target_properties(${ARG_TARGET} PROPERTIES COMPILE_FLAGS ${NEW_FLAGS})
 endfunction()
 
-# Look for dynamic runtime DLLs.
+# Find vcvarsall.bat and look for dynamic runtime DLLs.
 if(MSVC)
-	if((MSVC_VERSION GREATER 1909) AND (MSVC_VERSION LESS 1920))
+	if(NOT(MSVC_TOOLSET_VERSION STREQUAL ""))
+		set(VSVERSION "${MSVC_TOOLSET_VERSION}")
+	elseif((MSVC_VERSION GREATER 1909) AND (MSVC_VERSION LESS 1920))
 		set(VSVERSION "141")
-		set(VCRUNTIMEVERSION "140")
 	elseif(MSVC_VERSION EQUAL 1900)
 		set(VSVERSION "140")
-		set(VCRUNTIMEVERSION "140")
 	elseif(MSVC_VERSION EQUAL 1800)
 		set(VSVERSION "120")
-		set(VCRUNTIMEVERSION "120")
 	elseif(MSVC_VERSION LESS 1800)
 		message(WARNING "Visual Studio 2013 (VS12) or newer is required!")
 	else()
@@ -96,43 +95,17 @@ if(MSVC)
 		if(NOT(VS_INSTALL_DIR STREQUAL ""))
 			set(VSCOMNTOOLS "${VS_INSTALL_DIR}\\Common7\\Tools")
 		endif()
-		message(WARNING ${VSCOMNTOOLS})
 	endif()
 
 	if(VSCOMNTOOLS STREQUAL "")
 		message(WARNING "Environment variable VSCOMNTOOLS not defined and vswhere.exe could not be found. Is Visual Studio properly installed?")
 	else()
-		get_filename_component(VS_REDIST_DIR ${VSCOMNTOOLS}/../../VC/redist/${MEGA_ARCH}/Microsoft.VC${VSVERSION}.CRT ABSOLUTE)
-		set(MSVCP_DLL ${VS_REDIST_DIR}/msvcp${VCRUNTIMEVERSION}.dll)
-		if(MSVC_VERSION EQUAL 1800)
-			set(MSVCR_DLL ${VS_REDIST_DIR}/msvcr${VCRUNTIMEVERSION}.dll)
-		else()
-			set(MSVCR_DLL ${VS_REDIST_DIR}/vcruntime${VCRUNTIMEVERSION}.dll)
-		endif()
-
-		if (EXISTS ${MSVCP_DLL} AND EXISTS ${MSVCR_DLL})
-			message(STATUS "Found Visual C and C++ runtime .dll files")
-			set(MEGA_MSVC_DLLS ${MSVCP_DLL} ${MSVCR_DLL})
-		else()
-			message(WARNING "Could not find Visual C and C++ runtime .dll files")
-		endif()
-
-		if(NOT(MSVC_VERSION LESS 1900))
-			get_filename_component(UCRT_DIR "${PROGRAMFILES_X86}/Windows Kits/10/Redist/ucrt/DLLs/${MEGA_ARCH}" ABSOLUTE)
-			if(EXISTS ${UCRT_DIR})
-				message(STATUS "Found universal C runtime system component directory")
-				file(GLOB UCRT_FILES "${UCRT_DIR}/*.dll")
-				set(MEGA_MSVC_DLLS ${MEGA_MSVC_DLLS} ${UCRT_FILES})
-			else()
-				message(STATUS "Could not find universal C runtime system component directory")
-			endif()
-		endif()
-
 		# Find vcvarsall.bat.
-		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
 
 		if(NOT(EXISTS ${VS_VCVARSALL_BAT}))
-			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
+			# older VS versions have it here
+			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
 		endif()
 
 		if(EXISTS ${VS_VCVARSALL_BAT})
@@ -148,6 +121,47 @@ if(MSVC)
 			message(WARNING "Could not find vsvarsall.bat")
 		endif()
 	endif()
+
+	# We currently ship on platforms which might not have the Universal C Runtime installed.
+	set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
+	set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+
+	# TODO: The code for InstallRequiredSystemLibraries needs the UCRTVersion and WindowsSDKVersion
+	# environment variables set by vcvarsall in order to detect the correct version of the UCRT, in
+	# newer Windows SDK versions. We don't gurantee that vcvarsall has been loaded before running...
+	include(InstallRequiredSystemLibraries)
+
+	foreach(RUNTIME_LIB ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
+		if(RUNTIME_LIB MATCHES "concrt")
+			set(MSVC_RUNTIME_CONCRT_PATH ${RUNTIME_LIB})
+		elseif(RUNTIME_LIB MATCHES "msvcp")
+			set(MSVC_RUNTIME_MSVCP_PATH ${RUNTIME_LIB})
+		endif()
+	endforeach()
+
+	# InstallRequiredSystemLibraries adds the concrt dll to its list, but we don't need it.
+	if (EXISTS ${MSVC_RUNTIME_CONCRT_PATH})
+		list(REMOVE_ITEM CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS "${MSVC_RUNTIME_CONCRT_PATH}")
+	endif()
+
+	# InstallRequiredSystemLibraries (as of CMake 3.14.5) doesn't include msvcp140_1.dll or msvcp140_2.dll in its list.
+	if(EXISTS ${MSVC_RUNTIME_MSVCP_PATH})
+		get_filename_component(MSVC_RUNTIME_MSVCP_DIR ${MSVC_RUNTIME_MSVCP_PATH} DIRECTORY)
+		message(STATUS "Found MSVC Redist directory: ${MSVC_RUNTIME_MSVCP_DIR}")
+
+		file(GLOB MSVC_RUNTIME_MSVCP_FILES "${MSVC_RUNTIME_MSVCP_DIR}/msvcp*.dll")
+
+		set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} ${MSVC_RUNTIME_MSVCP_FILES})
+
+		list(REMOVE_DUPLICATES CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+	else()
+		message(WARNING "InstallRequiredSystemLibraries did not find any msvcp runtime dll")
+	endif()
+
+	list(LENGTH CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS MSVC_RUNTIME_COUNT)
+	message(STATUS "Found ${MSVC_RUNTIME_COUNT} Visual C/C++ Runtime files")
+
+	set(MEGA_MSVC_DLLS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
 endif()
 
 
