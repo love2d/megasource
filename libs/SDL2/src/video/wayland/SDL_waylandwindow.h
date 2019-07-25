@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -71,13 +71,16 @@ typedef struct {
 #endif /* SDL_VIDEO_DRIVER_WAYLAND_QT_TOUCH */
 
     struct {
-        SDL_bool pending;
+        SDL_bool pending, configure;
         uint32_t serial;
         int width, height;
+        float scale_factor;
     } resize;
 
-    SDL_bool finger_touching;  /* for mapping touch events to mice */
-    SDL_FingerID first_finger;
+    struct wl_output **outputs;
+    int num_outputs;
+
+    float scale_factor;
 } SDL_WindowData;
 
 extern void Wayland_ShowWindow(_THIS, SDL_Window *window);

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -676,8 +676,10 @@ SDL_PrivateGameControllerParseControllerConfigString(SDL_GameController *gamecon
         pchPos++;
     }
 
-    SDL_PrivateGameControllerParseElement(gamecontroller, szGameButton, szJoystickButton);
-
+    /* No more values if the string was terminated by a comma. Don't report an error. */
+    if (szGameButton[0] != '\0' || szJoystickButton[0] != '\0') {
+        SDL_PrivateGameControllerParseElement(gamecontroller, szGameButton, szJoystickButton);
+    }
 }
 
 /*
@@ -995,6 +997,17 @@ static ControllerMapping_t *SDL_CreateMappingForAndroidController(const char *na
     if (axis_mask & (1 << SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
         SDL_strlcat(mapping_string, "righttrigger:a5,", sizeof(mapping_string));
     }
+
+    /* Remove trailing comma */
+    {
+        int pos = (int)SDL_strlen(mapping_string) - 1;
+        if (pos >= 0) {
+            if (mapping_string[pos] == ',') {
+                mapping_string[pos] = '\0';
+            }
+        }
+    }
+
     return SDL_PrivateAddMappingForGUID(guid, mapping_string,
                       &existing, SDL_CONTROLLER_MAPPING_PRIORITY_DEFAULT);
 }
@@ -1015,7 +1028,7 @@ static ControllerMapping_t *SDL_PrivateGetControllerMappingForNameAndGUID(const 
             /* The Linux driver xpad.c maps the wireless dpad to buttons */
             SDL_bool existing;
             mapping = SDL_PrivateAddMappingForGUID(guid,
-"none,X360 Wireless Controller,a:b0,b:b1,back:b6,dpdown:b14,dpleft:b11,dpright:b12,dpup:b13,guide:b8,leftshoulder:b4,leftstick:b9,lefttrigger:a2,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b10,righttrigger:a5,rightx:a3,righty:a4,start:b7,x:b2,y:b3,",
+"none,X360 Wireless Controller,a:b0,b:b1,back:b6,dpdown:b14,dpleft:b11,dpright:b12,dpup:b13,guide:b8,leftshoulder:b4,leftstick:b9,lefttrigger:a2,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b10,righttrigger:a5,rightx:a3,righty:a4,start:b7,x:b2,y:b3",
                           &existing, SDL_CONTROLLER_MAPPING_PRIORITY_DEFAULT);
         }
     }
@@ -1645,6 +1658,8 @@ SDL_GameControllerGetAxis(SDL_GameController * gamecontroller, SDL_GameControlle
                         float normalized_value = (float)(value - binding->input.axis.axis_min) / (binding->input.axis.axis_max - binding->input.axis.axis_min);
                         value = binding->output.axis.axis_min + (int)(normalized_value * (binding->output.axis.axis_max - binding->output.axis.axis_min));
                     }
+                } else {
+                    value = 0;
                 }
             } else if (binding->inputType == SDL_CONTROLLER_BINDTYPE_BUTTON) {
                 value = SDL_JoystickGetButton(gamecontroller->joystick, binding->input.button);

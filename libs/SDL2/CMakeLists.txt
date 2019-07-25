@@ -3,7 +3,7 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 endif()
 
 cmake_minimum_required(VERSION 2.8.11)
-project(SDL2 C)
+project(SDL2 C CXX)
 
 # !!! FIXME: this should probably do "MACOSX_RPATH ON" as a target property
 # !!! FIXME:  for the SDL2 shared library (so you get an
@@ -42,9 +42,9 @@ include(${SDL2_SOURCE_DIR}/cmake/sdlchecks.cmake)
 # set SDL_BINARY_AGE and SDL_INTERFACE_AGE to 0.
 set(SDL_MAJOR_VERSION 2)
 set(SDL_MINOR_VERSION 0)
-set(SDL_MICRO_VERSION 9)
+set(SDL_MICRO_VERSION 10)
 set(SDL_INTERFACE_AGE 0)
-set(SDL_BINARY_AGE 9)
+set(SDL_BINARY_AGE 10)
 set(SDL_VERSION "${SDL_MAJOR_VERSION}.${SDL_MINOR_VERSION}.${SDL_MICRO_VERSION}")
 # the following should match the versions in Xcode project file:
 set(DYLIB_CURRENT_VERSION 10.0.0)
@@ -153,6 +153,20 @@ if(APPLE OR ARCH_64)
 endif()
 if(UNIX OR MINGW OR MSYS)
   set(OPT_DEF_LIBC ON)
+endif()
+
+# The hidraw support doesn't catch Xbox, PS4 and Nintendo controllers,
+#  so we'll just use libusb when it's available. Except that libusb
+#  requires root permissions to open devices, so that's not generally
+#  useful, and we'll disable this by default on Unix. Windows and macOS
+#  can use it without root access, though, so enable by default there.
+if(WINDOWS OR APPLE OR ANDROID)
+  set(HIDAPI_SKIP_LIBUSB TRUE)
+else()
+  set(HIDAPI_SKIP_LIBUSB FALSE)
+endif()
+if (HIDAPI_SKIP_LIBUSB)
+  set(OPT_DEF_HIDAPI ON)
 endif()
 
 # Compiler info
@@ -264,8 +278,23 @@ if(EMSCRIPTEN)
   set(SDL_DLOPEN_ENABLED_BY_DEFAULT OFF)
 endif()
 
+# When defined, respect CMake's BUILD_SHARED_LIBS setting:
+set(SDL_STATIC_ENABLED_BY_DEFAULT ON)
 if (NOT DEFINED SDL_SHARED_ENABLED_BY_DEFAULT)
+  # ...unless decided already (as for EMSCRIPTEN)
+
+  set(SDL_SHARED_ENABLED_BY_DEFAULT OFF)
+
+  if (NOT DEFINED BUILD_SHARED_LIBS)
+    # No preference? Build both, just like the AC/AM configure
     set(SDL_SHARED_ENABLED_BY_DEFAULT ON)
+
+  elseif (BUILD_SHARED_LIBS)
+    # In this case, we assume the user wants a shared lib and don't build
+    # the static one
+    set(SDL_SHARED_ENABLED_BY_DEFAULT ON)
+    set(SDL_STATIC_ENABLED_BY_DEFAULT OFF)
+  endif()
 endif()
 
 set(SDL_SUBSYSTEMS
@@ -341,11 +370,12 @@ set_option(VIDEO_VIVANTE       "Use Vivante EGL video driver" ${UNIX_SYS})
 dep_option(VIDEO_VULKAN        "Enable Vulkan support" ON "ANDROID OR APPLE OR LINUX OR WINDOWS" OFF)
 set_option(VIDEO_KMSDRM        "Use KMS DRM video driver" ${UNIX_SYS})
 dep_option(KMSDRM_SHARED       "Dynamically load KMS DRM support" ON "VIDEO_KMSDRM" OFF)
+option_string(BACKGROUNDING_SIGNAL "number to use for magic backgrounding signal or 'OFF'" "OFF")
+option_string(FOREGROUNDING_SIGNAL "number to use for magic foregrounding signal or 'OFF'" "OFF")
+set_option(HIDAPI              "Use HIDAPI for low level joystick drivers" ${OPT_DEF_HIDAPI})
 
-# TODO: We should (should we?) respect cmake's ${BUILD_SHARED_LIBS} flag here
-# The options below are for compatibility to configure's default behaviour.
-set(SDL_SHARED ON CACHE BOOL "Build a shared version of the library")
-set(SDL_STATIC OFF CACHE BOOL "Build a static version of the library")
+set(SDL_SHARED ${SDL_SHARED_ENABLED_BY_DEFAULT} CACHE BOOL "Build a shared version of the library")
+set(SDL_STATIC ${SDL_STATIC_ENABLED_BY_DEFAULT} CACHE BOOL "Build a static version of the library")
 
 dep_option(SDL_STATIC_PIC      "Static version of the library should be built with Position Independent Code" OFF "SDL_STATIC" OFF)
 set_option(SDL_TEST            "Build the test directory" OFF)
@@ -384,6 +414,14 @@ else()
 endif()
 set(HAVE_ASSERTIONS ${ASSERTIONS})
 
+if(NOT BACKGROUNDING_SIGNAL STREQUAL "OFF")
+  add_definitions("-DSDL_BACKGROUNDING_SIGNAL=${BACKGROUNDING_SIGNAL}")
+endif()
+
+if(NOT FOREGROUNDING_SIGNAL STREQUAL "OFF")
+  add_definitions("-DSDL_FOREGROUNDING_SIGNAL=${FOREGROUNDING_SIGNAL}")
+endif()
+
 # Compiler option evaluation
 if(USE_GCC OR USE_CLANG)
   # Check for -Wall first, so later things can override pieces of it.
@@ -393,6 +431,11 @@ if(USE_GCC OR USE_CLANG)
     if(HAIKU)
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-multichar")
     endif()
+  endif()
+
+  check_c_compiler_flag(-fno-strict-aliasing HAVE_GCC_NO_STRICT_ALIASING)
+  if(HAVE_GCC_NO_STRICT_ALIASING)
+    list(APPEND EXTRA_CFLAGS "-fno-strict-aliasing")
   endif()
 
   check_c_compiler_flag(-Wdeclaration-after-statement HAVE_GCC_WDECLARATION_AFTER_STATEMENT)
@@ -689,7 +732,7 @@ if(LIBC)
             _uitoa _ultoa strtol strtoul _i64toa _ui64toa strtoll strtoull
             atoi atof strcmp strncmp _stricmp strcasecmp _strnicmp strncasecmp
             vsscanf vsnprintf fopen64 fseeko fseeko64 sigaction setjmp
-            nanosleep sysconf sysctlbyname getauxval poll
+            nanosleep sysconf sysctlbyname getauxval poll _Exit
             )
       string(TOUPPER ${_FN} _UPPER)
       set(_HAVEVAR "HAVE_${_UPPER}")
@@ -761,7 +804,7 @@ if(SDL_POWER)
   file(GLOB POWER_SOURCES ${SDL2_SOURCE_DIR}/src/power/*.c)
   set(SOURCE_FILES ${SOURCE_FILES} ${POWER_SOURCES})
 endif()
-# TODO: in configure.in, the test for LOADSO and SDL_DLOPEN is a bit weird:
+# TODO: in configure.ac, the test for LOADSO and SDL_DLOPEN is a bit weird:
 # if LOADSO is not wanted, SDL_LOADSO_DISABLED is set
 # If however on Unix or APPLE dlopen() is detected via CheckDLOPEN(),
 # SDL_LOADSO_DISABLED will not be set, regardless of the LOADSO settings
@@ -800,6 +843,7 @@ if(SDL_VIDEO)
   endif()
 endif()
 
+# Platform-specific options and settings
 if(ANDROID)
   file(GLOB ANDROID_CORE_SOURCES ${SDL2_SOURCE_DIR}/src/core/android/*.c)
   set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_CORE_SOURCES})
@@ -835,6 +879,7 @@ if(ANDROID)
     set(HAVE_SDL_HAPTIC TRUE)
   endif()
   if(SDL_JOYSTICK)
+    CheckHIDAPI()
     set(SDL_JOYSTICK_ANDROID 1)
     file(GLOB ANDROID_JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/android/*.c ${SDL2_SOURCE_DIR}/src/joystick/steam/*.c)
     set(SOURCE_FILES ${SOURCE_FILES} ${ANDROID_JOYSTICK_SOURCES})
@@ -881,6 +926,8 @@ if(ANDROID)
     if(VIDEO_OPENGLES)
       set(SDL_VIDEO_OPENGL_EGL 1)
       set(HAVE_VIDEO_OPENGLES TRUE)
+      set(SDL_VIDEO_OPENGL_ES 1)
+      set(SDL_VIDEO_RENDER_OGL_ES 1)
       set(SDL_VIDEO_OPENGL_ES2 1)
       set(SDL_VIDEO_RENDER_OGL_ES2 1)
 
@@ -906,10 +953,7 @@ if(ANDROID)
 
   CheckPTHREAD()
 
-endif()
-
-# Platform-specific options and settings
-if(EMSCRIPTEN)
+elseif(EMSCRIPTEN)
   # Hide noisy warnings that intend to aid mostly during initial stages of porting a new
   # project. Uncomment at will for verbose cross-compiling -I/../ path info.
   add_definitions(-Wno-warn-absolute-paths)
@@ -961,6 +1005,7 @@ if(EMSCRIPTEN)
       set(SDL_VIDEO_RENDER_OGL_ES2 1)
     endif()
   endif()
+
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
   if(SDL_AUDIO)
     if(SYSV5 OR SOLARIS OR HPUX)
@@ -1084,6 +1129,7 @@ elseif(UNIX AND NOT APPLE AND NOT ANDROID)
 
   if(SDL_JOYSTICK)
     CheckUSBHID()   # seems to be BSD specific - limit the test to BSD only?
+    CheckHIDAPI()
     if(LINUX AND NOT ANDROID)
       set(SDL_JOYSTICK_LINUX 1)
       file(GLOB JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/linux/*.c ${SDL2_SOURCE_DIR}/src/joystick/steam/*.c)
@@ -1171,8 +1217,6 @@ elseif(WINDOWS)
     endif()
   endif()
 
-  set(SDL_LINK_DIR ${PARENT_SCOPE})
-
   # Check for DirectX
   if(DIRECTX)
     if(DEFINED MSVC_VERSION AND NOT ${MSVC_VERSION} LESS 1700)
@@ -1215,7 +1259,7 @@ elseif(WINDOWS)
       set(HAVE_DIRECTX TRUE)
       if(NOT CMAKE_COMPILER_IS_MINGW AND NOT USE_WINSDK_DIRECTX)
       # TODO: change $ENV{DXSDL_DIR} to get the path from the include checks
-        set(SDL_LINK_DIR $ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH} ${SDL_LINK_DIR})
+        link_directories($ENV{DXSDK_DIR}\\lib\\${PROCESSOR_ARCH})
         include_directories($ENV{DXSDK_DIR}\\Include)
       endif()
     endif()
@@ -1226,8 +1270,6 @@ elseif(WINDOWS)
   check_include_file(mmdeviceapi.h HAVE_MMDEVICEAPI_H)
   check_include_file(audioclient.h HAVE_AUDIOCLIENT_H)
   check_include_file(endpointvolume.h HAVE_ENDPOINTVOLUME_H)
-
-  link_directories(${SDL_LINK_DIR})
 
   if(SDL_AUDIO)
     set(SDL_AUDIO_DRIVER_WINMM 1)
@@ -1293,9 +1335,9 @@ elseif(WINDOWS)
   endif()
 
   # Libraries for Win32 native and MinGW
-  list(APPEND EXTRA_LIBS user32 gdi32 winmm imm32 ole32 oleaut32 version uuid advapi32 shell32)
+  list(APPEND EXTRA_LIBS user32 gdi32 winmm imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32)
 
-  # TODO: in configure.in the check for timers is set on
+  # TODO: in configure.ac the check for timers is set on
   # cygwin | mingw32* - does this include mingw32CE?
   if(SDL_TIMERS)
     set(SDL_TIMER_WINDOWS 1)
@@ -1331,6 +1373,10 @@ elseif(WINDOWS)
   endif()
 
   if(SDL_JOYSTICK)
+    CheckHIDAPI()
+    if(HAVE_HIDAPI)
+      set(SOURCE_FILES ${SOURCE_FILES} ${SDL2_SOURCE_DIR}/src/hidapi/windows/hid.c)
+    endif()
     file(GLOB JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/windows/*.c)
     set(SOURCE_FILES ${SOURCE_FILES} ${JOYSTICK_SOURCES})
     if(HAVE_DINPUT_H)
@@ -1376,6 +1422,7 @@ elseif(WINDOWS)
     set(SDL_CFLAGS "${SDL_CFLAGS} -Dmain=SDL_main")
     list(APPEND SDL_LIBS "-lmingw32" "-lSDL2main" "-mwindows")
   endif()
+
 elseif(APPLE)
   # TODO: rework this all for proper MacOS X, iOS and Darwin support
 
@@ -1413,6 +1460,14 @@ elseif(APPLE)
   endif()
 
   if(SDL_JOYSTICK)
+    CheckHIDAPI()
+    if(HAVE_HIDAPI)
+      if(IOS)
+        set(SOURCE_FILES ${SOURCE_FILES} ${SDL2_SOURCE_DIR}/src/hidapi/ios/hid.m)
+      else()
+        set(SOURCE_FILES ${SOURCE_FILES} ${SDL2_SOURCE_DIR}/src/hidapi/mac/hid.c)
+      endif()
+    endif()
     set(SDL_JOYSTICK_IOKIT 1)
     if (IOS)
       file(GLOB JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/iphoneos/*.m ${SDL2_SOURCE_DIR}/src/joystick/steam/*.c)
@@ -1525,6 +1580,7 @@ elseif(APPLE)
   endif()
 
   CheckPTHREAD()
+
 elseif(HAIKU)
   if(SDL_VIDEO)
     set(SDL_VIDEO_DRIVER_HAIKU 1)
@@ -1563,7 +1619,7 @@ if(VIDEO_VULKAN)
 endif()
 
 # Dummies
-# configure.in does it differently:
+# configure.ac does it differently:
 # if not have X
 #   if enable_X {  SDL_X_DISABLED = 1 }
 #   [add dummy sources]
@@ -1733,7 +1789,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
 
 # Always build SDLmain
 add_library(SDL2main STATIC ${SDLMAIN_SOURCES})
-target_include_directories(SDL2main PUBLIC include)
+target_include_directories(SDL2main PUBLIC "$<BUILD_INTERFACE:${SDL2_SOURCE_DIR}/include>" $<INSTALL_INTERFACE:include/SDL2>)
 set(_INSTALL_LIBS "SDL2main")
 if (NOT ANDROID)
   set_target_properties(SDL2main PROPERTIES DEBUG_POSTFIX ${SDL_CMAKE_DEBUG_POSTFIX})
@@ -1741,7 +1797,6 @@ endif()
 
 if(SDL_SHARED)
   add_library(SDL2 SHARED ${SOURCE_FILES} ${VERSION_SOURCES})
-  install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
   if(APPLE)
     set_target_properties(SDL2 PROPERTIES
       MACOSX_RPATH 1
@@ -1765,10 +1820,24 @@ if(SDL_SHARED)
   endif()
   set(_INSTALL_LIBS "SDL2" ${_INSTALL_LIBS})
   target_link_libraries(SDL2 ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
-  target_include_directories(SDL2 PUBLIC include)
+  target_include_directories(SDL2 PUBLIC "$<BUILD_INTERFACE:${SDL2_SOURCE_DIR}/include>" $<INSTALL_INTERFACE:include/SDL2>)
   if (NOT ANDROID)
     set_target_properties(SDL2 PROPERTIES DEBUG_POSTFIX ${SDL_CMAKE_DEBUG_POSTFIX})
   endif()
+endif()
+
+if(ANDROID)
+  if(HAVE_HIDAPI)
+    add_library(hidapi SHARED ${SDL2_SOURCE_DIR}/src/hidapi/android/hid.cpp)
+  endif()
+
+  if(MSVC AND NOT LIBC)
+    # Don't try to link with the default set of libraries.
+    set_target_properties(hidapi PROPERTIES LINK_FLAGS_RELEASE "/NODEFAULTLIB")
+    set_target_properties(hidapi PROPERTIES LINK_FLAGS_DEBUG "/NODEFAULTLIB")
+    set_target_properties(hidapi PROPERTIES STATIC_LIBRARY_FLAGS "/NODEFAULTLIB")
+  endif()
+  target_link_libraries(hidapi log)
 endif()
 
 if(SDL_STATIC)
@@ -1807,20 +1876,13 @@ if(SDL_TEST)
 endif()
 
 ##### Installation targets #####
-
-if(MEGA)
-  return()
-endif()
-
 install(TARGETS ${_INSTALL_LIBS} EXPORT SDL2Targets
   LIBRARY DESTINATION "lib${LIB_SUFFIX}"
   ARCHIVE DESTINATION "lib${LIB_SUFFIX}"
   RUNTIME DESTINATION bin)
 
 ##### Export files #####
-if (APPLE)
-  set(PKG_PREFIX "SDL2.framework/Resources")
-elseif (WINDOWS)
+if (WINDOWS)
   set(PKG_PREFIX "cmake")
 else ()
   set(PKG_PREFIX "lib/cmake/SDL2")
@@ -1868,8 +1930,8 @@ if(NOT (WINDOWS OR CYGWIN))
     if(NOT ANDROID)
         install(CODE "
           execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-            \"lib${SONAME}${SOPOSTFIX}${SOEXT}\" \"libSDL2${SOPOSTFIX}${SOEXT}\")"
-            WORKING_DIR "${SDL2_BINARY_DIR}")
+            \"lib${SONAME}${SOPOSTFIX}${SOEXT}\" \"libSDL2${SOPOSTFIX}${SOEXT}\"
+            WORKING_DIRECTORY \"${SDL2_BINARY_DIR}\")")
         install(FILES ${SDL2_BINARY_DIR}/libSDL2${SOPOSTFIX}${SOEXT} DESTINATION "lib${LIB_SUFFIX}")
     endif()
   endif()

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -139,10 +139,9 @@ SDL_InitSubSystem(Uint32 flags)
     if ((flags & SDL_INIT_EVENTS)) {
 #if !SDL_EVENTS_DISABLED
         if (SDL_PrivateShouldInitSubsystem(SDL_INIT_EVENTS)) {
-            if (SDL_StartEventLoop() < 0) {
+            if (SDL_EventsInit() < 0) {
                 return (-1);
             }
-            SDL_QuitInit();
         }
         SDL_PrivateSubsystemRefCountIncr(SDL_INIT_EVENTS);
 #else
@@ -333,8 +332,7 @@ SDL_QuitSubSystem(Uint32 flags)
 #if !SDL_EVENTS_DISABLED
     if ((flags & SDL_INIT_EVENTS)) {
         if (SDL_PrivateShouldQuitSubsystem(SDL_INIT_EVENTS)) {
-            SDL_QuitQuit();
-            SDL_StopEventLoop();
+            SDL_EventsQuit();
         }
         SDL_PrivateSubsystemRefCountDecr(SDL_INIT_EVENTS);
     }

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -444,7 +444,7 @@ static int
 PSP_QueueDrawPoints(SDL_Renderer * renderer, SDL_RenderCommand *cmd, const SDL_FPoint * points, int count)
 {
     VertV *verts = (VertV *) SDL_AllocateRenderVertices(renderer, count * sizeof (VertV), 4, &cmd->data.draw.first);
-    size_t i;
+    int i;
 
     if (!verts) {
         return -1;
@@ -465,7 +465,7 @@ static int
 PSP_QueueFillRects(SDL_Renderer * renderer, SDL_RenderCommand *cmd, const SDL_FRect * rects, int count)
 {
     VertV *verts = (GLfloat *) SDL_AllocateRenderVertices(renderer, count * 2 * sizeof (VertV), 4, &cmd->data.draw.first);
-    size_t i;
+    int i;
 
     if (!verts) {
         return -1;

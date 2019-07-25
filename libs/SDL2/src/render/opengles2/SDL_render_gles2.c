@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -30,7 +30,7 @@
 #include "SDL_shaders_gles2.h"
 
 /* To prevent unnecessary window recreation,
- * these should match the defaults selected in SDL_GL_ResetAttributes 
+ * these should match the defaults selected in SDL_GL_ResetAttributes
  */
 #define RENDERER_CONTEXT_MAJOR 2
 #define RENDERER_CONTEXT_MINOR 0
@@ -529,8 +529,10 @@ GLES2_CacheProgram(GLES2_RenderData *data, GLES2_ShaderCacheEntry *vertex,
         }
         data->glDeleteProgram(data->program_cache.tail->id);
         data->program_cache.tail = data->program_cache.tail->prev;
-        SDL_free(data->program_cache.tail->next);
-        data->program_cache.tail->next = NULL;
+        if (data->program_cache.tail != NULL) {
+            SDL_free(data->program_cache.tail->next);
+            data->program_cache.tail->next = NULL;
+        }
         --data->program_cache.count;
     }
     return entry;
@@ -766,7 +768,7 @@ static int
 GLES2_QueueDrawPoints(SDL_Renderer * renderer, SDL_RenderCommand *cmd, const SDL_FPoint * points, int count)
 {
     GLfloat *verts = (GLfloat *) SDL_AllocateRenderVertices(renderer, count * 2 * sizeof (GLfloat), 0, &cmd->data.draw.first);
-    size_t i;
+    int i;
 
     if (!verts) {
         return -1;
@@ -785,7 +787,7 @@ static int
 GLES2_QueueFillRects(SDL_Renderer * renderer, SDL_RenderCommand *cmd, const SDL_FRect * rects, int count)
 {
     GLfloat *verts = (GLfloat *) SDL_AllocateRenderVertices(renderer, count * 8 * sizeof (GLfloat), 0, &cmd->data.draw.first);
-    size_t i;
+    int i;
 
     if (!verts) {
         return -1;
@@ -1400,6 +1402,8 @@ GLES2_CreateTexture(SDL_Renderer *renderer, SDL_Texture *texture)
 
     GLES2_ActivateRenderer(renderer);
 
+    renderdata->drawstate.texture = NULL;  /* we trash this state. */
+
     /* Determine the corresponding GLES texture format params */
     switch (texture->format)
     {
@@ -1595,6 +1599,8 @@ GLES2_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture, const SDL_Rect
         return 0;
     }
 
+    data->drawstate.texture = NULL;  /* we trash this state. */
+
     /* Create a texture subimage with the supplied data */
     data->glBindTexture(tdata->texture_type, tdata->texture);
     GLES2_TexSubImage2D(data, tdata->texture_type,
@@ -1673,6 +1679,8 @@ GLES2_UpdateTextureYUV(SDL_Renderer * renderer, SDL_Texture * texture,
         return 0;
     }
 
+    data->drawstate.texture = NULL;  /* we trash this state. */
+
     data->glBindTexture(tdata->texture_type, tdata->texture_v);
     GLES2_TexSubImage2D(data, tdata->texture_type,
                     rect->x / 2,
@@ -1741,6 +1749,8 @@ GLES2_SetRenderTarget(SDL_Renderer * renderer, SDL_Texture * texture)
     GLES2_RenderData *data = (GLES2_RenderData *) renderer->driverdata;
     GLES2_TextureData *texturedata = NULL;
     GLenum status;
+
+    data->drawstate.viewport_dirty = SDL_TRUE;
 
     if (texture == NULL) {
         data->glBindFramebuffer(GL_FRAMEBUFFER, data->window_framebuffer);
@@ -1867,6 +1877,7 @@ static int GLES2_BindTexture (SDL_Renderer * renderer, SDL_Texture *texture, flo
     GLES2_ActivateRenderer(renderer);
 
     data->glBindTexture(texturedata->texture_type, texturedata->texture);
+    data->drawstate.texture = texture;
 
     if (texw) {
         *texw = 1.0;
@@ -1885,6 +1896,7 @@ static int GLES2_UnbindTexture (SDL_Renderer * renderer, SDL_Texture *texture)
     GLES2_ActivateRenderer(renderer);
 
     data->glBindTexture(texturedata->texture_type, 0);
+    data->drawstate.texture = NULL;
 
     return 0;
 }
@@ -2076,12 +2088,15 @@ GLES2_CreateRenderer(SDL_Window *window, Uint32 flags)
     renderer->info.texture_formats[renderer->info.num_texture_formats++] = SDL_PIXELFORMAT_EXTERNAL_OES;
 #endif
 
+    /* Set up parameters for rendering */
     data->glActiveTexture(GL_TEXTURE0);
     data->glPixelStorei(GL_PACK_ALIGNMENT, 1);
     data->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     data->glEnableVertexAttribArray(GLES2_ATTRIBUTE_POSITION);
     data->glDisableVertexAttribArray(GLES2_ATTRIBUTE_TEXCOORD);
+
+    data->glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     data->drawstate.blend = SDL_BLENDMODE_INVALID;
     data->drawstate.color = 0xFFFFFFFF;

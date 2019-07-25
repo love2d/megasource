@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -22,10 +22,9 @@
 #include "SDL_config.h"
 #else
 #include "../SDL_internal.h"
-#include "SDL_simd.h"
 #endif
 
-#if defined(__WIN32__)
+#if defined(__WIN32__) || defined(__WINRT__)
 #include "../core/windows/SDL_windows.h"
 #endif
 #if defined(__OS2__)

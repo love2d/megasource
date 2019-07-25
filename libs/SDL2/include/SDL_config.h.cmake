@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -184,6 +184,7 @@
 #cmakedefine HAVE_SEM_TIMEDWAIT 1
 #cmakedefine HAVE_GETAUXVAL 1
 #cmakedefine HAVE_POLL 1
+#cmakedefine HAVE__EXIT 1
 
 #elif __WIN32__
 #cmakedefine HAVE_STDARG_H 1
@@ -285,6 +286,7 @@
 #cmakedefine SDL_JOYSTICK_WINMM @SDL_JOYSTICK_WINMM@
 #cmakedefine SDL_JOYSTICK_USBHID @SDL_JOYSTICK_USBHID@
 #cmakedefine SDL_JOYSTICK_USBHID_MACHINE_JOYSTICK_H @SDL_JOYSTICK_USBHID_MACHINE_JOYSTICK_H@
+#cmakedefine SDL_JOYSTICK_HIDAPI @SDL_JOYSTICK_HIDAPI@
 #cmakedefine SDL_JOYSTICK_EMSCRIPTEN @SDL_JOYSTICK_EMSCRIPTEN@
 #cmakedefine SDL_HAPTIC_DUMMY @SDL_HAPTIC_DUMMY@
 #cmakedefine SDL_HAPTIC_LINUX @SDL_HAPTIC_LINUX@

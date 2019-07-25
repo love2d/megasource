@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -1733,11 +1733,12 @@ METAL_CreateRenderer(SDL_Window * window, Uint32 flags)
 #endif
 #else
 #ifdef __IPHONE_11_0
-    if (@available(iOS 11.0, *)) {
-        if ([mtldevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily4_v1]) {
-            maxtexsize = 16384;
-        }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    if ([mtldevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily4_v1]) {
+        maxtexsize = 16384;
     } else
+#pragma clang diagnostic pop
 #endif
 #ifdef __IPHONE_10_0
     if ([mtldevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v1]) {

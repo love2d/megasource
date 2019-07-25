@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -230,6 +230,23 @@ static const char *shader_source[NUM_SHADERS][2] =
     },
 
     /* SHADER_RGB */
+    {
+        /* vertex shader */
+        TEXTURE_VERTEX_SHADER,
+        /* fragment shader */
+"varying vec4 v_color;\n"
+"varying vec2 v_texCoord;\n"
+"uniform sampler2D tex0;\n"
+"\n"
+"void main()\n"
+"{\n"
+"    gl_FragColor = texture2D(tex0, v_texCoord);\n"
+"    gl_FragColor.a = 1.0;\n"
+"    gl_FragColor *= v_color;\n"
+"}"
+    },
+
+    /* SHADER_RGBA */
     {
         /* vertex shader */
         TEXTURE_VERTEX_SHADER,

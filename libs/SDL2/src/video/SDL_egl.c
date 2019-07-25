@@ -1,6 +1,6 @@
 /*
  *  Simple DirectMedia Layer
- *  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+ *  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
  * 
  *  This software is provided 'as-is', without any express or implied
  *  warranty.  In no event will the authors be held liable for any damages
@@ -27,6 +27,7 @@
 #endif
 #if SDL_VIDEO_DRIVER_ANDROID
 #include <android/native_window.h>
+#include "../core/android/SDL_android.h"
 #endif
 
 #include "SDL_sysvideo.h"
@@ -278,16 +279,30 @@ SDL_EGL_LoadLibrary(_THIS, const char *egl_path, NativeDisplayType native_displa
 
 #if SDL_VIDEO_DRIVER_WINDOWS || SDL_VIDEO_DRIVER_WINRT
     d3dcompiler = SDL_GetHint(SDL_HINT_VIDEO_WIN_D3DCOMPILER);
-    if (!d3dcompiler) {
-        if (WIN_IsWindowsVistaOrGreater()) {
-            d3dcompiler = "d3dcompiler_46.dll";
-        } else {
-            d3dcompiler = "d3dcompiler_43.dll";
+    if (d3dcompiler) {
+        if (SDL_strcasecmp(d3dcompiler, "none") != 0) {
+            if (SDL_LoadObject(d3dcompiler) == NULL) {
+                SDL_ClearError();
+            }
         }
-    }
-    if (SDL_strcasecmp(d3dcompiler, "none") != 0) {
-        if (SDL_LoadObject(d3dcompiler) == NULL) {
-            SDL_ClearError();
+    } else {
+        if (WIN_IsWindowsVistaOrGreater()) {
+            /* Try the newer d3d compilers first */
+            const char *d3dcompiler_list[] = {
+                "d3dcompiler_47.dll", "d3dcompiler_46.dll",
+            };
+            int i;
+
+            for (i = 0; i < SDL_arraysize(d3dcompiler_list); ++i) {
+                if (SDL_LoadObject(d3dcompiler_list[i]) != NULL) {
+                    break;
+                }
+                SDL_ClearError();
+            }
+        } else {
+            if (SDL_LoadObject("d3dcompiler_43.dll") == NULL) {
+                SDL_ClearError();
+            }
         }
     }
 #endif
@@ -885,6 +900,10 @@ SDL_EGL_CreateSurface(_THIS, NativeWindowType nw)
                                             EGL_NATIVE_VISUAL_ID, &format);
 
         ANativeWindow_setBuffersGeometry(nw, 0, 0, format);
+
+        /* Update SurfaceView holder format.
+         * May triggers a sequence surfaceDestroyed(), surfaceCreated(), surfaceChanged(). */
+        Android_JNI_SetSurfaceViewFormat(format);
     }
 #endif    
     if (_this->gl_config.framebuffer_srgb_capable) {

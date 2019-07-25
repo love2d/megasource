@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -26,8 +26,8 @@
 #include "SDL_opengles.h"
 #include "../SDL_sysrender.h"
 
-/* To prevent unnecessary window recreation, 
- * these should match the defaults selected in SDL_GL_ResetAttributes 
+/* To prevent unnecessary window recreation,
+ * these should match the defaults selected in SDL_GL_ResetAttributes
  */
 
 #define RENDERER_CONTEXT_MAJOR 1
@@ -170,7 +170,7 @@ static int GLES_LoadFunctions(GLES_RenderData * data)
 #define SDL_PROC_OES(ret,func,params) \
     do { \
         data->func = SDL_GL_GetProcAddress(#func); \
-    } while ( 0 );    
+    } while ( 0 );
 #endif /* __SDL_NOGETPROCADDR__ */
 
 #include "SDL_glesfuncs.h"
@@ -351,7 +351,7 @@ GLES_CreateTexture(SDL_Renderer * renderer, SDL_Texture * texture)
         }
     }
 
-    
+
     if (texture->access == SDL_TEXTUREACCESS_TARGET) {
         if (!renderdata->GL_OES_framebuffer_object_supported) {
             SDL_free(data);
@@ -361,7 +361,7 @@ GLES_CreateTexture(SDL_Renderer * renderer, SDL_Texture * texture)
     } else {
         data->fbo = NULL;
     }
-    
+
 
     renderdata->glGetError();
     renderdata->glEnable(GL_TEXTURE_2D);
@@ -391,13 +391,15 @@ GLES_CreateTexture(SDL_Renderer * renderer, SDL_Texture * texture)
     renderdata->glTexImage2D(data->type, 0, internalFormat, texture_w,
                              texture_h, 0, format, type, NULL);
     renderdata->glDisable(GL_TEXTURE_2D);
+    renderdata->drawstate.texture = texture;
+    renderdata->drawstate.texturing = SDL_FALSE;
 
     result = renderdata->glGetError();
     if (result != GL_NO_ERROR) {
         SDL_free(data);
         return GLES_SetError("glTexImage2D()", result);
     }
-    
+
     texture->driverdata = data;
     return 0;
 }
@@ -454,6 +456,9 @@ GLES_UpdateTexture(SDL_Renderer * renderer, SDL_Texture * texture,
     renderdata->glDisable(data->type);
     SDL_free(blob);
 
+    renderdata->drawstate.texture = texture;
+    renderdata->drawstate.texturing = SDL_FALSE;
+
     if (renderdata->glGetError() != GL_NO_ERROR) {
         return SDL_SetError("Failed to update texture");
     }
@@ -498,6 +503,8 @@ GLES_SetRenderTarget(SDL_Renderer * renderer, SDL_Texture * texture)
         return SDL_SetError("Can't enable render target support in this renderer");
     }
 
+    data->drawstate.viewport_dirty = SDL_TRUE;
+
     if (texture == NULL) {
         data->glBindFramebufferOES(GL_FRAMEBUFFER_OES, data->window_framebuffer);
         return 0;
@@ -526,7 +533,7 @@ static int
 GLES_QueueDrawPoints(SDL_Renderer * renderer, SDL_RenderCommand *cmd, const SDL_FPoint * points, int count)
 {
     GLfloat *verts = (GLfloat *) SDL_AllocateRenderVertices(renderer, count * 2 * sizeof (GLfloat), 0, &cmd->data.draw.first);
-    size_t i;
+    int i;
 
     if (!verts) {
         return -1;
@@ -545,7 +552,7 @@ static int
 GLES_QueueFillRects(SDL_Renderer * renderer, SDL_RenderCommand *cmd, const SDL_FRect * rects, int count)
 {
     GLfloat *verts = (GLfloat *) SDL_AllocateRenderVertices(renderer, count * 8 * sizeof (GLfloat), 0, &cmd->data.draw.first);
-    size_t i;
+    int i;
 
     if (!verts) {
         return -1;
@@ -1060,6 +1067,9 @@ static int GLES_BindTexture (SDL_Renderer * renderer, SDL_Texture *texture, floa
     data->glEnable(GL_TEXTURE_2D);
     data->glBindTexture(texturedata->type, texturedata->texture);
 
+    data->drawstate.texture = texture;
+    data->drawstate.texturing = SDL_TRUE;
+
     if (texw) {
         *texw = (float)texturedata->texw;
     }
@@ -1076,6 +1086,9 @@ static int GLES_UnbindTexture (SDL_Renderer * renderer, SDL_Texture *texture)
     GLES_TextureData *texturedata = (GLES_TextureData *) texture->driverdata;
     GLES_ActivateRenderer(renderer);
     data->glDisable(texturedata->type);
+
+    data->drawstate.texture = NULL;
+    data->drawstate.texturing = SDL_FALSE;
 
     return 0;
 }
@@ -1209,6 +1222,8 @@ GLES_CreateRenderer(SDL_Window * window, Uint32 flags)
 
     data->glEnableClientState(GL_VERTEX_ARRAY);
     data->glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+    data->glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     data->drawstate.blend = SDL_BLENDMODE_INVALID;
     data->drawstate.color = 0xFFFFFFFF;
