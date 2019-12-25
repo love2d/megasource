@@ -265,7 +265,8 @@ if(MSVC)
 		@echo off
 		call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
-		msvcbuild.bat
+		if %1 == \"\" shift /1
+		msvcbuild.bat %1 %2
 	")
 
 	file(WRITE ${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat ${MEGA_LUAJIT_BUILD_BAT})
@@ -274,7 +275,7 @@ if(MSVC)
 		SOURCE_DIR ${MEGA_LUAJIT_SOURCE_DIR}
 		BUILD_IN_SOURCE 1
 		CONFIGURE_COMMAND ""
-		BUILD_COMMAND "${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat"
+		BUILD_COMMAND "${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat" $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:debug> $<$<NOT:$<CONFIG:Debug>>:amalg>
 		INSTALL_COMMAND cmake -E make_directory ${CMAKE_BINARY_DIR}/bin
 			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.dll ${CMAKE_BINARY_DIR}/bin
 			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.lib ${CMAKE_BINARY_DIR}/bin)
