@@ -262,6 +262,9 @@ SDL_ScanFloat(const char *text, double *valuep)
 }
 #endif
 
+#if defined(_MSC_VER) && !defined(HAVE_MEMSET)
+__declspec(noinline)
+#endif
 void *
 SDL_memset(SDL_OUT_BYTECAP(len) void *dst, int c, size_t len)
 {
