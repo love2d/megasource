@@ -16,7 +16,7 @@ Building
 
 To build just the dependencies:
 
-	$ hg clone https://bitbucket.org/rude/megasource megasource
+	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
 	$ cmake -G "Visual Studio 16 2019" -A Win32 -H. -Bbuild
 	$ cmake --build build --target megatest --config Release
@@ -25,9 +25,9 @@ To build just the dependencies:
 
 If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megasource will automatically look for it there. E.g.:
 
-	$ hg clone https://bitbucket.org/rude/megasource megasource
+	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
-	$ hg clone https://bitbucket.org/rude/love libs/love
+	$ git clone https://github.com/love2d/love libs/love
 	$ cmake -G "Visual Studio 16 2019" -A Win32 -H. -Bbuild
 	$ cmake --build build --target love/love --config Release
 
