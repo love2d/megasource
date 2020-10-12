@@ -1,6 +1,6 @@
 /*
 ** FFI library.
-** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2020 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lib_ffi_c
@@ -194,7 +194,7 @@ LJLIB_CF(ffi_meta___eq)		LJLIB_REC(cdata_arith MM_eq)
 
 LJLIB_CF(ffi_meta___len)	LJLIB_REC(cdata_arith MM_len)
 {
-  return lj_carith_len(L);
+  return ffi_arith(L);
 }
 
 LJLIB_CF(ffi_meta___lt)		LJLIB_REC(cdata_arith MM_lt)
