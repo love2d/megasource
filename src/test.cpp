@@ -8,7 +8,6 @@
 #include <ogg/ogg.h>
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
-#include "mpg123.h"
 #include <freetype/config/ftconfig.h>
 #include <freetype/freetype.h>
 #include <SDL.h>
@@ -72,14 +71,6 @@ int main(int argc, char **argv)
 		return "vorbisfile";
 	};
 
-	vfunc mpg123 = [](strs &c, strs &l)
-	{
-		mpg123_init();
-		c << "N/A";
-		l << "N/A";
-		return "mpg123";
-	};
-
 	vfunc freetype = [](strs &c, strs &l)
 	{
 		FT_Library lib;
@@ -128,7 +119,6 @@ int main(int argc, char **argv)
 	funcs.push_back(ogg);
 	funcs.push_back(vorbis);
 	funcs.push_back(vorbisfile);
-	funcs.push_back(mpg123);
 	funcs.push_back(freetype);
 	funcs.push_back(SDL2);
 	funcs.push_back(OpenAL);

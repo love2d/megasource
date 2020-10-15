@@ -171,7 +171,6 @@ set(MEGA_LUAJIT_VER "2.1.0-1d8b747")
 set(MEGA_LIBOGG_VER "1.3.2")
 set(MEGA_LIBVORBIS_VER "1.3.5")
 set(MEGA_LIBTHEORA_VER "1.1.1")
-set(MEGA_MPG123_VER "1.25.6")
 set(MEGA_FREETYPE_VER "2.8.1")
 set(MEGA_SDL2_VER "2.0.10")
 set(MEGA_OPENAL_VER "1.19.1")
@@ -215,12 +214,6 @@ message(STATUS "Configuring: libtheora ${MEGA_LIBTHEORA_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libtheora-${MEGA_LIBTHEORA_VER}" ${CMAKE_BINARY_DIR}/libtheora)
 set(MEGA_LIBTHEORA theora-static)
-
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: mpg123 ${MEGA_MPG123_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/mpg123-${MEGA_MPG123_VER}" ${CMAKE_BINARY_DIR}/mpg123)
-set(MEGA_MPEG123 mpg123)
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: freetype ${MEGA_FREETYPE_VER}")
@@ -293,7 +286,6 @@ set(MEGA_3P
 	${MEGA_LIBVORBIS}
 	${MEGA_LIBVORBISFILE}
 	${MEGA_LIBTHEORA}
-	${MEGA_MPEG123}
 	${MEGA_FREETYPE}
 	${MEGA_SDL2}
 	${MEGA_SDL2MAIN}
@@ -324,7 +316,6 @@ link_directories(${SDL_LINK_DIR})
 add_executable(megatest src/test.cpp)
 target_link_libraries(megatest ${MEGA_3P})
 
-add_move_dll(megatest ${MEGA_MPEG123})
 add_move_dll(megatest ${MEGA_SDL2})
 add_move_dll(megatest ${MEGA_OPENAL})
 add_move_dll(megatest ${MEGA_LUA51})
