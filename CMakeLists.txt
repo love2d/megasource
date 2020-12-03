@@ -14,8 +14,33 @@ set(MEGA TRUE)
 set (CMAKE_CXX_STANDARD 11)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	set(MEGA_X64 TRUE)
-	set(MEGA_ARCH x64)
+	if(MSVC)
+		# Normally we should rely on CMAKE_SYSTEM_PROCESSOR
+		# but as of CMake 3.19.1, it sets to AMD64 even when targetting
+		# Windows ARM64. This needs to be reevaluated in the future.
+		set(_MEGATEMP_CHECKVAR CMAKE_SYSTEM_PROCESSOR)
+		if("${CMAKE_GENERATOR}" MATCHES "^Visual Studio")
+			set(_MEGATEMP_CHECKVAR CMAKE_GENERATOR_PLATFORM)
+		# Note that MSVC_CXX_ARCHITECTURE_ID is an undocumented
+		# variable, but unfortunately we need to depends on it
+		# as reason stated above.
+		# https://gitlab.kitware.com/cmake/cmake/-/issues/15170
+		elseif(DEFINED MSVC_CXX_ARCHITECTURE_ID)
+			set(_MEGATEMP_CHECKVAR MSVC_CXX_ARCHITECTURE_ID)
+		endif()
+		# FIXME: Code below also duplicates MEGA_X64 architecture assignment.
+		if(${_MEGATEMP_CHECKVAR} STREQUAL "ARM64")
+			set(MEGA_ARM64 TRUE)
+			set(MEGA_ARCH ARM64)
+		else()
+			set(MEGA_X64 TRUE)
+			set(MEGA_ARCH x64)
+		endif()
+		unset(_MEGATEMP_CHECKVAR)
+	else()
+		set(MEGA_X64 TRUE)
+		set(MEGA_ARCH x64)
+	endif()
 else()
 	set(MEGA_X86 TRUE)
 	set(MEGA_ARCH x86)
@@ -114,6 +139,8 @@ if(MSVC)
 
 			if(MEGA_X86)
 				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
+			elseif(MEGA_ARM64)
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_arm64")
 			else()
 				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
 			endif()
@@ -144,8 +171,13 @@ if(MSVC)
 		list(REMOVE_ITEM CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS "${MSVC_RUNTIME_CONCRT_PATH}")
 	endif()
 
+	# FIXME: InstallRequiredSystemLibraries (as of CMake 3.19.1) mistreat Windows ARM64 as AMD64
+	# and will copy AMD64 DLLs. That's not the DLLs we want!
+	# TODO: Re-evaluate this in the future. This probably needs to be reported upstream!
+	if(MEGA_ARM64)
+		message(WARNING "InstallRequiredSystemLibraries doesn't support Windows ARM64 yet")
 	# InstallRequiredSystemLibraries (as of CMake 3.14.5) doesn't include msvcp140_1.dll or msvcp140_2.dll in its list.
-	if(EXISTS ${MSVC_RUNTIME_MSVCP_PATH})
+	elseif(EXISTS ${MSVC_RUNTIME_MSVCP_PATH})
 		get_filename_component(MSVC_RUNTIME_MSVCP_DIR ${MSVC_RUNTIME_MSVCP_PATH} DIRECTORY)
 		message(STATUS "Found MSVC Redist directory: ${MSVC_RUNTIME_MSVCP_DIR}")
 
@@ -158,10 +190,12 @@ if(MSVC)
 		message(WARNING "InstallRequiredSystemLibraries did not find any msvcp runtime dll")
 	endif()
 
-	list(LENGTH CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS MSVC_RUNTIME_COUNT)
-	message(STATUS "Found ${MSVC_RUNTIME_COUNT} Visual C/C++ Runtime files")
+	if(NOT MEGA_ARM64)
+		list(LENGTH CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS MSVC_RUNTIME_COUNT)
+		message(STATUS "Found ${MSVC_RUNTIME_COUNT} Visual C/C++ Runtime files")
 
-	set(MEGA_MSVC_DLLS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
+		set(MEGA_MSVC_DLLS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
+	endif()
 endif()
 
 
@@ -224,6 +258,12 @@ set(MEGA_FREETYPE freetype)
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
 message(STATUS "-----------------------------------------------------")
+if(WIN32 AND MEGA_ARM64)
+	# In Windows, SDL always tries to open OpenGL32.dll, which is not available in Windows 10
+	# ARM64. This will cause error later on which makes love.window.setMode unhappy even when
+	# LOVE_GRAPHICS_USE_OPENGLES is set, so disable OpenGL backend.
+	set(VIDEO_OPENGL OFF CACHE BOOL "(SDL) Enable OpenGL Backend" FORCE)
+endif()
 add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
 set(MEGA_SDL2 SDL2)
 set(MEGA_SDL2MAIN SDL2main)
@@ -241,7 +281,7 @@ add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmo
 set(MEGA_MODPLUG modplug-static)
 
 # LuaJIT
-if(MSVC)
+if(MSVC AND NOT MEGA_ARM64)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
 	message(STATUS "-----------------------------------------------------")
@@ -302,6 +342,13 @@ if(EXISTS ${MEGA_LOVE}/CMakeLists.txt)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: love")
 	message(STATUS "-----------------------------------------------------")
+	if(MEGA_ARM64)
+		# LuaJIT currently doesn't support targetting Windows with ARM64
+		# architecture yet.
+		# TODO: Re-evaluate this once LuaJIT supports it.
+		# https://github.com/LuaJIT/LuaJIT/issues/593
+		set(LOVE_JIT OFF CACHE BOOL "Enable LOVE JIT" FORCE)
+	endif()
 	add_subdirectory(${MEGA_LOVE} ${CMAKE_BINARY_DIR}/love)
 
 	# Turn off third-party warnings when building with LOVE.
