@@ -478,8 +478,8 @@ EnumJoysticksCallback(const DIDEVICEINSTANCE * pdidInstance, VOID * pContext)
                 pPrevJoystick->pNext = pNewJoystick->pNext;
             }
 
-            // Update with new guid/etc, if it has changed
-            pNewJoystick->dxdevice = *pdidInstance;
+            /* Update with new guid/etc, if it has changed */
+            SDL_memcpy(&pNewJoystick->dxdevice, pdidInstance, sizeof(DIDEVICEINSTANCE));
 
             pNewJoystick->pNext = SYS_Joystick;
             SYS_Joystick = pNewJoystick;
