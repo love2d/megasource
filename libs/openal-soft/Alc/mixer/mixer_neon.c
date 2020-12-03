@@ -9,6 +9,15 @@
 #include "hrtf.h"
 #include "defs.h"
 
+inline float32x4_t set_f4(float l0, float l1, float l2, float l3)
+{
+    float32x4_t ret;
+    ret = vsetq_lane_f32(l0, ret, 0);
+    ret = vsetq_lane_f32(l1, ret, 1);
+    ret = vsetq_lane_f32(l2, ret, 2);
+    ret = vsetq_lane_f32(l3, ret, 3);
+    return ret;
+}
 
 const ALfloat *Resample_lerp_Neon(const InterpState* UNUSED(state),
   const ALfloat *restrict src, ALsizei frac, ALint increment,
@@ -34,8 +43,8 @@ const ALfloat *Resample_lerp_Neon(const InterpState* UNUSED(state),
         const int pos1 = vgetq_lane_s32(pos4, 1);
         const int pos2 = vgetq_lane_s32(pos4, 2);
         const int pos3 = vgetq_lane_s32(pos4, 3);
-        const float32x4_t val1 = (float32x4_t){src[pos0], src[pos1], src[pos2], src[pos3]};
-        const float32x4_t val2 = (float32x4_t){src[pos0+1], src[pos1+1], src[pos2+1], src[pos3+1]};
+        const float32x4_t val1 = set_f4(src[pos0], src[pos1], src[pos2], src[pos3]);
+        const float32x4_t val2 = set_f4(src[pos0+1], src[pos1+1], src[pos2+1], src[pos3+1]);
 
         /* val1 + (val2-val1)*mu */
         const float32x4_t r0 = vsubq_f32(val2, val1);
