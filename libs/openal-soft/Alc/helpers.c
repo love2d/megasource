@@ -218,6 +218,13 @@ void FillCPUCaps(int capfilter)
 #endif
 #endif
 #ifdef HAVE_NEON
+#ifdef _WIN32
+#ifndef PF_ARM_NEON_INSTRUCTIONS_AVAILABLE
+#define PF_ARM_NEON_INSTRUCTIONS_AVAILABLE 19
+#endif
+    if (IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE))
+        caps |= CPU_CAP_NEON;
+#else
     FILE *file = fopen("/proc/cpuinfo", "rt");
     if(!file)
         ERR("Failed to open /proc/cpuinfo, cannot check for NEON support\n");
@@ -262,6 +269,7 @@ void FillCPUCaps(int capfilter)
 
         alstr_reset(&features);
     }
+#endif
 #endif
 
     TRACE("Extensions:%s%s%s%s%s%s\n",
