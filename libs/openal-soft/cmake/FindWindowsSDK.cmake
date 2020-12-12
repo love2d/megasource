@@ -73,6 +73,11 @@ macro(_winsdk_announce)
 endmacro()
 
 set(_winsdk_win10vers
+	10.0.18362.0 # Windows 10 Version 1903
+	10.0.17763.0 # Windows 10 Version 1809
+	10.0.17134.0 # Windows 10 Version 1803 (April 2018 Update)
+	10.0.16299.0 # Windows 10 Version 1709 (Fall Creators Update)
+	10.0.15063.0 # Windows 10 Version 1703 (Creators Update)
 	10.0.14393.0 # Redstone aka Win10 1607 "Anniversary Update"
 	10.0.10586.0 # TH2 aka Win10 1511
 	10.0.10240.0 # Win10 RTM
@@ -470,9 +475,11 @@ find_package_handle_standard_args(WindowsSDK
 
 if(WINDOWSSDK_FOUND)
 	# Internal: Architecture-appropriate library directory names.
-	if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "ARM")
+	if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "ARM" OR "${CMAKE_VS_PLATFORM_NAME}" STREQUAL "ARM64")
 		if(CMAKE_SIZEOF_VOID_P MATCHES "8")
 			# Only supported in Win10 SDK and up.
+			set(_winsdk_archbare ) # what the architecture used to be called in oldest SDKs
+			set(_winsdk_arch arm64) # what the architecture used to be called
 			set(_winsdk_arch8 arm64) # what the WDK for Win8+ calls this architecture
 		else()
 			set(_winsdk_archbare /arm) # what the architecture used to be called in oldest SDKs
