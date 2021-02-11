@@ -1,5 +1,5 @@
 @rem Script to build LuaJIT with MSVC.
-@rem Copyright (C) 2005-2020 Mike Pall. See Copyright Notice in luajit.h
+@rem Copyright (C) 2005-2021 Mike Pall. See Copyright Notice in luajit.h
 @rem
 @rem Open a "Visual Studio Command Prompt" (either x86 or x64).
 @rem Then cd to this directory and run this script. Use the following
@@ -15,7 +15,7 @@
 @setlocal
 @rem Add more debug flags here, e.g. DEBUGCFLAGS=/DLUA_USE_APICHECK
 @set DEBUGCFLAGS=
-@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /DLUAJIT_ENABLE_LUA52COMPAT
+@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
