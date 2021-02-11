@@ -44,6 +44,8 @@
 
 #include "common/alhelpers.h"
 
+#include "win_main_utf8.h"
+
 #ifndef M_PI
 #define M_PI    (3.14159265358979323846)
 #endif
@@ -82,22 +84,25 @@ static void ApplySin(ALfloat *data, ALdouble g, ALuint srate, ALuint freq)
     ALdouble smps_per_cycle = (ALdouble)srate / freq;
     ALuint i;
     for(i = 0;i < srate;i++)
-        data[i] += (ALfloat)(sin(i/smps_per_cycle * 2.0*M_PI) * g);
+    {
+        ALdouble ival;
+        data[i] += (ALfloat)(sin(modf(i/smps_per_cycle, &ival) * 2.0*M_PI) * g);
+    }
 }
 
 /* Generates waveforms using additive synthesis. Each waveform is constructed
  * by summing one or more sine waves, up to (and excluding) nyquist.
  */
-static ALuint CreateWave(enum WaveType type, ALuint freq, ALuint srate)
+static ALuint CreateWave(enum WaveType type, ALuint freq, ALuint srate, ALfloat gain)
 {
     ALuint seed = 22222;
-    ALint data_size;
+    ALuint data_size;
     ALfloat *data;
     ALuint buffer;
     ALenum err;
     ALuint i;
 
-    data_size = srate * sizeof(ALfloat);
+    data_size = (ALuint)(srate * sizeof(ALfloat));
     data = calloc(1, data_size);
     switch(type)
     {
@@ -139,10 +144,16 @@ static ALuint CreateWave(enum WaveType type, ALuint freq, ALuint srate)
             break;
     }
 
+    if(gain != 1.0f)
+    {
+        for(i = 0;i < srate;i++)
+            data[i] *= gain;
+    }
+
     /* Buffer the audio data into a new buffer object. */
     buffer = 0;
     alGenBuffers(1, &buffer);
-    alBufferData(buffer, AL_FORMAT_MONO_FLOAT32, data, data_size, srate);
+    alBufferData(buffer, AL_FORMAT_MONO_FLOAT32, data, (ALsizei)data_size, (ALsizei)srate);
     free(data);
 
     /* Check if an error occured, and clean up if so. */
@@ -170,6 +181,7 @@ int main(int argc, char *argv[])
     ALint tone_freq = 1000;
     ALCint dev_rate;
     ALenum state;
+    ALfloat gain = 1.0f;
     int i;
 
     argv++; argc--;
@@ -185,7 +197,8 @@ int main(int argc, char *argv[])
 
     for(i = 0;i < argc;i++)
     {
-        if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
+        if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0
+            || strcmp(argv[i], "--help") == 0)
         {
             fprintf(stderr, "OpenAL Tone Generator\n"
 "\n"
@@ -197,6 +210,7 @@ int main(int argc, char *argv[])
 "  --waveform/-w <type>      Waveform type: sine (default), square, sawtooth,\n"
 "                                triangle, impulse, noise\n"
 "  --freq/-f <hz>            Tone frequency (default 1000 hz)\n"
+"  --gain/-g <gain>          gain 0.0 to 1 (default 1)\n"
 "  --srate/-s <sample rate>  Sampling rate (default output rate)\n",
                 appname
             );
@@ -236,6 +250,16 @@ int main(int argc, char *argv[])
                 tone_freq = 1;
             }
         }
+        else if(i+1 < argc && (strcmp(argv[i], "--gain") == 0 || strcmp(argv[i], "-g") == 0))
+        {
+            i++;
+            gain = (ALfloat)atof(argv[i]);
+            if(gain < 0.0f || gain > 1.0f)
+            {
+                fprintf(stderr, "Invalid gain: %s (min: 0.0, max 1.0)\n", argv[i]);
+                gain = 1.0f;
+            }
+        }
         else if(i+1 < argc && (strcmp(argv[i], "--srate") == 0 || strcmp(argv[i], "-s") == 0))
         {
             i++;
@@ -257,7 +281,7 @@ int main(int argc, char *argv[])
         srate = dev_rate;
 
     /* Load the sound into a buffer. */
-    buffer = CreateWave(wavetype, tone_freq, srate);
+    buffer = CreateWave(wavetype, (ALuint)tone_freq, (ALuint)srate, gain);
     if(!buffer)
     {
         CloseAL();
@@ -271,7 +295,7 @@ int main(int argc, char *argv[])
     /* Create the source to play the sound with. */
     source = 0;
     alGenSources(1, &source);
-    alSourcei(source, AL_BUFFER, buffer);
+    alSourcei(source, AL_BUFFER, (ALint)buffer);
     assert(alGetError()==AL_NO_ERROR && "Failed to setup sound source");
 
     /* Play the sound for a while. */
