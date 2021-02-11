@@ -201,7 +201,7 @@ endif()
 
 set(MEGA_ZLIB_VER "1.2.11")
 set(MEGA_LUA51_VER "5.1.5")
-set(MEGA_LUAJIT_VER "2.1.0-1d8b747")
+set(MEGA_LUAJIT_VER "2.1.0-ec6edc5")
 set(MEGA_LIBOGG_VER "1.3.2")
 set(MEGA_LIBVORBIS_VER "1.3.5")
 set(MEGA_LIBTHEORA_VER "1.1.1")
@@ -316,7 +316,21 @@ if(MSVC AND NOT MEGA_ARM64)
 	set(MEGA_LUAJIT_LIB ${CMAKE_BINARY_DIR}/bin/lua51.lib)
 	set(MEGA_LUAJIT_DLL ${CMAKE_BINARY_DIR}/bin/lua51.dll)
 	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_SOURCE_DIR}/src)
+elseif(ANDROID)
+	# LuaJIT is prebuilt in Android
+	message(STATUS "-----------------------------------------------------")
+	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
+	message(STATUS "-----------------------------------------------------")
+	set(MEGA_LUAJIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/LuaJIT")
 
+	add_library(luajit IMPORTED STATIC)
+	set_target_properties(luajit PROPERTIES
+		IMPORTED_LOCATION ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.a
+		INCLUDE_DIRECTORIES ${MEGA_LUAJIT_DIR}/src
+	)
+	set(MEGA_LUAJIT_LIB ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.a)
+	set(MEGA_LUAJIT_DLL)
+	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_DIR}/src)
 endif()
 
 set(MEGA_3P
