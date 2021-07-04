@@ -302,7 +302,9 @@ if(MSVC AND NOT MEGA_ARM64)
 	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
 
 	set(MEGA_LUAJIT_BUILD_BAT "
-		call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
+		if not defined DevEnvDir (
+			call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
+		)
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
 		if %1 == \"\" shift /1
 		msvcbuild.bat %1 %2
