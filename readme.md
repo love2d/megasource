@@ -23,6 +23,8 @@ To build just the dependencies:
 
 ... or you can open the solution file in Visual Studio and build from there instead of invoking cmake --build.
 
+Note, that ```-H``` had been replaced in CMake 3.13 with ```-S```.
+
 If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megasource will automatically look for it there. E.g.:
 
 	$ git clone https://github.com/love2d/megasource megasource
