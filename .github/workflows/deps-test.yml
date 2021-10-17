@@ -18,7 +18,7 @@ jobs:
       with:
         path: megasource/libs/love
         repository: love2d/love
-        ref: master
+        ref: main
     - name: Configure
       shell: cmd
       env:
