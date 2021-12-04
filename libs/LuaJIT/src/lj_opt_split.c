@@ -1,6 +1,6 @@
 /*
 ** SPLIT: Split 64 bit IR instructions into 32 bit IR instructions.
-** Copyright (C) 2005-2020 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2021 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_split_c
@@ -645,7 +645,7 @@ static void split_ir(jit_State *J)
       tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), hisubst[op1], oir[op1].prev);
 #endif
       ir->prev = split_emit(J, IRTI(IR_CALLN), tmp, IRCALL_lj_vm_tobit);
-    } else if (ir->o == IR_TOSTR) {
+    } else if (ir->o == IR_TOSTR || ir->o == IR_TMPREF) {
       if (hisubst[ir->op1]) {
 	if (irref_isk(ir->op1))
 	  nir->op1 = ir->op1;
