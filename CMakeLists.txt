@@ -92,6 +92,8 @@ endfunction()
 
 # Find vcvarsall.bat and look for dynamic runtime DLLs.
 if(MSVC)
+	option(LOVE_INSTALL_UCRT "Provide the Windows 10 Universal CRT DLLs with LOVE" OFF)
+
 	if(NOT(MSVC_TOOLSET_VERSION STREQUAL ""))
 		set(VSVERSION "${MSVC_TOOLSET_VERSION}")
 	elseif((MSVC_VERSION GREATER 1909) AND (MSVC_VERSION LESS 1920))
@@ -149,8 +151,11 @@ if(MSVC)
 		endif()
 	endif()
 
-	# We currently ship on platforms which might not have the Universal C Runtime installed.
-	set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
+	if(LOVE_INSTALL_UCRT)
+		# We currently ship on platforms which might not have the Universal C Runtime installed.
+		set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
+	endif()
+
 	set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
 
 	# TODO: The code for InstallRequiredSystemLibraries needs the UCRTVersion and WindowsSDKVersion
