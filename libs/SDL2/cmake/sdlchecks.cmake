@@ -418,7 +418,7 @@ macro(CheckX11)
     check_include_file(X11/extensions/Xinerama.h HAVE_XINERAMA_H)
     check_include_file(X11/extensions/XInput2.h HAVE_XINPUT2_H)
     check_include_file(X11/extensions/Xrandr.h HAVE_XRANDR_H)
-    check_include_file(X11/extensions/Xfixes.h HAVE_XFIXES_H)
+    check_include_file(X11/extensions/Xfixes.h HAVE_XFIXES_H_)
     check_include_file(X11/extensions/Xrender.h HAVE_XRENDER_H)
     check_include_file(X11/extensions/scrnsaver.h HAVE_XSS_H)
     check_include_file(X11/extensions/shape.h HAVE_XSHAPE_H)
@@ -538,6 +538,15 @@ macro(CheckX11)
       endif()
 
       # check along with XInput2.h because we use Xfixes with XIBarrierReleasePointer
+      if(SDL_X11_XFIXES AND HAVE_XFIXES_H_ AND HAVE_XINPUT2_H)
+        check_c_source_compiles("
+            #include <X11/Xlib.h>
+            #include <X11/Xproto.h>
+            #include <X11/extensions/XInput2.h>
+            #include <X11/extensions/Xfixes.h>
+            BarrierEventID b;
+            int main(void) { }" HAVE_XFIXES_H)
+      endif()
       if(SDL_X11_XFIXES AND HAVE_XFIXES_H AND HAVE_XINPUT2_H)
         if(HAVE_X11_SHARED AND XFIXES_LIB)
           set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XFIXES "\"${XFIXES_LIB_SONAME}\"")
@@ -637,11 +646,11 @@ macro(CheckWayland)
       endif()
       string(REPLACE "wayland-scanner " "" WAYLAND_SCANNER_VERSION ${WAYLAND_SCANNER_VERSION})
 
-      string(COMPARE GREATER_EQUAL ${WAYLAND_SCANNER_VERSION} "1.15.0" WAYLAND_SCANNER_1_15_FOUND)
-      if(WAYLAND_SCANNER_1_15_FOUND)
-        set(WAYLAND_SCANNER_CODE_MODE "private-code")
-      else()
+      string(COMPARE LESS ${WAYLAND_SCANNER_VERSION} "1.15.0" WAYLAND_SCANNER_PRE_1_15)
+      if(WAYLAND_SCANNER_PRE_1_15)
         set(WAYLAND_SCANNER_CODE_MODE "code")
+      else()
+        set(WAYLAND_SCANNER_CODE_MODE "private-code")
       endif()
     endif()
 
@@ -808,8 +817,7 @@ endmacro()
 macro(CheckEGL)
   if (SDL_OPENGL OR SDL_OPENGLES)
     pkg_check_modules(EGL egl)
-    string(REPLACE "-D_THREAD_SAFE;" "-D_THREAD_SAFE=1;" EGL_CFLAGS "${EGL_CFLAGS}")
-    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${EGL_CFLAGS}")
+    set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} ${EGL_CFLAGS}")
     check_c_source_compiles("
         #define EGL_API_FB
         #define MESA_EGL_NO_X11_HEADERS
@@ -1161,6 +1169,8 @@ macro(CheckHIDAPI)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LIBUSB_CFLAGS}")
         if(HIDAPI_ONLY_LIBUSB)
           list(APPEND EXTRA_LIBS ${LIBUSB_LIBS})
+        elseif(OS2)
+          set(SDL_LIBUSB_DYNAMIC "\"usb100.dll\"")
         else()
           # libusb is loaded dynamically, so don't add it to EXTRA_LIBS
           FindLibraryAndSONAME("usb-1.0")
@@ -1212,7 +1222,11 @@ macro(CheckRPI)
     set(CMAKE_REQUIRED_LIBRARIES "${VIDEO_RPI_LIBRARIES}")
     check_c_source_compiles("
         #include <bcm_host.h>
-        int main(int argc, char **argv) {}" HAVE_RPI)
+        #include <EGL/eglplatform.h>
+        int main(int argc, char **argv) {
+          EGL_DISPMANX_WINDOW_T window;
+          bcm_host_init();
+        }" HAVE_RPI)
     set(CMAKE_REQUIRED_FLAGS "${ORIG_CMAKE_REQUIRED_FLAGS}")
     set(CMAKE_REQUIRED_LIBRARIES)
 
