@@ -264,10 +264,10 @@ message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
 message(STATUS "-----------------------------------------------------")
 if(WIN32 AND MEGA_ARM64)
-	# In Windows, SDL always tries to open OpenGL32.dll, which is not available in Windows 10
-	# ARM64. This will cause error later on which makes love.window.setMode unhappy even when
+	# In Windows, SDL always tries to open OpenGL32.dll, which is not available in Windows ARM64.
+	# This will cause error later on which makes love.window.setMode unhappy even when
 	# LOVE_GRAPHICS_USE_OPENGLES is set, so disable OpenGL backend.
-	set(VIDEO_OPENGL OFF CACHE BOOL "(SDL) Enable OpenGL Backend" FORCE)
+	set(SDL_OPENGL OFF CACHE BOOL "(SDL) Enable OpenGL Backend" FORCE)
 endif()
 add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
 set(MEGA_SDL2 SDL2)
