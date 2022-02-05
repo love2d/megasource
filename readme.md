@@ -29,7 +29,7 @@ If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megaso
 	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
 	$ git clone https://github.com/love2d/love libs/love
-	$ cmake -G "Visual Studio 16 2019" -A Win32 -H. -Bbuild
+	$ cmake -H. -Bbuild
 	$ cmake --build build --target love/love --config Release
 
 The binaries can be found in *build/love/Release*.
@@ -44,4 +44,3 @@ A zip with the binaries and the installer will appear in *build*.
 [cmake]: http://www.cmake.org/
 [nsis]: http://nsis.sourceforge.net
 [vs2019]: https://visualstudio.microsoft.com/downloads/
-[oldvs]: https://visualstudio.microsoft.com/vs/older-downloads/
