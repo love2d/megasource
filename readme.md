@@ -6,8 +6,7 @@ Prerequisites
 -------------
 
  - Windows.
- - LOVE 12+: [Visual Studio 2019][vs2019].
- - LOVE 11 and older: [Visual Studio 2013, 2015, or 2017][oldvs]. Official builds of LOVE 11 and older use Visual Studio 2013.
+ - [Visual Studio 2019][vs2019] or greater.
  - [CMake 3.1][cmake] or greater.
  - [NSIS][nsis] if you want to build the LÖVE installer.
 
@@ -18,7 +17,7 @@ To build just the dependencies:
 
 	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
-	$ cmake -G "Visual Studio 16 2019" -A Win32 -H. -Bbuild
+	$ cmake -H. -Bbuild
 	$ cmake --build build --target megatest --config Release
 
 ... or you can open the solution file in Visual Studio and build from there instead of invoking cmake --build.
