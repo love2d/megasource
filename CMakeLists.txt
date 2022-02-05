@@ -176,13 +176,15 @@ if(MSVC)
 		list(REMOVE_ITEM CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS "${MSVC_RUNTIME_CONCRT_PATH}")
 	endif()
 
-	# FIXME: InstallRequiredSystemLibraries (as of CMake 3.19.1) mistreat Windows ARM64 as AMD64
-	# and will copy AMD64 DLLs. That's not the DLLs we want!
-	# TODO: Re-evaluate this in the future. This probably needs to be reported upstream!
-	if(MEGA_ARM64)
-		message(WARNING "InstallRequiredSystemLibraries doesn't support Windows ARM64 yet")
+	# CMake 3.20 InstallRequiredSystemLibraries recognize ARM64, but their older version aren't.
+	# Put this safeguard in place, otherwise it will copy AMD64 DLLS which is NOT what user wants!
+	if(MEGA_ARM64 AND ${CMAKE_VERSION} VERSION_LESS "3.20.0")
+		message(WARNING "InstallRequiredSystemLibraries of CMake ${CMAKE_VERSION} doesn't support Windows ARM64. Please update your CMake!")
+		set(MSVC_RUNTIME_MSVCP_PATH "")
+	endif()
+
 	# InstallRequiredSystemLibraries (as of CMake 3.14.5) doesn't include msvcp140_1.dll or msvcp140_2.dll in its list.
-	elseif(EXISTS ${MSVC_RUNTIME_MSVCP_PATH})
+	if(EXISTS ${MSVC_RUNTIME_MSVCP_PATH})
 		get_filename_component(MSVC_RUNTIME_MSVCP_DIR ${MSVC_RUNTIME_MSVCP_PATH} DIRECTORY)
 		message(STATUS "Found MSVC Redist directory: ${MSVC_RUNTIME_MSVCP_DIR}")
 
@@ -195,12 +197,10 @@ if(MSVC)
 		message(WARNING "InstallRequiredSystemLibraries did not find any msvcp runtime dll")
 	endif()
 
-	if(NOT MEGA_ARM64)
-		list(LENGTH CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS MSVC_RUNTIME_COUNT)
-		message(STATUS "Found ${MSVC_RUNTIME_COUNT} Visual C/C++ Runtime files")
+	list(LENGTH CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS MSVC_RUNTIME_COUNT)
+	message(STATUS "Found ${MSVC_RUNTIME_COUNT} Visual C/C++ Runtime files")
 
-		set(MEGA_MSVC_DLLS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
-	endif()
+	set(MEGA_MSVC_DLLS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
 endif()
 
 
