@@ -326,14 +326,21 @@ elseif(ANDROID)
 	message(STATUS "-----------------------------------------------------")
 	set(MEGA_LUAJIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/LuaJIT")
 
-	add_library(luajit IMPORTED STATIC)
+	add_library(luajit IMPORTED SHARED)
 	set_target_properties(luajit PROPERTIES
-		IMPORTED_LOCATION ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.a
-		INCLUDE_DIRECTORIES ${MEGA_LUAJIT_DIR}/src
+		IMPORTED_LOCATION ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.so
+		INTERFACE_INCLUDE_DIRECTORIES ${MEGA_LUAJIT_DIR}/src
 	)
-	set(MEGA_LUAJIT_LIB ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.a)
+	set(MEGA_LUAJIT_LIB ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.so)
 	set(MEGA_LUAJIT_DLL)
 	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_DIR}/src)
+	set(LUA_FOUND ON)
+	set(LUA_INCLUDE_DIR ${MEGA_LUAJIT_INCLUDE})
+	set(LUA_LIBRARY luajit)
+	set(LUA_VERSION_MAJOR 5)
+	set(LUA_VERSION_MINOR 1)
+	set(LUA_VERSION_PATCH 5)
+	set(LUA_VERSION_STRING "LuaJIT ${MEGA_LUAJIT_VER}")
 endif()
 
 set(MEGA_3P
