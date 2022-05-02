@@ -278,7 +278,8 @@ static void setenv(const char *name, const char *value, int overwrite)
 #endif
 
 static int abc_isvalidchar(char c) {
-	return(isalpha(c) || isdigit(c) || isspace(c) || c == '%' || c == ':');
+	unsigned char uc = (unsigned char) c;
+	return(isalpha(uc) || isdigit(uc) || isspace(uc) || c == '%' || c == ':');
 }
 
 static const char *abc_skipspace(const char *p)
