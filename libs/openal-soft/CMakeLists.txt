@@ -728,7 +728,7 @@ set(OPENAL_OBJS
     al/effects/dedicated.cpp
     al/effects/distortion.cpp
     al/effects/echo.cpp
-	al/effects/effects.cpp
+    al/effects/effects.cpp
     al/effects/effects.h
     al/effects/equalizer.cpp
     al/effects/fshifter.cpp
@@ -1143,6 +1143,10 @@ if(OBOE_TARGET)
         set(ALC_OBJS  ${ALC_OBJS} alc/backends/oboe.cpp alc/backends/oboe.h)
         set(BACKENDS  "${BACKENDS} Oboe,")
         set(EXTRA_LIBS ${OBOE_TARGET} ${EXTRA_LIBS})
+
+        if(MEGA)
+            set(ALC_OBJS  ${ALC_OBJS} opensl_latency.cpp)
+        endif()
     endif()
 endif()
 if(ALSOFT_REQUIRE_OBOE AND NOT HAVE_OBOE)
