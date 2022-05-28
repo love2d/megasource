@@ -1128,7 +1128,7 @@ if(ANDROID)
 
         set(OBOE_TARGET oboe)
     else()
-        find_package(Oboe)
+        find_package(Oboe CONFIG)
         if(TARGET oboe::oboe)
             set(OBOE_TARGET "oboe::oboe")
         endif()
