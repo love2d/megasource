@@ -279,7 +279,6 @@ set(ALSOFT_INSTALL_AMBDEC_PRESETS OFF CACHE BOOL "Install AmbDec preset files" F
 set(ALSOFT_INSTALL_EXAMPLES OFF CACHE BOOL "Install example programs (alplay, alstream, ...)" FORCE)
 set(ALSOFT_INSTALL_UTILS OFF CACHE BOOL "Install utility programs (openal-info, alsoft-config, ...)" FORCE)
 if(ANDROID)
-	set(OBOE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/libs/oboe" CACHE PATH "Oboe Source Code" FORCE)
 	set(ALSOFT_REQUIRE_OBOE ON CACHE BOOL "Require Oboe backend" FORCE)
 	set(ALSOFT_REQUIRE_OPENSL ON CACHE BOOL "Require OpenSL backend" FORCE)
 endif()
