@@ -12,6 +12,7 @@
 extern SDLTest_TestSuiteReference audioTestSuite;
 extern SDLTest_TestSuiteReference clipboardTestSuite;
 extern SDLTest_TestSuiteReference eventsTestSuite;
+extern SDLTest_TestSuiteReference guidTestSuite;
 extern SDLTest_TestSuiteReference keyboardTestSuite;
 extern SDLTest_TestSuiteReference mainTestSuite;
 extern SDLTest_TestSuiteReference mouseTestSuite;
@@ -27,12 +28,14 @@ extern SDLTest_TestSuiteReference syswmTestSuite;
 extern SDLTest_TestSuiteReference timerTestSuite;
 extern SDLTest_TestSuiteReference videoTestSuite;
 extern SDLTest_TestSuiteReference hintsTestSuite;
+extern SDLTest_TestSuiteReference mathTestSuite;
 
 /* All test suites */
 SDLTest_TestSuiteReference *testSuites[] =  {
     &audioTestSuite,
     &clipboardTestSuite,
     &eventsTestSuite,
+    &guidTestSuite,
     &keyboardTestSuite,
     &mainTestSuite,
     &mouseTestSuite,
@@ -48,6 +51,7 @@ SDLTest_TestSuiteReference *testSuites[] =  {
     &timerTestSuite,
     &videoTestSuite,
     &hintsTestSuite,
+    &mathTestSuite,
     NULL
 };
 

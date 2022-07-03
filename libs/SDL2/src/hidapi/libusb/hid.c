@@ -74,12 +74,8 @@ typedef struct _SDL_ThreadBarrier
 
 static int SDL_CreateThreadBarrier(SDL_ThreadBarrier *barrier, Uint32 count)
 {
-	if (barrier == NULL) {
-		return SDL_SetError("barrier must be non-NULL");
-	}
-	if (count == 0) {
-		return SDL_SetError("count must be > 0");
-	}
+	SDL_assert(barrier != NULL);
+	SDL_assert(count != 0);
 
 	barrier->mutex = SDL_CreateMutex();
 	if (barrier->mutex == NULL) {
@@ -639,6 +635,7 @@ static int is_xbox360(unsigned short vendor_id, const struct libusb_interface_de
 		0x1bad, /* Harmonix */
 		0x20d6, /* PowerA */
 		0x24c6, /* PowerA */
+		0x2c22, /* Qanba */
 	};
 
 	if (intf_desc->bInterfaceClass == LIBUSB_CLASS_VENDOR_SPEC &&
@@ -998,7 +995,7 @@ static void LIBUSB_CALL read_callback(struct libusb_transfer *transfer)
 }
 
 
-static int read_thread(void *param)
+static int SDLCALL read_thread(void *param)
 {
 	hid_device *dev = (hid_device *)param;
 	uint8_t *buf;
@@ -1501,6 +1498,7 @@ void HID_API_EXPORT hid_close(hid_device *dev)
 
 	/* Clean up the Transfer objects allocated in read_thread(). */
 	free(dev->transfer->buffer);
+	dev->transfer->buffer = NULL;
 	libusb_free_transfer(dev->transfer);
 
 	/* release the interface */
