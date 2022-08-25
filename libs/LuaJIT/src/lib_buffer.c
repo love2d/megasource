@@ -76,6 +76,8 @@ LJLIB_CF(buffer_method_skip)		LJLIB_REC(.)
   MSize len = sbufxlen(sbx);
   if (n < len) {
     sbx->r += n;
+  } else if (sbufiscow(sbx)) {
+    sbx->r = sbx->w;
   } else {
     sbx->r = sbx->w = sbx->b;
   }
@@ -173,7 +175,7 @@ LJLIB_CF(buffer_method_get)		LJLIB_REC(.)
     setstrV(L, o, lj_str_new(L, sbx->r, n));
     sbx->r += n;
   }
-  if (sbx->r == sbx->w) sbx->r = sbx->w = sbx->b;
+  if (sbx->r == sbx->w && !sbufiscow(sbx)) sbx->r = sbx->w = sbx->b;
   lj_gc_check(L);
   return narg-1;
 }
@@ -321,6 +323,7 @@ LJLIB_CF(buffer_new)
   setgcref(sbx->dict_str, obj2gco(dict_str));
   setgcref(sbx->dict_mt, obj2gco(dict_mt));
   if (sz > 0) lj_buf_need2((SBuf *)sbx, sz);
+  lj_gc_check(L);
   return 1;
 }
 
@@ -337,6 +340,7 @@ LJLIB_CF(buffer_decode)			LJLIB_REC(.)
   GCstr *str = lj_lib_checkstrx(L, 1);
   setnilV(L->top++);
   lj_serialize_decode(L, L->top-1, str);
+  lj_gc_check(L);
   return 1;
 }
 
