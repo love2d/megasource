@@ -22,7 +22,7 @@ rem ARMv7 is complicated.
 if exist android\armeabi-v7a\libluajit.a goto :x86
 wsl make clean
 if not "%ERRORLEVEL%" == "0" goto :error
-wsl make HOST_LUA=luajit.exe "HOST_CC=clang.exe -m32" HOST_CFLAGS=-D_CRT_SECURE_NO_WARNINGS CC=clang CROSS=arm-linux-androideabi- STATIC_CC=armv7a-linux-androideabi16-clang "DYNAMIC_CC=armv7a-linux-androideabi16-clang -fPIC" "TARGET_AR=llvm-ar.exe rcus" TARGET_LD=armv7a-linux-androideabi16-clang TARGET_LDFLAGS=-fuse-ld=lld TARGET_STRIP=llvm-strip.exe amalg -j4
+wsl make HOST_LUA=luajit.exe "HOST_CC=clang.exe -m32" HOST_CFLAGS=-D_CRT_SECURE_NO_WARNINGS CC=clang CROSS=arm-linux-androideabi- STATIC_CC=armv7a-linux-androideabi16-clang "DYNAMIC_CC=armv7a-linux-androideabi16-clang -fPIC" "TARGET_AR=llvm-ar.exe rcus" TARGET_LD=armv7a-linux-androideabi16-clang TARGET_LDFLAGS=-fuse-ld=lld TARGET_STRIP=llvm-strip.exe TARGET_SONAME=libluajit.so amalg -j4
 if not "%ERRORLEVEL%" == "0" goto :error
 copy src\libluajit.a android\armeabi-v7a\libluajit.a
 if not "%ERRORLEVEL%" == "0" goto :error
@@ -46,7 +46,7 @@ goto :done
 if exist android\%1\libluajit.a exit /b 0
 wsl make clean
 if not "%ERRORLEVEL%" == "0" goto :error
-wsl make HOST_LUA=luajit.exe "HOST_CC=clang.exe %4" HOST_CFLAGS=-D_CRT_SECURE_NO_WARNINGS CC=clang CROSS=%2- "STATIC_CC=%2%3-clang -fPIC" "DYNAMIC_CC=%2%3-clang -fPIC" "TARGET_AR=llvm-ar.exe rcus" TARGET_LD=%2%3-clang TARGET_LDFLAGS=-fuse-ld=lld TARGET_STRIP=llvm-strip.exe amalg -j%NUMBER_OF_PROCESSORS%
+wsl make HOST_LUA=luajit.exe "HOST_CC=clang.exe %4" HOST_CFLAGS=-D_CRT_SECURE_NO_WARNINGS CC=clang CROSS=%2- "STATIC_CC=%2%3-clang -fPIC" "DYNAMIC_CC=%2%3-clang -fPIC" "TARGET_AR=llvm-ar.exe rcus" TARGET_LD=%2%3-clang TARGET_LDFLAGS=-fuse-ld=lld TARGET_STRIP=llvm-strip.exe TARGET_SONAME=libluajit.so amalg -j%NUMBER_OF_PROCESSORS%
 if not "%ERRORLEVEL%" == "0" goto :error
 copy src\libluajit.a android\%1\libluajit.a
 if not "%ERRORLEVEL%" == "0" goto :error
