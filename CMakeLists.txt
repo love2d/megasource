@@ -11,7 +11,9 @@ project(megasource)
 
 set(MEGA TRUE)
 
-set (CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 11)
+
+option(APPIMAGE "Build AppImage (Linux and love only)")
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	if(MSVC)
@@ -52,6 +54,9 @@ if(MSVC)
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MP")
 	message(STATUS "CMAKE_CXX_FLAGS_RELEASE: ${CMAKE_CXX_FLAGS_RELEASE}")
 	message(STATUS "CMAKE_C_FLAGS_RELEASE: ${CMAKE_C_FLAGS_RELEASE}")
+elseif(NOT APPLE AND APPIMAGE)
+	set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+	set(CMAKE_INSTALL_RPATH "../lib")
 endif()
 
 function(add_move_dll ARG_POST_TARGET ARG_TARGET)
@@ -71,14 +76,12 @@ endfunction()
 
 function(disable_warnings ARG_TARGET)
 	get_target_property(OLD_FLAGS ${ARG_TARGET} COMPILE_FLAGS)
-	if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-		set(NEW_FLAGS -w)
-	else ()
-		set(NEW_FLAGS -W0)
-	endif ()
-	if(OLD_FLAGS)
-		set(NEW_FLAGS "${OLD_FLAGS} ${NEW_FLAGS}")
+
+	if(NOT OLD_FLAGS)
+		set(OLD_FLAGS "")
 	endif()
+
+	set(NEW_FLAGS "${OLD_FLAGS} -w")
 	set_target_properties(${ARG_TARGET} PROPERTIES COMPILE_FLAGS ${NEW_FLAGS})
 endfunction()
 
@@ -222,12 +225,6 @@ add_subdirectory("libs/zlib-${MEGA_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
 set(MEGA_ZLIB zlibstatic)
 
 message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: lua ${MEGA_LUA51_VER}")
-message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/lua-${MEGA_LUA51_VER}" ${CMAKE_BINARY_DIR}/lua51)
-set(MEGA_LUA51 lua51)
-
-message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: libogg ${MEGA_LIBOGG_VER}")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/libogg-${MEGA_LIBOGG_VER}" ${CMAKE_BINARY_DIR}/libogg)
@@ -249,7 +246,9 @@ set(MEGA_LIBTHEORA theora-static)
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: freetype ${MEGA_FREETYPE_VER}")
 message(STATUS "-----------------------------------------------------")
-set(FT_DISABLE_ZLIB ON CACHE BOOL "(FreeType) Use zlib from megasource" FORCE)
+set(FT_DISABLE_ZLIB   ON CACHE BOOL "(FreeType) Use zlib from megasource" FORCE)
+set(FT_DISABLE_PNG    ON CACHE BOOL "(FreeType) Disable PNG library" FORCE)
+set(FT_DISABLE_BROTLI ON CACHE BOOL "(FreeType) Disable brotli library" FORCE)
 add_subdirectory("libs/freetype" ${CMAKE_BINARY_DIR}/freetype)
 set(MEGA_FREETYPE freetype)
 
@@ -278,6 +277,7 @@ set(ALSOFT_INSTALL_HRTF_DATA OFF CACHE BOOL "Install HRTF data files" FORCE)
 set(ALSOFT_INSTALL_AMBDEC_PRESETS OFF CACHE BOOL "Install AmbDec preset files" FORCE)
 set(ALSOFT_INSTALL_EXAMPLES OFF CACHE BOOL "Install example programs (alplay, alstream, ...)" FORCE)
 set(ALSOFT_INSTALL_UTILS OFF CACHE BOOL "Install utility programs (openal-info, alsoft-config, ...)" FORCE)
+set(ALSOFT_BACKEND_SNDIO OFF CACHE BOOL "Enable SndIO backend" FORCE) # because it is dynamically linked
 if(ANDROID)
 	set(ALSOFT_REQUIRE_OBOE ON CACHE BOOL "Require Oboe backend" FORCE)
 	set(ALSOFT_REQUIRE_OPENSL ON CACHE BOOL "Require OpenSL backend" FORCE)
@@ -293,6 +293,10 @@ set(MEGA_MODPLUG modplug-static)
 
 # LuaJIT
 if(MSVC AND NOT MEGA_ARM64)
+	# LuaJIT currently doesn't support targetting Windows with ARM64
+	# architecture yet.
+	# TODO: Re-evaluate this once LuaJIT supports it.
+	# https://github.com/LuaJIT/LuaJIT/issues/593
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
 	message(STATUS "-----------------------------------------------------")
@@ -350,7 +354,42 @@ elseif(ANDROID)
 	set(LUA_VERSION_MINOR 1)
 	set(LUA_VERSION_PATCH 5)
 	set(LUA_VERSION_STRING "LuaJIT ${MEGA_LUAJIT_VER}")
+elseif(UNIX AND NOT APPLE)
+	message(STATUS "-----------------------------------------------------")
+	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
+	message(STATUS "-----------------------------------------------------")
+	set(MEGA_LUAJIT_DIR "LuaJIT")
+
+	# Copy LuaJIT source to binary dir. LuaJIT builds in-source,
+	# and we don't want to modify the original source tree, so
+	# we copy it.
+	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION libs)
+
+	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
+
+	ExternalProject_Add(luajit
+		SOURCE_DIR ${MEGA_LUAJIT_SOURCE_DIR}
+		BUILD_IN_SOURCE 1
+		CONFIGURE_COMMAND ""
+		INSTALL_COMMAND ""
+		BUILD_COMMAND make TARGET_SONAME=libluajit.so)
+	install(FILES
+		${MEGA_LUAJIT_SOURCE_DIR}/src/libluajit.so
+		DESTINATION ${CMAKE_INSTALL_LIBDIR})
+	install(DIRECTORY
+		${MEGA_LUAJIT_SOURCE_DIR}/src/jit
+		DESTINATION share/luajit
+		PATTERN "\.gitignore" EXCLUDE)
+
+	set(MEGA_LUAJIT_LIB ${MEGA_LUAJIT_SOURCE_DIR}/src/libluajit.so)
+	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_SOURCE_DIR}/src)
 endif()
+
+message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: lua ${MEGA_LUA51_VER}")
+message(STATUS "-----------------------------------------------------")
+add_subdirectory("libs/lua-${MEGA_LUA51_VER}" ${CMAKE_BINARY_DIR}/lua51)
+set(MEGA_LUA51 lua51)
 
 set(MEGA_3P
 	${MEGA_ZLIB}
@@ -375,11 +414,7 @@ if(EXISTS ${MEGA_LOVE}/CMakeLists.txt)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: love")
 	message(STATUS "-----------------------------------------------------")
-	if(MEGA_ARM64)
-		# LuaJIT currently doesn't support targetting Windows with ARM64
-		# architecture yet.
-		# TODO: Re-evaluate this once LuaJIT supports it.
-		# https://github.com/LuaJIT/LuaJIT/issues/593
+	if(NOT MEGA_LUAJIT_DIR)
 		set(LOVE_JIT OFF CACHE BOOL "Enable LOVE JIT" FORCE)
 	endif()
 	add_subdirectory(${MEGA_LOVE} ${CMAKE_BINARY_DIR}/love)
@@ -403,3 +438,4 @@ target_link_libraries(megatest ${MEGA_3P})
 add_move_dll(megatest ${MEGA_SDL2})
 add_move_dll(megatest ${MEGA_OPENAL})
 add_move_dll(megatest ${MEGA_LUA51})
+
