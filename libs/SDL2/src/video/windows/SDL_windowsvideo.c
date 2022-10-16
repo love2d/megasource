@@ -80,6 +80,13 @@ static void WIN_SuspendScreenSaver(_THIS)
 extern void D3D12_XBOX_GetResolution(Uint32 *width, Uint32 *height);
 #endif
 
+#ifndef SDL_VIDEO_OPENGL
+void
+WIN_GL_GetDrawableSize(_THIS, SDL_Window *window, int *w, int *h)
+{
+    WIN_GetDrawableSize(window, w, h);
+}
+#endif
 
 /* Windows driver bootstrap functions */
 
