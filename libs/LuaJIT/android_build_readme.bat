@@ -18,22 +18,11 @@ call :compile arm64-v8a aarch64-linux-android 21
 if "%ERRORLEVEL%" == "1" goto :error
 
 rem ARMv7
-rem ARMv7 is complicated.
-if exist android\armeabi-v7a\libluajit.a goto :x86
-wsl make clean
+call :compile armeabi-v7a armv7a-linux-androideabi 21 -m32
 if not "%ERRORLEVEL%" == "0" goto :error
-wsl make HOST_LUA=luajit.exe "HOST_CC=clang.exe -m32" HOST_CFLAGS=-D_CRT_SECURE_NO_WARNINGS CC=clang CROSS=arm-linux-androideabi- STATIC_CC=armv7a-linux-androideabi16-clang "DYNAMIC_CC=armv7a-linux-androideabi16-clang -fPIC" "TARGET_AR=llvm-ar.exe rcus" TARGET_LD=armv7a-linux-androideabi16-clang TARGET_LDFLAGS=-fuse-ld=lld TARGET_STRIP=llvm-strip.exe TARGET_SONAME=libluajit.so amalg -j4
-if not "%ERRORLEVEL%" == "0" goto :error
-copy src\libluajit.a android\armeabi-v7a\libluajit.a
-if not "%ERRORLEVEL%" == "0" goto :error
-copy src\libluajit.so android\armeabi-v7a\libluajit.so
-if not "%ERRORLEVEL%" == "0" goto :error
-xcopy src\jit android\armeabi-v7a\jit /I
-del android\armeabi-v7a\jit\.gitignore
 
-:x86
 rem x86
-call :compile x86 i686-linux-android 16 -m32
+call :compile x86 i686-linux-android 21 -m32
 if not "%ERRORLEVEL%" == "0" goto :error
 
 rem x86_64
