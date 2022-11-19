@@ -198,7 +198,7 @@ endif()
 
 set(MEGA_ZLIB_VER "1.2.12")
 set(MEGA_LUA51_VER "5.1.5")
-set(MEGA_LUAJIT_VER "2.1.0-7306ba7")
+set(MEGA_LUAJIT_VER "2.1.0-7a0cf5f")
 set(MEGA_LIBOGG_VER "1.3.2")
 set(MEGA_LIBVORBIS_VER "1.3.5")
 set(MEGA_LIBTHEORA_VER "1.1.1")
@@ -335,11 +335,11 @@ elseif(ANDROID)
 	message(STATUS "-----------------------------------------------------")
 	set(MEGA_LUAJIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/LuaJIT")
 
-	add_library(luajit IMPORTED SHARED)
+	add_library(luajit IMPORTED SHARED GLOBAL)
 	set_target_properties(luajit PROPERTIES
 		IMPORTED_LOCATION ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.so
-		INTERFACE_INCLUDE_DIRECTORIES ${MEGA_LUAJIT_DIR}/src
 	)
+	target_include_directories(luajit INTERFACE ${MEGA_LUAJIT_DIR}/src)
 	set(MEGA_LUAJIT_LIB ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.so)
 	set(MEGA_LUAJIT_DLL)
 	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_DIR}/src)
