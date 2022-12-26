@@ -254,6 +254,12 @@ add_subdirectory("libs/freetype" ${CMAKE_BINARY_DIR}/freetype)
 set(MEGA_FREETYPE freetype)
 
 message(STATUS "-----------------------------------------------------")
+message(STATUS "Configuring: harfbuzz")
+message(STATUS "-----------------------------------------------------")
+add_subdirectory("libs/harfbuzz" ${CMAKE_BINARY_DIR}/harfbuzz)
+set(MEGA_HARFBUZZ harfbuzz)
+
+message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
 message(STATUS "-----------------------------------------------------")
 if(WIN32 AND MEGA_ARM64)
