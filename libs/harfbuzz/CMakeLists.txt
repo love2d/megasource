@@ -709,6 +709,10 @@ if (HB_BUILD_UTILS)
   mark_as_advanced(CAIRO_INCLUDE_DIRS CAIRO_LIBRARIESNAMES)
 endif ()
 
+if (MEGA)
+  return()
+endif ()
+
 ## Install
 include (GNUInstallDirs)
 
