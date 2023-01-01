@@ -2,6 +2,13 @@ Megasource is a CMake-buildable collection of all [LÖVE][love2d] dependencies.
 
 It is currently only officially supported on Windows, but may also work on macOS. It could certainly also work on Linux, but good package managers makes megasource less relevant there.
 
+Versions
+--------
+
+This repository uses git tags for the library dependencies of a specific released version of LÖVE.
+
+For in-development versions of LÖVE, there may be a branch in this repository corresponding to a similar branch in the love repository.
+
 Prerequisites
 -------------
 
