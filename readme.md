@@ -13,31 +13,35 @@ Prerequisites
 -------------
 
  - Windows.
- - LOVE 12+: [Visual Studio 2019][vs2019].
- - LOVE 11 and older: [Visual Studio 2013, 2015, or 2017][oldvs]. Official builds of LOVE 11 and older use Visual Studio 2013.
+ - LOVE 12+: [Visual Studio 2019][vs2019] or newer.
+ - LOVE 11 and older: [Visual Studio 2013][oldvs] or newer. Official builds of LOVE 11 and older use Visual Studio 2013.
  - [CMake 3.1][cmake] or greater.
  - [NSIS][nsis] if you want to build the LÖVE installer.
 
 Building
 --------
 
-To build just the dependencies:
+To build just the dependencies for 64 bit x86 using Visual Studio 2019:
 
 	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
-	$ cmake -G "Visual Studio 16 2019" -A Win32 -H. -Bbuild
+	$ cmake -G "Visual Studio 16 2019" -A x64 -H. -Bbuild
 	$ cmake --build build --target megatest --config Release
 
 ... or you can open the solution file in Visual Studio and build from there instead of invoking cmake --build.
 
-Note, that ```-H``` had been replaced in CMake 3.13 with ```-S```.
+To build for a different version of Visual Studio (or a different build tool), replace ```"Visual Studio 16 2019"``` with one of the other [build system generators][generators]. For example Visual Studio 2022 is ```"Visual Studio 17 2022"```.
+
+Similarly, to build for a different architecture than 64 bit x86, use a different [architecture name][architectures] for the ```-A``` parameter.
+
+Note that ```-H``` has been replaced in CMake 3.13 with ```-S```.
 
 If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megasource will automatically look for it there. E.g.:
 
 	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
 	$ git clone https://github.com/love2d/love libs/love
-	$ cmake -G "Visual Studio 16 2019" -A Win32 -H. -Bbuild
+	$ cmake -G "Visual Studio 16 2019" -A x64 -H. -Bbuild
 	$ cmake --build build --target love/love --config Release
 
 The binaries can be found in *build/love/Release*.
@@ -53,3 +57,5 @@ A zip with the binaries and the installer will appear in *build*.
 [nsis]: http://nsis.sourceforge.net
 [vs2019]: https://visualstudio.microsoft.com/downloads/
 [oldvs]: https://visualstudio.microsoft.com/vs/older-downloads/
+[generators]: https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html#visual-studio-generators
+[architectures]: https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2016%202019.html#platform-selection
