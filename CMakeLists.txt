@@ -332,6 +332,7 @@ if(MSVC AND NOT MEGA_ARM64)
 			call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
 		)
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
+		cl
 		msvcbuild.bat debug amalg
 	")
 
