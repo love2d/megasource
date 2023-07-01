@@ -347,6 +347,8 @@ if(VITA OR PSP OR PS2 OR N3DS)
   set(SDL_LOADSO_ENABLED_BY_DEFAULT OFF)
 endif()
 
+set(BUILD_SHARED_LIBS ON)
+
 # When defined, respect CMake's BUILD_SHARED_LIBS setting:
 set(SDL_STATIC_ENABLED_BY_DEFAULT ON)
 if (NOT DEFINED SDL_SHARED_ENABLED_BY_DEFAULT)
@@ -1741,6 +1743,8 @@ elseif(WINDOWS)
     set(HAVE_SDL_MISC TRUE)
   endif()
 
+  set(SDL_LINK_DIR ${PARENT_SCOPE})
+
   # Check for DirectX
   if(SDL_DIRECTX)
     if(DEFINED MSVC_VERSION AND NOT ${MSVC_VERSION} LESS 1700)
@@ -1780,6 +1784,8 @@ elseif(WINDOWS)
     endif()
     set(CMAKE_REQUIRED_FLAGS ${ORIG_CMAKE_REQUIRED_FLAGS})
   endif()
+
+  link_directories(${SDL_LINK_DIR})
 
   if(SDL_XINPUT)
     # xinput.h may need windows.h, but does not include it itself.
@@ -3435,6 +3441,13 @@ endif()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSDL_BUILD_MAJOR_VERSION=${SDL_MAJOR_VERSION}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSDL_BUILD_MINOR_VERSION=${SDL_MINOR_VERSION}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSDL_BUILD_MICRO_VERSION=${SDL_MICRO_VERSION}")
+
+if(MEGA)
+  if(SDL_SHARED)
+    install(TARGETS SDL2 RUNTIME DESTINATION . LIBRARY DESTINATION .)
+  endif()
+  return()
+endif()
 
 ##### Tests #####
 
