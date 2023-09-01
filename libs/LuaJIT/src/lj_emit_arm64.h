@@ -27,8 +27,8 @@ static uint64_t get_k64val(ASMState *as, IRRef ref)
 /* Encode constant in K12 format for data processing instructions. */
 static uint32_t emit_isk12(int64_t n)
 {
-  uint64_t k = (n < 0) ? -n : n;
-  uint32_t m = (n < 0) ? 0x40000000 : 0;
+  uint64_t k = n < 0 ? ~(uint64_t)n+1u : (uint64_t)n;
+  uint32_t m = n < 0 ? 0x40000000 : 0;
   if (k < 0x1000) {
     return A64I_K12|m|A64F_U12(k);
   } else if ((k & 0xfff000) == k) {
@@ -143,7 +143,7 @@ static void emit_lso(ASMState *as, A64Ins ai, Reg rd, Reg rn, int64_t ofs)
       goto nopair;
     }
     if (ofsm >= (int)((unsigned int)-64<<sc) && ofsm <= (63<<sc)) {
-      *as->mcp = aip | A64F_N(rn) | ((ofsm >> sc) << 15) |
+      *as->mcp = aip | A64F_N(rn) | (((ofsm >> sc) & 0x7f) << 15) |
 	(ai ^ ((ai == A64I_LDRx || ai == A64I_STRx) ? 0x50000000 : 0x90000000));
       return;
     }
@@ -177,7 +177,7 @@ static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int lim)
 	emit_dm(as, A64I_MOVx, rd, r);
 	return 1;
       } else {
-	uint32_t k12 = emit_isk12(delta < 0 ? -delta : delta);
+	uint32_t k12 = emit_isk12(delta < 0 ? (int64_t)(~(uint64_t)delta+1u) : delta);
 	if (k12) {
 	  emit_dn(as, (delta < 0 ? A64I_SUBx : A64I_ADDx)^k12, rd, r);
 	  return 1;
@@ -348,16 +348,22 @@ static void emit_cnb(ASMState *as, A64Ins ai, Reg r, MCode *target)
 
 #define emit_jmp(as, target)	emit_branch(as, A64I_B, (target))
 
-static void emit_call(ASMState *as, void *target)
+static void emit_call(ASMState *as, ASMFunction target)
 {
   MCode *p = --as->mcp;
-  ptrdiff_t delta = (char *)target - (char *)p;
+#if LJ_ABI_PAUTH
+  char *targetp = ptrauth_auth_data((char *)target,
+				    ptrauth_key_function_pointer, 0);
+#else
+  char *targetp = (char *)target;
+#endif
+  ptrdiff_t delta = targetp - (char *)p;
   if (A64F_S_OK(delta>>2, 26)) {
     *p = A64I_BL | A64F_S26(delta>>2);
   } else {  /* Target out of range: need indirect call. But don't use R0-R7. */
     Reg r = ra_allock(as, i64ptr(target),
 		      RSET_RANGE(RID_X8, RID_MAX_GPR)-RSET_FIXED);
-    *p = A64I_BLR | A64F_N(r);
+    *p = A64I_BLR_AUTH | A64F_N(r);
   }
 }
 
@@ -417,7 +423,8 @@ static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
 {
   if (ofs)
     emit_opk(as, ofs < 0 ? A64I_SUBx : A64I_ADDx, r, r,
-		 ofs < 0 ? -ofs : ofs, rset_exclude(RSET_GPR, r));
+		 ofs < 0 ? (int32_t)(~(uint32_t)ofs+1u) : ofs,
+		 rset_exclude(RSET_GPR, r));
 }
 
 #define emit_spsub(as, ofs)	emit_addptr(as, RID_SP, -(ofs))

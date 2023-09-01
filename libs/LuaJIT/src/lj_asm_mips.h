@@ -1337,8 +1337,8 @@ static void asm_fload(ASMState *as, IRIns *ir)
       }
     }
     ofs = field_ofs[ir->op2];
+    lj_assertA(!irt_isfp(ir->t), "bad FP FLOAD");
   }
-  lj_assertA(!irt_isfp(ir->t), "bad FP FLOAD");
   emit_tsi(as, mi, dest, idx, ofs);
 }
 
@@ -1894,7 +1894,7 @@ static void asm_arithov(ASMState *as, IRIns *ir)
   lj_assertA(!irt_is64(ir->t), "bad usage");
   if (irref_isk(ir->op2)) {
     int k = IR(ir->op2)->i;
-    if (ir->o == IR_SUBOV) k = -k;
+    if (ir->o == IR_SUBOV) k = (int)(~(unsigned int)k+1u);
     if (checki16(k)) {  /* (dest < left) == (k >= 0 ? 1 : 0) */
       left = ra_alloc1(as, ir->op1, RSET_GPR);
       asm_guard(as, k >= 0 ? MIPSI_BNE : MIPSI_BEQ, RID_TMP, RID_ZERO);
@@ -2667,7 +2667,7 @@ static void asm_head_root_base(ASMState *as)
 }
 
 /* Coalesce BASE register for a side trace. */
-static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
+static Reg asm_head_side_base(ASMState *as, IRIns *irp)
 {
   IRIns *ir = IR(REF_BASE);
   Reg r = ir->r;
@@ -2676,15 +2676,15 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
     if (rset_test(as->modset, r) || irt_ismarked(ir->t))
       ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
     if (irp->r == r) {
-      rset_clear(allow, r);  /* Mark same BASE register as coalesced. */
+      return r;  /* Same BASE register already coalesced. */
     } else if (ra_hasreg(irp->r) && rset_test(as->freeset, irp->r)) {
-      rset_clear(allow, irp->r);
       emit_move(as, r, irp->r);  /* Move from coalesced parent reg. */
+      return irp->r;
     } else {
       emit_getgl(as, r, jit_base);  /* Otherwise reload BASE. */
     }
   }
-  return allow;
+  return RID_NONE;
 }
 
 /* -- Tail of trace ------------------------------------------------------- */

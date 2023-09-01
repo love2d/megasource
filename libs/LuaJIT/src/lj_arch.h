@@ -259,6 +259,9 @@
 #define LJ_ARCH_NAME		"arm64"
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
 #endif
+#if !defined(LJ_ABI_PAUTH) && defined(__arm64e__)
+#define LJ_ABI_PAUTH		1
+#endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_EHRAREG	30
@@ -466,8 +469,14 @@
 #endif
 #endif
 #elif !LJ_TARGET_PS3
+#if __clang__
+#if ((__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5))
+#error "Need at least Clang 3.5 or newer"
+#endif
+#else
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
 #error "Need at least GCC 4.3 or newer"
+#endif
 #endif
 #endif
 #endif
@@ -596,6 +605,10 @@
 #endif
 #define LJ_SOFTFP		(!LJ_ARCH_HASFPU)
 #define LJ_SOFTFP32		(LJ_SOFTFP && LJ_32)
+
+#ifndef LJ_ABI_PAUTH
+#define LJ_ABI_PAUTH		0
+#endif
 
 #if LJ_ARCH_ENDIAN == LUAJIT_BE
 #define LJ_LE			0
