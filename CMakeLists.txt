@@ -344,10 +344,10 @@ elseif(ANDROID)
 	set_target_properties(luajit PROPERTIES
 		IMPORTED_LOCATION ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.so
 	)
-	target_include_directories(luajit INTERFACE ${MEGA_LUAJIT_DIR}/src)
+	target_include_directories(luajit INTERFACE ${MEGA_LUAJIT_DIR}/src ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI})
 	set(MEGA_LUAJIT_LIB ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI}/libluajit.so)
 	set(MEGA_LUAJIT_DLL)
-	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_DIR}/src)
+	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_DIR}/src ${MEGA_LUAJIT_DIR}/android/${ANDROID_ABI})
 	set(LUA_FOUND ON)
 	set(LUA_INCLUDE_DIR ${MEGA_LUAJIT_INCLUDE})
 	set(LUA_LIBRARY luajit)
