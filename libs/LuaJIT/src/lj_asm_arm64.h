@@ -222,7 +222,8 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
     return A64F_M(ir->r);
   } else if (irref_isk(ref)) {
     int64_t k = get_k64val(as, ref);
-    uint32_t m = logical ? emit_isk13(k, irt_is64(ir->t)) : emit_isk12(k);
+    uint32_t m = logical ? emit_isk13(k, irt_is64(ir->t)) :
+			   emit_isk12(irt_is64(ir->t) ? k : (int32_t)k);
     if (m)
       return m;
   } else if (mayfuse(as, ref)) {
@@ -432,6 +433,11 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   for (gpr = REGARG_FIRSTGPR; gpr <= REGARG_LASTGPR; gpr++)
     as->cost[gpr] = REGCOST(~0u, ASMREF_L);
   gpr = REGARG_FIRSTGPR;
+#if LJ_HASFFI && LJ_ABI_WIN
+  if ((ci->flags & CCI_VARARG)) {
+    fpr = REGARG_LASTFPR+1;
+  }
+#endif
   for (n = 0; n < nargs; n++) { /* Setup args. */
     IRRef ref = args[n];
     IRIns *ir = IR(ref);
@@ -442,6 +448,11 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 		     "reg %d not free", fpr);  /* Must have been evicted. */
 	  ra_leftov(as, fpr, ref);
 	  fpr++;
+#if LJ_HASFFI && LJ_ABI_WIN
+	} else if ((ci->flags & CCI_VARARG) && (gpr <= REGARG_LASTGPR)) {
+	  Reg rf = ra_alloc1(as, ref, RSET_FPR);
+	  emit_dn(as, A64I_FMOV_R_D, gpr++, rf & 31);
+#endif
 	} else {
 	  Reg r = ra_alloc1(as, ref, RSET_FPR);
 	  int32_t al = spalign;
@@ -776,7 +787,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   int destused = ra_used(ir);
   Reg dest = ra_dest(as, ir, allow);
   Reg tab = ra_alloc1(as, ir->op1, rset_clear(allow, dest));
-  Reg key = 0, tmp = RID_TMP, type = RID_NONE, tkey;
+  Reg tmp = RID_TMP, type = RID_NONE, key, tkey;
   IRRef refkey = ir->op2;
   IRIns *irkey = IR(refkey);
   int isk = irref_isk(refkey);
@@ -786,26 +797,22 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   MCLabel l_end, l_loop;
   rset_clear(allow, tab);
 
-  /* Allocate registers outside of the loop. */
-  if (irkey->o != IR_KNUM || !(k = emit_isk12((int64_t)ir_knum(irkey)->u64))) {
-    key = ra_alloc1(as, refkey, irt_isnum(kt) ? RSET_FPR : allow);
-    rset_clear(allow, key);
-  }
-  if (!isk) {
-    tkey = ra_scratch(as, allow);
-    rset_clear(allow, tkey);
-  } else if (irt_isnum(kt)) {
-    tkey = key; /* Assumes -0.0 is already canonicalized to +0.0. */
-  } else {
+  /* Allocate register for tkey outside of the loop. */
+  if (isk) {
     int64_t kk;
     if (irt_isaddr(kt)) {
       kk = ((int64_t)irt_toitype(kt) << 47) | irkey[1].tv.u64;
+    } else if (irt_isnum(kt)) {
+      kk = (int64_t)ir_knum(irkey)->u64;
+      /* Assumes -0.0 is already canonicalized to +0.0. */
     } else {
       lj_assertA(irt_ispri(kt) && !irt_isnil(kt), "bad HREF key type");
       kk = ~((int64_t)~irt_toitype(kt) << 47);
     }
-    tkey = ra_allock(as, kk, allow);
-    rset_clear(allow, tkey);
+    k = emit_isk12(kk);
+    tkey = k ? 0 : ra_allock(as, kk, allow);
+  } else {
+    tkey = ra_scratch(as, allow);
   }
 
   /* Key not found in chain: jump to exit (if merged) or load niltv. */
@@ -838,10 +845,13 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   /* Construct tkey as canonicalized or tagged key. */
   if (!isk) {
     if (irt_isnum(kt)) {
+      key = ra_alloc1(as, refkey, RSET_FPR);
       emit_dnm(as, A64I_CSELx | A64F_CC(CC_EQ), tkey, RID_ZERO, tkey);
+      /* A64I_FMOV_R_D from key to tkey done below. */
     } else {
       lj_assertA(irt_isaddr(kt), "bad HREF key type");
-      type = ra_allock(as, irt_toitype(kt) << 15, allow);
+      key = ra_alloc1(as, refkey, allow);
+      type = ra_allock(as, irt_toitype(kt) << 15, rset_clear(allow, key));
       emit_dnm(as, A64I_ADDx | A64F_SH(A64SH_LSL, 32), tkey, key, type);
     }
   }
@@ -1943,6 +1953,9 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
     int ngpr = REGARG_NUMGPR, nfpr = REGARG_NUMFPR;
     int spofs = 0, spalign = LJ_TARGET_OSX ? 0 : 7, nslots;
     asm_collectargs(as, ir, ci, args);
+#if LJ_ABI_WIN
+    if ((ci->flags & CCI_VARARG)) nfpr = 0;
+#endif
     for (i = 0; i < nargs; i++) {
       int al = spalign;
       if (!args[i]) {
@@ -1954,7 +1967,9 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
 #endif
       } else if (irt_isfp(IR(args[i])->t)) {
 	if (nfpr > 0) { nfpr--; continue; }
-#if LJ_TARGET_OSX
+#if LJ_ABI_WIN
+	if ((ci->flags & CCI_VARARG) && ngpr > 0) { ngpr--; continue; }
+#elif LJ_TARGET_OSX
 	al |= irt_isnum(IR(args[i])->t) ? 7 : 3;
 #endif
       } else {
@@ -1970,7 +1985,7 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
       as->evenspill = nslots;
   }
 #endif
-  return REGSP_HINT(RID_RET);
+  return REGSP_HINT(irt_isfp(ir->t) ? RID_FPRET : RID_RET);
 }
 
 static void asm_setup_target(ASMState *as)
