@@ -66,6 +66,7 @@ wsl make ^
 	TARGET_LDFLAGS=-fuse-ld=lld ^
 	TARGET_STRIP=llvm-strip.exe ^
 	TARGET_SONAME=libluajit.so ^
+	CCDEBUG=-g ^
 	"GIT_RELVER=cp ../.relver luajit_relver.txt" ^
 	amalg -j%NUMBER_OF_PROCESSORS%
 if not "%ERRORLEVEL%" == "0" goto :error
