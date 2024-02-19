@@ -1,6 +1,6 @@
 # CMakeLists.txt
 #
-# Copyright (C) 2013-2022 by
+# Copyright (C) 2013-2023 by
 # David Turner, Robert Wilhelm, and Werner Lemberg.
 #
 # Written originally by John Cary <cary@txcorp.com>
@@ -60,6 +60,8 @@
 # to modify compilation and linking parameters.
 #
 # Some notes.
+#
+# - Say `cmake -LAH` to see all configuration options.
 #
 # - `cmake' creates configuration files in
 #
@@ -121,7 +123,6 @@ endif ()
 
 include(CheckIncludeFile)
 include(CMakeDependentOption)
-include(FindPkgConfig)
 
 # CMAKE_TOOLCHAIN_FILE must be set before `project' is called, which
 # configures the base build environment and references the toolchain file
@@ -162,8 +163,8 @@ endif ()
 project(freetype C)
 
 set(VERSION_MAJOR "2")
-set(VERSION_MINOR "12")
-set(VERSION_PATCH "0")
+set(VERSION_MINOR "13")
+set(VERSION_PATCH "2")
 
 # Generate LIBRARY_VERSION and LIBRARY_SOVERSION.
 set(LIBTOOL_REGEX "version_info='([0-9]+):([0-9]+):([0-9]+)'")
@@ -216,6 +217,8 @@ cmake_dependent_option(FT_REQUIRE_BROTLI
   "Require support of compressed WOFF2 fonts." OFF
   "NOT FT_DISABLE_BROTLI" OFF)
 
+option(FT_ENABLE_ERROR_STRINGS
+  "Enable support for meaningful error descriptions." OFF)
 
 # Disallow in-source builds
 if ("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
@@ -245,6 +248,8 @@ endif ()
 
 
 # Find dependencies
+include(FindPkgConfig)
+
 if (NOT FT_DISABLE_HARFBUZZ)
   set(HARFBUZZ_MIN_VERSION "2.0.0")
   if (FT_REQUIRE_HARFBUZZ)
@@ -350,6 +355,12 @@ endif ()
 if (BROTLIDEC_FOUND)
   string(REGEX REPLACE
     "/\\* +(#define +FT_CONFIG_OPTION_USE_BROTLI) +\\*/" "\\1"
+    FTOPTION_H "${FTOPTION_H}")
+endif ()
+
+if (FT_ENABLE_ERROR_STRINGS)
+  string(REGEX REPLACE
+    "/\\* +(#define +FT_CONFIG_OPTION_ERROR_STRINGS) +\\*/" "\\1"
     FTOPTION_H "${FTOPTION_H}")
 endif ()
 
@@ -469,8 +480,6 @@ if (BUILD_SHARED_LIBS)
     SOVERSION ${LIBRARY_SOVERSION})
 endif ()
 
-message(STATUS ${CMAKE_CURRENT_BINARY_DIR})
-
 # Pick up ftconfig.h and ftoption.h generated above, first.
 target_include_directories(
   freetype
@@ -493,46 +502,55 @@ if (BUILD_FRAMEWORK)
   )
   set_target_properties(freetype PROPERTIES
     FRAMEWORK TRUE
-    MACOSX_FRAMEWORK_INFO_PLIST builds/mac/freetype-Info.plist
+    MACOSX_FRAMEWORK_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/builds/mac/freetype-Info.plist
     PUBLIC_HEADER "${PUBLIC_HEADERS}"
     XCODE_ATTRIBUTE_INSTALL_PATH "@rpath"
   )
 endif ()
 
+# 'freetype-interface' is an interface library, to be accessed with
+# `EXPORT_NAME Freetype::Freetype`.  This is the target name provided by
+# CMake's `FindFreetype.cmake`, so we provide it for compatibility.
+add_library(freetype-interface INTERFACE)
+set_target_properties(freetype-interface PROPERTIES
+  EXPORT_NAME Freetype::Freetype
+  INTERFACE_LINK_LIBRARIES freetype)
 
-set(PKG_CONFIG_REQUIRED_PRIVATE "")
-set(PKG_CONFIG_LIBS_PRIVATE "")
+set(PKGCONFIG_REQUIRES "")
+set(PKGCONFIG_REQUIRES_PRIVATE "")
+set(PKGCONFIG_LIBS "-L\${libdir} -lfreetype")
+set(PKGCONFIG_LIBS_PRIVATE "")
 
 if (ZLIB_FOUND)
   target_link_libraries(freetype PRIVATE ${ZLIB_LIBRARIES})
   target_include_directories(freetype PRIVATE ${ZLIB_INCLUDE_DIRS})
-  list(APPEND PKG_CONFIG_REQUIRED_PRIVATE "zlib")
+  list(APPEND PKGCONFIG_REQUIRES_PRIVATE "zlib")
 endif ()
 if (BZIP2_FOUND)
   target_link_libraries(freetype PRIVATE ${BZIP2_LIBRARIES})
   target_include_directories(freetype PRIVATE ${BZIP2_INCLUDE_DIR}) # not BZIP2_INCLUDE_DIRS
   if (PC_BZIP2_FOUND)
-    list(APPEND PKG_CONFIG_REQUIRED_PRIVATE "bzip2")
+    list(APPEND PKGCONFIG_REQUIRES_PRIVATE "bzip2")
   else ()
-    list(APPEND PKG_CONFIG_LIBS_PRIVATE "-lbz2")
+    list(APPEND PKGCONFIG_LIBS_PRIVATE "-lbz2")
   endif ()
 endif ()
 if (PNG_FOUND)
   target_link_libraries(freetype PRIVATE ${PNG_LIBRARIES})
   target_compile_definitions(freetype PRIVATE ${PNG_DEFINITIONS})
   target_include_directories(freetype PRIVATE ${PNG_INCLUDE_DIRS})
-  list(APPEND PKG_CONFIG_REQUIRED_PRIVATE "libpng")
+  list(APPEND PKGCONFIG_REQUIRES_PRIVATE "libpng")
 endif ()
 if (HarfBuzz_FOUND)
   target_link_libraries(freetype PRIVATE ${HarfBuzz_LIBRARY})
   target_include_directories(freetype PRIVATE ${HarfBuzz_INCLUDE_DIRS})
-  list(APPEND PKG_CONFIG_REQUIRED_PRIVATE "harfbuzz >= ${HARFBUZZ_MIN_VERSION}")
+  list(APPEND PKGCONFIG_REQUIRES_PRIVATE "harfbuzz >= ${HARFBUZZ_MIN_VERSION}")
 endif ()
 if (BROTLIDEC_FOUND)
   target_link_libraries(freetype PRIVATE ${BROTLIDEC_LIBRARIES})
   target_compile_definitions(freetype PRIVATE ${BROTLIDEC_DEFINITIONS})
   target_include_directories(freetype PRIVATE ${BROTLIDEC_INCLUDE_DIRS})
-  list(APPEND PKG_CONFIG_REQUIRED_PRIVATE "libbrotlidec")
+  list(APPEND PKGCONFIG_REQUIRES_PRIVATE "libbrotlidec")
 endif ()
 
 
@@ -559,7 +577,7 @@ if (NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
   # Generate the pkg-config file
   file(READ "${PROJECT_SOURCE_DIR}/builds/unix/freetype2.in" FREETYPE2_PC_IN)
 
-  string(REPLACE ";" ", " PKG_CONFIG_REQUIRED_PRIVATE "${PKG_CONFIG_REQUIRED_PRIVATE}")
+  string(REPLACE ";" ", " PKGCONFIG_REQUIRES_PRIVATE "${PKGCONFIG_REQUIRES_PRIVATE}")
 
   string(REPLACE "%prefix%" ${CMAKE_INSTALL_PREFIX}
           FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
@@ -571,10 +589,26 @@ if (NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
           FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
   string(REPLACE "%ft_version%" "${LIBTOOL_CURRENT}.${LIBTOOL_REVISION}.${LIBTOOL_AGE}"
           FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
-  string(REPLACE "%REQUIRES_PRIVATE%" "${PKG_CONFIG_REQUIRED_PRIVATE}"
-          FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
-  string(REPLACE "%LIBS_PRIVATE%" "${PKG_CONFIG_LIBS_PRIVATE}"
-          FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+
+  if (BUILD_SHARED_LIBS)
+    string(REPLACE "%PKGCONFIG_REQUIRES%" "${PKGCONFIG_REQUIRES}"
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+    string(REPLACE "%PKGCONFIG_REQUIRES_PRIVATE%" "${PKGCONFIG_REQUIRES_PRIVATE}"
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+    string(REPLACE "%PKGCONFIG_LIBS%" "${PKGCONFIG_LIBS}"
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+    string(REPLACE "%PKGCONFIG_LIBS_PRIVATE%" "${PKGCONFIG_LIBS_PRIVATE}"
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+  else ()
+    string(REPLACE "%PKGCONFIG_REQUIRES%" "${PKGCONFIG_REQUIRES} ${PKGCONFIG_REQUIRES_PRIVATE}"
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+    string(REPLACE "%PKGCONFIG_REQUIRES_PRIVATE%" ""
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+    string(REPLACE "%PKGCONFIG_LIBS%" "${PKGCONFIG_LIBS} ${PKGCONFIG_LIBS_PRIVATE}"
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+    string(REPLACE "%PKGCONFIG_LIBS_PRIVATE%" ""
+            FREETYPE2_PC_IN ${FREETYPE2_PC_IN})
+  endif ()
 
   set(FREETYPE2_PC_IN_NAME "${PROJECT_BINARY_DIR}/freetype2.pc")
   if (EXISTS "${FREETYPE2_PC_IN_NAME}")
@@ -598,7 +632,7 @@ if (NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
     COMPATIBILITY SameMajorVersion)
 
   install(
-    TARGETS freetype
+    TARGETS freetype freetype-interface
       EXPORT freetype-targets
       LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

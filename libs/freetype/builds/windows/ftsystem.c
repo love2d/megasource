@@ -4,7 +4,7 @@
  *
  *   Windows-specific FreeType low-level system interface (body).
  *
- * Copyright (C) 2021-2022 by
+ * Copyright (C) 2021-2023 by
  * David Turner, Robert Wilhelm, and Werner Lemberg.
  *
  * This file is part of the FreeType project, and may only be used,
@@ -197,8 +197,7 @@
 
 
   /* non-desktop Universal Windows Platform */
-#if defined( WINAPI_FAMILY_PARTITION )                 && \
-    !WINAPI_FAMILY_PARTITION( WINAPI_PARTITION_DESKTOP )
+#if defined( WINAPI_FAMILY ) && WINAPI_FAMILY != WINAPI_FAMILY_DESKTOP_APP
 
 #define PACK_DWORD64( hi, lo )  ( ( (DWORD64)(hi) << 32 ) | (DWORD)(lo) )
 

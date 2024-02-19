@@ -2,7 +2,7 @@
 #
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (C) 2001-2022 by
+# Copyright (C) 2001-2023 by
 # David Turner, Robert Wilhelm, and Werner Lemberg.
 #
 # This file is part of the FreeType project, and may only be used, modified,
@@ -11,13 +11,13 @@
 # indicate that you have read the license and understand and accept it
 # fully.
 
-AC_INIT([FreeType], [2.12], [freetype@nongnu.org], [freetype])
+AC_INIT([FreeType], [2.13.2], [freetype@nongnu.org], [freetype])
 AC_CONFIG_SRCDIR([ftconfig.h.in])
 
 
 # Don't forget to update `docs/VERSIONS.TXT'!
 
-version_info='24:2:18'
+version_info='26:1:20'
 AC_SUBST([version_info])
 ft_version=`echo $version_info | tr : .`
 AC_SUBST([ft_version])
@@ -50,7 +50,7 @@ if test ${cross_compiling} = yes; then
 
   AC_MSG_CHECKING([for suffix of native executables])
   rm -f a.* b.* a_out.exe conftest.*
-  echo > conftest.c "int main() { return 0;}"
+  echo > conftest.c "int main(void) { return 0;}"
   ${CC_BUILD} conftest.c || AC_MSG_ERROR([native C compiler is not working])
   rm -f conftest.c
   if test -x a.out -o -x b.out -o -x conftest; then
@@ -161,9 +161,6 @@ if test -z "$FTSYS_SRC"; then
   FTSYS_SRC='$(BASE_DIR)/ftsystem.c'
 fi
 AC_SUBST([FTSYS_SRC])
-
-
-AC_CHECK_FUNCS([memcpy memmove])
 
 
 # get compiler flags right
@@ -406,16 +403,12 @@ if test x"$with_png" = xyes -o x"$with_png" = xauto; then
       have_libpng="yes (LIBPNG_CFLAGS and LIBPNG_LIBS)"
     else
       # fall back to config script
-      AC_MSG_CHECKING([for libpng-config])
-      if which libpng-config > /dev/null 2>&1; then
+      AC_CHECK_PROG(have_libpng, [libpng-config], [yes (libpng-config)], [no])
+      if test "$have_libpng" != no; then
         LIBPNG_CFLAGS=`libpng-config --cflags`
         LIBPNG_LIBS=`libpng-config --ldflags`
         libpng_libspriv=`libpng-config --static --ldflags`
         libpng_libsstaticconf="$libpng_libspriv"
-        have_libpng="yes (libpng-config)"
-        AC_MSG_RESULT([yes])
-      else
-        AC_MSG_RESULT([no])
       fi
     fi
   fi
@@ -530,16 +523,28 @@ AC_SEARCH_LIBS([clock_gettime],
                [test "$ac_cv_search_clock_gettime" = "none required" \
                 || LIB_CLOCK_GETTIME=$ac_cv_search_clock_gettime])
 
-# 'librsvg' is needed to demonstrate SVG support.
-PKG_CHECK_MODULES([LIBRSVG], [librsvg-2.0 >= 2.46.0],
-                  [have_librsvg="yes (pkg-config)"], [have_librsvg=no])
-
 FT_DEMO_CFLAGS=""
 FT_DEMO_LDFLAGS="$LIB_CLOCK_GETTIME"
 
-if test "$have_librsvg" != no; then
-  FT_DEMO_CFLAGS="$FT_DEMO_CFLAGS $LIBRSVG_CFLAGS -DHAVE_LIBRSVG"
-  FT_DEMO_LDFLAGS="$FT_DEMO_LDFLAGS $LIBRSVG_LIBS"
+# 'librsvg' is needed to demonstrate SVG support.
+AC_ARG_WITH([librsvg],
+  [AS_HELP_STRING([--with-librsvg=@<:@yes|no|auto@:>@],
+                  [support OpenType SVG fonts in FreeType demo programs @<:@default=auto@:>@])],
+  [], [with_librsvg=auto])
+
+have_librsvg=no
+if test x"$with_librsvg" = xyes -o x"$with_librsvg" = xauto; then
+  PKG_CHECK_MODULES([LIBRSVG], [librsvg-2.0 >= 2.46.0],
+                    [have_librsvg="yes (pkg-config)"], [:])
+
+  if test "$have_librsvg" != no; then
+    FT_DEMO_CFLAGS="$FT_DEMO_CFLAGS $LIBRSVG_CFLAGS -DHAVE_LIBRSVG"
+    FT_DEMO_LDFLAGS="$FT_DEMO_LDFLAGS $LIBRSVG_LIBS"
+  fi
+fi
+
+if test x"$with_librsvg" = xyes -a "$have_librsvg" = no; then
+  AC_MSG_ERROR([librsvg support requested but library not found])
 fi
 
 AC_SUBST([FT_DEMO_CFLAGS])
@@ -961,14 +966,14 @@ esac
 AX_PTHREAD([have_pthread=yes], [have_pthread=no])
 
 # Check for Python and docwriter
-
+PYTHON_MIN_VERSION=3.5
 have_py3=no
 have_docwriter=no
 PIP=pip
 
 AC_CHECK_PROGS([PYTHON], [python3 python], [missing])
 if test "x$PYTHON" != "xmissing"; then
-  AX_PROG_PYTHON_VERSION([3.5], [have_py3=yes], [])
+  AX_PROG_PYTHON_VERSION([$PYTHON_MIN_VERSION], [have_py3=yes], [])
 
   if test "x$have_py3" = "xyes"; then
     PIP="$PYTHON -m $PIP"
@@ -1157,7 +1162,7 @@ if test $have_docwriter = no; then
   `make refdoc' will fail since pip package `docwriter' is not installed.
   To install, run `$PIP install docwriter', or to use a Python
   virtual environment, run `make refdoc-venv' (requires pip package
-  `virtualenv').  These operations require Python >= 3.5.
+  `virtualenv').  These operations require Python >= $PYTHON_MIN_VERSION.
   ])
 fi
 
