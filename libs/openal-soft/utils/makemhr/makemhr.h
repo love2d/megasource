@@ -1,42 +1,52 @@
 #ifndef MAKEMHR_H
 #define MAKEMHR_H
 
-#include <vector>
+#include <array>
 #include <complex>
+#include <vector>
 
+#include "alcomplex.h"
 #include "polyphase_resampler.h"
 
 
 // The maximum path length used when processing filenames.
-#define MAX_PATH_LEN                 (256)
+enum { MAX_PATH_LEN = 256u };
 
 // The limit to the number of 'distances' listed in the data set definition.
 // Must be less than 256
-#define MAX_FD_COUNT                 (16)
+enum { MAX_FD_COUNT = 16u };
 
 // The limits to the number of 'elevations' listed in the data set definition.
 // Must be less than 256.
-#define MIN_EV_COUNT                 (5)
-#define MAX_EV_COUNT                 (181)
+enum {
+    MIN_EV_COUNT = 5u,
+    MAX_EV_COUNT = 181u
+};
 
 // The limits for each of the 'azimuths' listed in the data set definition.
 // Must be less than 256.
-#define MIN_AZ_COUNT                 (1)
-#define MAX_AZ_COUNT                 (255)
+enum {
+    MIN_AZ_COUNT = 1u,
+    MAX_AZ_COUNT = 255u
+};
 
 // The limits for the 'distance' from source to listener for each field in
 // the definition file.
-#define MIN_DISTANCE                 (0.05)
-#define MAX_DISTANCE                 (2.50)
+inline constexpr double MIN_DISTANCE{0.05};
+inline constexpr double MAX_DISTANCE{2.50};
 
 // The limits for the sample 'rate' metric in the data set definition and for
 // resampling.
-#define MIN_RATE                     (32000)
-#define MAX_RATE                     (96000)
+enum {
+    MIN_RATE = 32000u,
+    MAX_RATE = 96000u
+};
 
 // The limits for the HRIR 'points' metric in the data set definition.
-#define MIN_POINTS                   (16)
-#define MAX_POINTS                   (8192)
+enum {
+    MIN_POINTS = 16u,
+    MAX_POINTS = 8192u
+};
 
 
 using uint = unsigned int;
@@ -67,23 +77,19 @@ enum ChannelTypeT {
 struct HrirAzT {
     double mAzimuth{0.0};
     uint mIndex{0u};
-    double mDelays[2]{0.0, 0.0};
-    double *mIrs[2]{nullptr, nullptr};
+    std::array<double,2> mDelays{};
+    std::array<double*,2> mIrs{};
 };
 
 struct HrirEvT {
     double mElevation{0.0};
-    uint mIrCount{0u};
-    uint mAzCount{0u};
-    HrirAzT *mAzs{nullptr};
+    al::span<HrirAzT> mAzs;
 };
 
 struct HrirFdT {
     double mDistance{0.0};
-    uint mIrCount{0u};
-    uint mEvCount{0u};
     uint mEvStart{0u};
-    HrirEvT *mEvs{nullptr};
+    al::span<HrirEvT> mEvs;
 };
 
 // The HRIR metrics and data set used when loading, processing, and storing
@@ -97,21 +103,35 @@ struct HrirDataT {
     uint mIrSize{0u};
     double mRadius{0.0};
     uint mIrCount{0u};
-    uint mFdCount{0u};
 
     std::vector<double> mHrirsBase;
     std::vector<HrirEvT> mEvsBase;
     std::vector<HrirAzT> mAzsBase;
 
     std::vector<HrirFdT> mFds;
+
+    /* GCC warns when it tries to inline this. */
+    ~HrirDataT();
 };
 
 
-int PrepareHrirData(const uint fdCount, const double (&distances)[MAX_FD_COUNT], const uint (&evCounts)[MAX_FD_COUNT], const uint azCounts[MAX_FD_COUNT * MAX_EV_COUNT], HrirDataT *hData);
+bool PrepareHrirData(const al::span<const double> distances,
+    const al::span<const uint,MAX_FD_COUNT> evCounts,
+    const al::span<const std::array<uint,MAX_EV_COUNT>,MAX_FD_COUNT> azCounts, HrirDataT *hData);
 void MagnitudeResponse(const uint n, const complex_d *in, double *out);
-void FftForward(const uint n, complex_d *inout);
-void FftInverse(const uint n, complex_d *inout);
 
+// Performs a forward FFT.
+inline void FftForward(const uint n, complex_d *inout)
+{ forward_fft(al::span{inout, n}); }
+
+// Performs an inverse FFT.
+inline void FftInverse(const uint n, complex_d *inout)
+{
+    inverse_fft(al::span{inout, n});
+    double f{1.0 / n};
+    for(uint i{0};i < n;i++)
+        inout[i] *= f;
+}
 
 // Performs linear interpolation.
 inline double Lerp(const double a, const double b, const double f)

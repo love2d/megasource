@@ -25,15 +25,14 @@
 #include "config.h"
 
 #include <array>
+#include <cinttypes>
+#include <cstddef>
 #include <cstring>
-#include <inttypes.h>
 #include <memory>
-#include <stddef.h>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "almalloc.h"
 #include "alnumbers.h"
 #include "alspan.h"
 #include "opthelpers.h"
@@ -65,10 +64,14 @@ struct UhjEncoder {
     constexpr static size_t sFilterDelay{1024};
 
     /* Delays and processing storage for the unfiltered signal. */
-    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mS{};
-    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mD{};
-    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mT{};
-    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mQ{};
+    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mW{};
+    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mX{};
+    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mY{};
+    alignas(16) std::array<float,BufferLineSize+sFilterDelay> mZ{};
+
+    alignas(16) std::array<float,BufferLineSize> mS{};
+    alignas(16) std::array<float,BufferLineSize> mD{};
+    alignas(16) std::array<float,BufferLineSize> mT{};
 
     /* History for the FIR filter. */
     alignas(16) std::array<float,sFilterDelay*2 - 1> mWXHistory1{};
@@ -78,8 +81,6 @@ struct UhjEncoder {
 
     void encode(const al::span<FloatBufferLine> OutSamples,
         const al::span<FloatBufferLine,4> InSamples, const size_t SamplesToDo);
-
-    DEF_NEWDEL(UhjEncoder)
 };
 
 const PhaseShifterT<UhjEncoder::sFilterDelay*2> PShift{};
@@ -106,26 +107,27 @@ void UhjEncoder::encode(const al::span<FloatBufferLine> OutSamples,
     const float *RESTRICT yinput{al::assume_aligned<16>(InSamples[2].data())};
     const float *RESTRICT zinput{al::assume_aligned<16>(InSamples[3].data())};
 
-    /* Combine the previously delayed S/D signal with the input. */
+    /* Combine the previously delayed input signal with the new input. */
+    std::copy_n(winput, SamplesToDo, mW.begin()+sFilterDelay);
+    std::copy_n(xinput, SamplesToDo, mX.begin()+sFilterDelay);
+    std::copy_n(yinput, SamplesToDo, mY.begin()+sFilterDelay);
+    std::copy_n(zinput, SamplesToDo, mZ.begin()+sFilterDelay);
 
     /* S = 0.9396926*W + 0.1855740*X */
-    auto miditer = mS.begin() + sFilterDelay;
-    std::transform(winput, winput+SamplesToDo, xinput, miditer,
-        [](const float w, const float x) noexcept -> float
-        { return 0.9396926f*w + 0.1855740f*x; });
+    for(size_t i{0};i < SamplesToDo;++i)
+        mS[i] = 0.9396926f*mW[i] + 0.1855740f*mX[i];
 
-    /* D = 0.6554516*Y */
-    auto sideiter = mD.begin() + sFilterDelay;
-    std::transform(yinput, yinput+SamplesToDo, sideiter,
-        [](const float y) noexcept -> float { return 0.6554516f*y; });
-
-    /* D += j(-0.3420201*W + 0.5098604*X) */
+    /* Precompute j(-0.3420201*W + 0.5098604*X) and store in mD. */
     auto tmpiter = std::copy(mWXHistory1.cbegin(), mWXHistory1.cend(), mTemp.begin());
     std::transform(winput, winput+SamplesToDo, xinput, tmpiter,
         [](const float w, const float x) noexcept -> float
         { return -0.3420201f*w + 0.5098604f*x; });
     std::copy_n(mTemp.cbegin()+SamplesToDo, mWXHistory1.size(), mWXHistory1.begin());
-    PShift.processAccum({mD.data(), SamplesToDo}, mTemp.data());
+    PShift.process({mD.data(), SamplesToDo}, mTemp.data());
+
+    /* D = j(-0.3420201*W + 0.5098604*X) + 0.6554516*Y */
+    for(size_t i{0};i < SamplesToDo;++i)
+        mD[i] = mD[i] + 0.6554516f*mY[i];
 
     /* Left = (S + D)/2.0 */
     float *RESTRICT left{al::assume_aligned<16>(OutSamples[0].data())};
@@ -138,40 +140,32 @@ void UhjEncoder::encode(const al::span<FloatBufferLine> OutSamples,
 
     if(OutSamples.size() > 2)
     {
-        /* T = -0.7071068*Y */
-        sideiter = mT.begin() + sFilterDelay;
-        std::transform(yinput, yinput+SamplesToDo, sideiter,
-            [](const float y) noexcept -> float { return -0.7071068f*y; });
-
-        /* T += j(-0.1432*W + 0.6512*X) */
+        /* Precompute j(-0.1432*W + 0.6512*X) and store in mT. */
         tmpiter = std::copy(mWXHistory2.cbegin(), mWXHistory2.cend(), mTemp.begin());
         std::transform(winput, winput+SamplesToDo, xinput, tmpiter,
             [](const float w, const float x) noexcept -> float
             { return -0.1432f*w + 0.6512f*x; });
         std::copy_n(mTemp.cbegin()+SamplesToDo, mWXHistory2.size(), mWXHistory2.begin());
-        PShift.processAccum({mT.data(), SamplesToDo}, mTemp.data());
+        PShift.process({mT.data(), SamplesToDo}, mTemp.data());
 
+        /* T = j(-0.1432*W + 0.6512*X) - 0.7071068*Y */
         float *RESTRICT t{al::assume_aligned<16>(OutSamples[2].data())};
         for(size_t i{0};i < SamplesToDo;i++)
-            t[i] = mT[i];
+            t[i] = mT[i] - 0.7071068f*mY[i];
     }
     if(OutSamples.size() > 3)
     {
         /* Q = 0.9772*Z */
-        sideiter = mQ.begin() + sFilterDelay;
-        std::transform(zinput, zinput+SamplesToDo, sideiter,
-            [](const float z) noexcept -> float { return 0.9772f*z; });
-
         float *RESTRICT q{al::assume_aligned<16>(OutSamples[3].data())};
         for(size_t i{0};i < SamplesToDo;i++)
-            q[i] = mQ[i];
+            q[i] = 0.9772f*mZ[i];
     }
 
     /* Copy the future samples to the front for next time. */
-    std::copy(mS.cbegin()+SamplesToDo, mS.cbegin()+SamplesToDo+sFilterDelay, mS.begin());
-    std::copy(mD.cbegin()+SamplesToDo, mD.cbegin()+SamplesToDo+sFilterDelay, mD.begin());
-    std::copy(mT.cbegin()+SamplesToDo, mT.cbegin()+SamplesToDo+sFilterDelay, mT.begin());
-    std::copy(mQ.cbegin()+SamplesToDo, mQ.cbegin()+SamplesToDo+sFilterDelay, mQ.begin());
+    std::copy(mW.cbegin()+SamplesToDo, mW.cbegin()+SamplesToDo+sFilterDelay, mW.begin());
+    std::copy(mX.cbegin()+SamplesToDo, mX.cbegin()+SamplesToDo+sFilterDelay, mX.begin());
+    std::copy(mY.cbegin()+SamplesToDo, mY.cbegin()+SamplesToDo+sFilterDelay, mY.begin());
+    std::copy(mZ.cbegin()+SamplesToDo, mZ.cbegin()+SamplesToDo+sFilterDelay, mZ.begin());
 }
 
 
@@ -182,50 +176,55 @@ struct SpeakerPos {
 };
 
 /* Azimuth is counter-clockwise. */
-constexpr SpeakerPos StereoMap[2]{
-    { SF_CHANNEL_MAP_LEFT,   30.0f, 0.0f },
-    { SF_CHANNEL_MAP_RIGHT, -30.0f, 0.0f },
-}, QuadMap[4]{
-    { SF_CHANNEL_MAP_LEFT,         45.0f, 0.0f },
-    { SF_CHANNEL_MAP_RIGHT,       -45.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_LEFT,   135.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_RIGHT, -135.0f, 0.0f },
-}, X51Map[6]{
-    { SF_CHANNEL_MAP_LEFT,         30.0f, 0.0f },
-    { SF_CHANNEL_MAP_RIGHT,       -30.0f, 0.0f },
-    { SF_CHANNEL_MAP_CENTER,        0.0f, 0.0f },
-    { SF_CHANNEL_MAP_LFE, 0.0f, 0.0f },
-    { SF_CHANNEL_MAP_SIDE_LEFT,   110.0f, 0.0f },
-    { SF_CHANNEL_MAP_SIDE_RIGHT, -110.0f, 0.0f },
-}, X51RearMap[6]{
-    { SF_CHANNEL_MAP_LEFT,         30.0f, 0.0f },
-    { SF_CHANNEL_MAP_RIGHT,       -30.0f, 0.0f },
-    { SF_CHANNEL_MAP_CENTER,        0.0f, 0.0f },
-    { SF_CHANNEL_MAP_LFE, 0.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_LEFT,   110.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_RIGHT, -110.0f, 0.0f },
-}, X71Map[8]{
-    { SF_CHANNEL_MAP_LEFT,         30.0f, 0.0f },
-    { SF_CHANNEL_MAP_RIGHT,       -30.0f, 0.0f },
-    { SF_CHANNEL_MAP_CENTER,        0.0f, 0.0f },
-    { SF_CHANNEL_MAP_LFE, 0.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_LEFT,   150.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_RIGHT, -150.0f, 0.0f },
-    { SF_CHANNEL_MAP_SIDE_LEFT,    90.0f, 0.0f },
-    { SF_CHANNEL_MAP_SIDE_RIGHT,  -90.0f, 0.0f },
-}, X714Map[12]{
-    { SF_CHANNEL_MAP_LEFT,         30.0f,  0.0f },
-    { SF_CHANNEL_MAP_RIGHT,       -30.0f,  0.0f },
-    { SF_CHANNEL_MAP_CENTER,        0.0f,  0.0f },
-    { SF_CHANNEL_MAP_LFE, 0.0f, 0.0f },
-    { SF_CHANNEL_MAP_REAR_LEFT,   150.0f,  0.0f },
-    { SF_CHANNEL_MAP_REAR_RIGHT, -150.0f,  0.0f },
-    { SF_CHANNEL_MAP_SIDE_LEFT,    90.0f,  0.0f },
-    { SF_CHANNEL_MAP_SIDE_RIGHT,  -90.0f,  0.0f },
-    { SF_CHANNEL_MAP_TOP_FRONT_LEFT,    45.0f, 35.0f },
-    { SF_CHANNEL_MAP_TOP_FRONT_RIGHT,  -45.0f, 35.0f },
-    { SF_CHANNEL_MAP_TOP_REAR_LEFT,    135.0f, 35.0f },
-    { SF_CHANNEL_MAP_TOP_REAR_RIGHT,  -135.0f, 35.0f },
+constexpr std::array StereoMap{
+    SpeakerPos{SF_CHANNEL_MAP_LEFT,   30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_RIGHT, -30.0f, 0.0f},
+};
+constexpr std::array QuadMap{
+    SpeakerPos{SF_CHANNEL_MAP_LEFT,         45.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_RIGHT,       -45.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_LEFT,   135.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_RIGHT, -135.0f, 0.0f},
+};
+constexpr std::array X51Map{
+    SpeakerPos{SF_CHANNEL_MAP_LEFT,         30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_RIGHT,       -30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_CENTER,        0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_LFE, 0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_SIDE_LEFT,   110.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_SIDE_RIGHT, -110.0f, 0.0f},
+};
+constexpr std::array X51RearMap{
+    SpeakerPos{SF_CHANNEL_MAP_LEFT,         30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_RIGHT,       -30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_CENTER,        0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_LFE, 0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_LEFT,   110.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_RIGHT, -110.0f, 0.0f},
+};
+constexpr std::array X71Map{
+    SpeakerPos{SF_CHANNEL_MAP_LEFT,         30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_RIGHT,       -30.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_CENTER,        0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_LFE, 0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_LEFT,   150.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_RIGHT, -150.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_SIDE_LEFT,    90.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_SIDE_RIGHT,  -90.0f, 0.0f},
+};
+constexpr std::array X714Map{
+    SpeakerPos{SF_CHANNEL_MAP_LEFT,         30.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_RIGHT,       -30.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_CENTER,        0.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_LFE, 0.0f, 0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_LEFT,   150.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_REAR_RIGHT, -150.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_SIDE_LEFT,    90.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_SIDE_RIGHT,  -90.0f,  0.0f},
+    SpeakerPos{SF_CHANNEL_MAP_TOP_FRONT_LEFT,    45.0f, 35.0f},
+    SpeakerPos{SF_CHANNEL_MAP_TOP_FRONT_RIGHT,  -45.0f, 35.0f},
+    SpeakerPos{SF_CHANNEL_MAP_TOP_REAR_LEFT,    135.0f, 35.0f},
+    SpeakerPos{SF_CHANNEL_MAP_TOP_REAR_RIGHT,  -135.0f, 35.0f},
 };
 
 constexpr auto GenCoeffs(double x /*+front*/, double y /*+left*/, double z /*+up*/) noexcept
@@ -291,9 +290,6 @@ int main(int argc, char **argv)
 
         /* Work out the channel map, preferably using the actual channel map
          * from the file/format, but falling back to assuming WFX order.
-         *
-         * TODO: Map indices when the channel order differs from the virtual
-         * speaker position maps.
          */
         al::span<const SpeakerPos> spkrs;
         auto chanmap = std::vector<int>(static_cast<uint>(ininfo.channels), SF_CHANNEL_MAP_INVALID);
@@ -327,8 +323,11 @@ int main(int argc, char **argv)
 
             auto match_chanmap = [](const al::span<int> a, const al::span<const int> b) -> bool
             {
-                return a.size() == b.size()
-                    && std::mismatch(a.begin(), a.end(), b.begin(), b.end()).first == a.end();
+                if(a.size() != b.size())
+                    return false;
+                auto find_channel = [b](const int id) -> bool
+                { return std::find(b.begin(), b.end(), id) != b.end(); };
+                return std::all_of(a.cbegin(), a.cend(), find_channel);
             };
             if(match_chanmap(chanmap, stereomap))
                 spkrs = StereoMap;
@@ -349,7 +348,7 @@ int main(int argc, char **argv)
             else
             {
                 std::string mapstr;
-                if(chanmap.size() > 0)
+                if(!chanmap.empty())
                 {
                     mapstr = std::to_string(chanmap[0]);
                     for(int idx : al::span<int>{chanmap}.subspan<1>())
@@ -367,16 +366,32 @@ int main(int argc, char **argv)
         {
             fprintf(stderr, " ... assuming WFX order stereo\n");
             spkrs = StereoMap;
+            chanmap[0] = SF_CHANNEL_MAP_FRONT_LEFT;
+            chanmap[1] = SF_CHANNEL_MAP_FRONT_RIGHT;
         }
         else if(ininfo.channels == 6)
         {
             fprintf(stderr, " ... assuming WFX order 5.1\n");
             spkrs = X51Map;
+            chanmap[0] = SF_CHANNEL_MAP_FRONT_LEFT;
+            chanmap[1] = SF_CHANNEL_MAP_FRONT_RIGHT;
+            chanmap[2] = SF_CHANNEL_MAP_FRONT_CENTER;
+            chanmap[3] = SF_CHANNEL_MAP_LFE;
+            chanmap[4] = SF_CHANNEL_MAP_SIDE_LEFT;
+            chanmap[5] = SF_CHANNEL_MAP_SIDE_RIGHT;
         }
         else if(ininfo.channels == 8)
         {
             fprintf(stderr, " ... assuming WFX order 7.1\n");
             spkrs = X71Map;
+            chanmap[0] = SF_CHANNEL_MAP_FRONT_LEFT;
+            chanmap[1] = SF_CHANNEL_MAP_FRONT_RIGHT;
+            chanmap[2] = SF_CHANNEL_MAP_FRONT_CENTER;
+            chanmap[3] = SF_CHANNEL_MAP_LFE;
+            chanmap[4] = SF_CHANNEL_MAP_REAR_LEFT;
+            chanmap[5] = SF_CHANNEL_MAP_REAR_RIGHT;
+            chanmap[6] = SF_CHANNEL_MAP_SIDE_LEFT;
+            chanmap[7] = SF_CHANNEL_MAP_SIDE_RIGHT;
         }
         else
         {
@@ -397,11 +412,11 @@ int main(int argc, char **argv)
         }
 
         auto encoder = std::make_unique<UhjEncoder>();
-        auto splbuf = al::vector<FloatBufferLine, 16>(static_cast<uint>(9+ininfo.channels)+uhjchans);
-        auto ambmem = al::span<FloatBufferLine,4>{&splbuf[0], 4};
-        auto encmem = al::span<FloatBufferLine,4>{&splbuf[4], 4};
-        auto srcmem = al::span<float,BufferLineSize>{splbuf[8].data(), BufferLineSize};
-        auto outmem = al::span<float>{splbuf[9].data(), BufferLineSize*uhjchans};
+        auto splbuf = al::vector<FloatBufferLine, 16>(static_cast<uint>(ininfo.channels)+9+size_t{uhjchans});
+        auto ambmem = al::span{splbuf}.subspan<0,4>();
+        auto encmem = al::span{splbuf}.subspan<4,4>();
+        auto srcmem = al::span{splbuf[8]};
+        auto outmem = al::span<float>{splbuf[9].data(), size_t{BufferLineSize}*uhjchans};
 
         /* A number of initial samples need to be skipped to cut the lead-in
          * from the all-pass filter delay. The same number of samples need to
@@ -434,7 +449,7 @@ int main(int argc, char **argv)
                 /* B-Format is already in the correct order. It just needs a
                  * +3dB boost.
                  */
-                constexpr float scale{al::numbers::sqrt2_v<float>};
+                static constexpr float scale{al::numbers::sqrt2_v<float>};
                 const size_t chans{std::min<size_t>(static_cast<uint>(ininfo.channels), 4u)};
                 for(size_t c{0};c < chans;++c)
                 {
@@ -443,12 +458,20 @@ int main(int argc, char **argv)
                     ++inmem;
                 }
             }
-            else for(auto&& spkr : spkrs)
+            else for(const int chanid : chanmap)
             {
                 /* Skip LFE. Or mix directly into W? Or W+X? */
-                if(spkr.mChannelID == SF_CHANNEL_MAP_LFE)
+                if(chanid == SF_CHANNEL_MAP_LFE)
                 {
                     ++inmem;
+                    continue;
+                }
+
+                const auto spkr = std::find_if(spkrs.cbegin(), spkrs.cend(),
+                    [chanid](const SpeakerPos &pos){return pos.mChannelID == chanid;});
+                if(spkr == spkrs.cend())
+                {
+                    fprintf(stderr, " ... failed to find channel ID %d\n", chanid);
                     continue;
                 }
 
@@ -456,11 +479,11 @@ int main(int argc, char **argv)
                     srcmem[i] = inmem[i * static_cast<uint>(ininfo.channels)];
                 ++inmem;
 
-                constexpr auto Deg2Rad = al::numbers::pi / 180.0;
+                static constexpr auto Deg2Rad = al::numbers::pi / 180.0;
                 const auto coeffs = GenCoeffs(
-                    std::cos(spkr.mAzimuth*Deg2Rad) * std::cos(spkr.mElevation*Deg2Rad),
-                    std::sin(spkr.mAzimuth*Deg2Rad) * std::cos(spkr.mElevation*Deg2Rad),
-                    std::sin(spkr.mElevation*Deg2Rad));
+                    std::cos(spkr->mAzimuth*Deg2Rad) * std::cos(spkr->mElevation*Deg2Rad),
+                    std::sin(spkr->mAzimuth*Deg2Rad) * std::cos(spkr->mElevation*Deg2Rad),
+                    std::sin(spkr->mElevation*Deg2Rad));
                 for(size_t c{0};c < 4;++c)
                 {
                     for(size_t i{0};i < got;++i)
@@ -478,11 +501,9 @@ int main(int argc, char **argv)
             got -= LeadIn;
             for(size_t c{0};c < uhjchans;++c)
             {
-                constexpr float max_val{8388607.0f / 8388608.0f};
-                auto clamp = [](float v, float mn, float mx) noexcept
-                { return std::min(std::max(v, mn), mx); };
+                static constexpr float max_val{8388607.0f / 8388608.0f};
                 for(size_t i{0};i < got;++i)
-                    outmem[i*uhjchans + c] = clamp(encmem[c][LeadIn+i], -1.0f, max_val);
+                    outmem[i*uhjchans + c] = std::clamp(encmem[c][LeadIn+i], -1.0f, max_val);
             }
             LeadIn = 0;
 

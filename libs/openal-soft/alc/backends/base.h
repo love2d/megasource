@@ -3,13 +3,15 @@
 
 #include <chrono>
 #include <cstdarg>
+#include <cstddef>
 #include <memory>
 #include <ratio>
 #include <string>
+#include <string_view>
 
-#include "albyte.h"
 #include "core/device.h"
 #include "core/except.h"
+#include "alc/events.h"
 
 
 using uint = unsigned int;
@@ -20,13 +22,13 @@ struct ClockLatency {
 };
 
 struct BackendBase {
-    virtual void open(const char *name) = 0;
+    virtual void open(std::string_view name) = 0;
 
     virtual bool reset();
     virtual void start() = 0;
     virtual void stop() = 0;
 
-    virtual void captureSamples(al::byte *buffer, uint samples);
+    virtual void captureSamples(std::byte *buffer, uint samples);
     virtual uint availableSamples();
 
     virtual ClockLatency getClockLatency();
@@ -38,14 +40,9 @@ struct BackendBase {
 
 protected:
     /** Sets the default channel order used by most non-WaveFormatEx-based APIs. */
-    void setDefaultChannelOrder();
+    void setDefaultChannelOrder() const;
     /** Sets the default channel order used by WaveFormatEx. */
-    void setDefaultWFXChannelOrder();
-
-#ifdef _WIN32
-    /** Sets the channel order given the WaveFormatEx mask. */
-    void setChannelOrderFromWFXMask(uint chanmask);
-#endif
+    void setDefaultWFXChannelOrder() const;
 };
 using BackendPtr = std::unique_ptr<BackendBase>;
 
@@ -54,18 +51,6 @@ enum class BackendType {
     Capture
 };
 
-
-/* Helper to get the current clock time from the device's ClockBase, and
- * SamplesDone converted from the sample rate.
- */
-inline std::chrono::nanoseconds GetDeviceClockTime(DeviceBase *device)
-{
-    using std::chrono::seconds;
-    using std::chrono::nanoseconds;
-
-    auto ns = nanoseconds{seconds{device->SamplesDone}} / device->Frequency;
-    return device->ClockBase + ns;
-}
 
 /* Helper to get the device latency from the backend, including any fixed
  * latency from post-processing.
@@ -79,16 +64,18 @@ inline ClockLatency GetClockLatency(DeviceBase *device, BackendBase *backend)
 
 
 struct BackendFactory {
+    virtual ~BackendFactory() = default;
+
     virtual bool init() = 0;
 
     virtual bool querySupport(BackendType type) = 0;
 
+    virtual alc::EventSupport queryEventSupport(alc::EventType, BackendType)
+    { return alc::EventSupport::NoSupport; }
+
     virtual std::string probe(BackendType type) = 0;
 
     virtual BackendPtr createBackend(DeviceBase *device, BackendType type) = 0;
-
-protected:
-    virtual ~BackendFactory() = default;
 };
 
 namespace al {
@@ -103,19 +90,15 @@ class backend_exception final : public base_exception {
     backend_error mErrorCode;
 
 public:
-#ifdef __USE_MINGW_ANSI_STDIO
-    [[gnu::format(gnu_printf, 3, 4)]]
+#ifdef __MINGW32__
+    [[gnu::format(__MINGW_PRINTF_FORMAT, 3, 4)]]
 #else
     [[gnu::format(printf, 3, 4)]]
 #endif
-    backend_exception(backend_error code, const char *msg, ...) : mErrorCode{code}
-    {
-        std::va_list args;
-        va_start(args, msg);
-        setMessage(msg, args);
-        va_end(args);
-    }
-    backend_error errorCode() const noexcept { return mErrorCode; }
+    backend_exception(backend_error code, const char *msg, ...);
+    ~backend_exception() override;
+
+    [[nodiscard]] auto errorCode() const noexcept -> backend_error { return mErrorCode; }
 };
 
 } // namespace al

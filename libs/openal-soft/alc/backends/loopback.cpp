@@ -30,16 +30,14 @@ namespace {
 struct LoopbackBackend final : public BackendBase {
     LoopbackBackend(DeviceBase *device) noexcept : BackendBase{device} { }
 
-    void open(const char *name) override;
+    void open(std::string_view name) override;
     bool reset() override;
     void start() override;
     void stop() override;
-
-    DEF_NEWDEL(LoopbackBackend)
 };
 
 
-void LoopbackBackend::open(const char *name)
+void LoopbackBackend::open(std::string_view name)
 {
     mDevice->DeviceName = name;
 }

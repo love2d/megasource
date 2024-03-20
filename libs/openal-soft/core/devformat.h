@@ -2,6 +2,7 @@
 #define CORE_DEVFORMAT_H
 
 #include <cstdint>
+#include <cstddef>
 
 
 using uint = unsigned int;
@@ -24,6 +25,23 @@ enum Channel : unsigned char {
     TopBackLeft,
     TopBackCenter,
     TopBackRight,
+
+    Aux0,
+    Aux1,
+    Aux2,
+    Aux3,
+    Aux4,
+    Aux5,
+    Aux6,
+    Aux7,
+    Aux8,
+    Aux9,
+    Aux10,
+    Aux11,
+    Aux12,
+    Aux13,
+    Aux14,
+    Aux15,
 
     MaxChannels
 };
@@ -48,11 +66,13 @@ enum DevFmtChannels : unsigned char {
     DevFmtX51,
     DevFmtX61,
     DevFmtX71,
+    DevFmtX714,
+    DevFmtX3D71,
     DevFmtAmbi3D,
 
     DevFmtChannelsDefault = DevFmtStereo
 };
-#define MAX_OUTPUT_CHANNELS  16
+inline constexpr size_t MaxOutputChannels{16};
 
 /* DevFmtType traits, providing the type, etc given a DevFmtType. */
 template<DevFmtType T>

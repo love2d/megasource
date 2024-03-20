@@ -23,18 +23,19 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
-#include <iterator>
+#include <variant>
 
 #include "alc/effects/base.h"
-#include "almalloc.h"
 #include "alspan.h"
 #include "core/bufferline.h"
 #include "core/devformat.h"
 #include "core/device.h"
+#include "core/effects/base.h"
 #include "core/effectslot.h"
 #include "core/mixer.h"
 #include "intrusive_ptr.h"
 
+struct BufferStorage;
 struct ContextBase;
 
 
@@ -42,79 +43,100 @@ namespace {
 
 using uint = unsigned int;
 
-struct DedicatedState final : public EffectState {
-    float mCurrentGains[MAX_OUTPUT_CHANNELS];
-    float mTargetGains[MAX_OUTPUT_CHANNELS];
+struct DedicatedState : public EffectState {
+    /* The "dedicated" effect can output to the real output, so should have
+     * gains for all possible output channels and not just the main ambisonic
+     * buffer.
+     */
+    std::array<float,MaxOutputChannels> mCurrentGains{};
+    std::array<float,MaxOutputChannels> mTargetGains{};
 
 
-    void deviceUpdate(const DeviceBase *device, const Buffer &buffer) override;
+    void deviceUpdate(const DeviceBase *device, const BufferStorage *buffer) final;
     void update(const ContextBase *context, const EffectSlot *slot, const EffectProps *props,
         const EffectTarget target) override;
     void process(const size_t samplesToDo, const al::span<const FloatBufferLine> samplesIn,
-        const al::span<FloatBufferLine> samplesOut) override;
-
-    DEF_NEWDEL(DedicatedState)
+        const al::span<FloatBufferLine> samplesOut) final;
 };
 
-void DedicatedState::deviceUpdate(const DeviceBase*, const Buffer&)
+struct DedicatedLfeState final : public DedicatedState {
+    void update(const ContextBase *context, const EffectSlot *slot, const EffectProps *props,
+        const EffectTarget target) final;
+};
+
+void DedicatedState::deviceUpdate(const DeviceBase*, const BufferStorage*)
 {
-    std::fill(std::begin(mCurrentGains), std::end(mCurrentGains), 0.0f);
+    std::fill(mCurrentGains.begin(), mCurrentGains.end(), 0.0f);
 }
 
 void DedicatedState::update(const ContextBase*, const EffectSlot *slot,
     const EffectProps *props, const EffectTarget target)
 {
-    std::fill(std::begin(mTargetGains), std::end(mTargetGains), 0.0f);
+    std::fill(mTargetGains.begin(), mTargetGains.end(), 0.0f);
 
-    const float Gain{slot->Gain * props->Dedicated.Gain};
+    const float Gain{slot->Gain * std::get<DedicatedDialogProps>(*props).Gain};
 
-    if(slot->EffectType == EffectSlotType::DedicatedLFE)
+    /* Dialog goes to the front-center speaker if it exists, otherwise it plays
+     * from the front-center location.
+     */
+    const size_t idx{target.RealOut ? target.RealOut->ChannelIndex[FrontCenter]
+        : InvalidChannelIndex};
+    if(idx != InvalidChannelIndex)
     {
-        const uint idx{!target.RealOut ? INVALID_CHANNEL_INDEX :
-            GetChannelIdxByName(*target.RealOut, LFE)};
-        if(idx != INVALID_CHANNEL_INDEX)
-        {
-            mOutTarget = target.RealOut->Buffer;
-            mTargetGains[idx] = Gain;
-        }
+        mOutTarget = target.RealOut->Buffer;
+        mTargetGains[idx] = Gain;
     }
-    else if(slot->EffectType == EffectSlotType::DedicatedDialog)
+    else
     {
-        /* Dialog goes to the front-center speaker if it exists, otherwise it
-         * plays from the front-center location. */
-        const uint idx{!target.RealOut ? INVALID_CHANNEL_INDEX :
-            GetChannelIdxByName(*target.RealOut, FrontCenter)};
-        if(idx != INVALID_CHANNEL_INDEX)
-        {
-            mOutTarget = target.RealOut->Buffer;
-            mTargetGains[idx] = Gain;
-        }
-        else
-        {
-            const auto coeffs = CalcDirectionCoeffs({0.0f, 0.0f, -1.0f}, 0.0f);
+        static constexpr auto coeffs = CalcDirectionCoeffs(std::array{0.0f, 0.0f, -1.0f});
 
-            mOutTarget = target.Main->Buffer;
-            ComputePanGains(target.Main, coeffs.data(), Gain, mTargetGains);
-        }
+        mOutTarget = target.Main->Buffer;
+        ComputePanGains(target.Main, coeffs, Gain, mTargetGains);
+    }
+}
+
+void DedicatedLfeState::update(const ContextBase*, const EffectSlot *slot,
+    const EffectProps *props, const EffectTarget target)
+{
+    std::fill(mTargetGains.begin(), mTargetGains.end(), 0.0f);
+
+    const float Gain{slot->Gain * std::get<DedicatedLfeProps>(*props).Gain};
+
+    const size_t idx{target.RealOut ? target.RealOut->ChannelIndex[LFE] : InvalidChannelIndex};
+    if(idx != InvalidChannelIndex)
+    {
+        mOutTarget = target.RealOut->Buffer;
+        mTargetGains[idx] = Gain;
     }
 }
 
 void DedicatedState::process(const size_t samplesToDo, const al::span<const FloatBufferLine> samplesIn, const al::span<FloatBufferLine> samplesOut)
 {
-    MixSamples({samplesIn[0].data(), samplesToDo}, samplesOut, mCurrentGains, mTargetGains,
-        samplesToDo, 0);
+    MixSamples({samplesIn[0].data(), samplesToDo}, samplesOut, mCurrentGains.data(),
+        mTargetGains.data(), samplesToDo, 0);
 }
 
 
-struct DedicatedStateFactory final : public EffectStateFactory {
+struct DedicatedDialogStateFactory final : public EffectStateFactory {
     al::intrusive_ptr<EffectState> create() override
     { return al::intrusive_ptr<EffectState>{new DedicatedState{}}; }
 };
 
+struct DedicatedLfeStateFactory final : public EffectStateFactory {
+    al::intrusive_ptr<EffectState> create() override
+    { return al::intrusive_ptr<EffectState>{new DedicatedLfeState{}}; }
+};
+
 } // namespace
 
-EffectStateFactory *DedicatedStateFactory_getFactory()
+EffectStateFactory *DedicatedDialogStateFactory_getFactory()
 {
-    static DedicatedStateFactory DedicatedFactory{};
+    static DedicatedDialogStateFactory DedicatedFactory{};
+    return &DedicatedFactory;
+}
+
+EffectStateFactory *DedicatedLfeStateFactory_getFactory()
+{
+    static DedicatedLfeStateFactory DedicatedFactory{};
     return &DedicatedFactory;
 }
