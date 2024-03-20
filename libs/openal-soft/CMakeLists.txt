@@ -1154,6 +1154,9 @@ if(ALSOFT_BACKEND_OBOE)
         set(ALC_OBJS  ${ALC_OBJS} alc/backends/oboe.cpp alc/backends/oboe.h)
         set(BACKENDS  "${BACKENDS} Oboe,")
         set(EXTRA_LIBS ${OBOE_TARGET} ${EXTRA_LIBS})
+        if(MEGA)
+            set(ALC_OBJS  ${ALC_OBJS} opensl_latency.cpp)
+        endif()
     endif()
 endif()
 if(ALSOFT_REQUIRE_OBOE AND NOT HAVE_OBOE)
@@ -1469,6 +1472,8 @@ else()
             MACOSX_RPATH TRUE)
     endif()
 endif()
+
+set(OPENAL_LIB_NAME ${IMPL_TARGET} PARENT_SCOPE)
 
 target_include_directories(${IMPL_TARGET}
   PUBLIC
@@ -1828,4 +1833,8 @@ if(EXTRA_INSTALLS)
         BUNDLE  DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+
+if(MEGA)
+    install(TARGETS ${IMPL_TARGET} RUNTIME DESTINATION . LIBRARY DESTINATION .)
 endif()
