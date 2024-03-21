@@ -136,10 +136,12 @@ if(MSVC)
 
 			if(VS_VCVARSALL_BAT MATCHES "VsDevCmd")
 				message(STATUS "Found VsDevCmd.bat")
-				if(MEGA_X86)
-					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=x86")
-				else()
+				if(MEGA_X64)
 					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=amd64")
+				elseif(MEGA_ARM64)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=arm64 -host_arch=amd64")
+				else()
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=x86")
 				endif()
 				math(EXPR VS_TOOLCHAIN_VERSION_MAJOR "${VSVERSION} / 10")
 				math(EXPR VS_TOOLCHAIN_VERSION_MINOR "${VSVERSION} % 10")
@@ -149,7 +151,7 @@ if(MSVC)
 				if(MEGA_X86)
 					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
 				elseif(MEGA_ARM64)
-					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_arm64")
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x64_arm64")
 				else()
 					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
 				endif()
@@ -314,7 +316,7 @@ add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmo
 set(MEGA_MODPLUG modplug-static)
 
 # LuaJIT
-if(MSVC AND NOT MEGA_ARM64)
+if(MSVC)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
 	message(STATUS "-----------------------------------------------------")
@@ -397,13 +399,6 @@ if(EXISTS ${MEGA_LOVE}/CMakeLists.txt)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: love")
 	message(STATUS "-----------------------------------------------------")
-	if(MEGA_ARM64)
-		# LuaJIT currently doesn't support targetting Windows with ARM64
-		# architecture yet.
-		# TODO: Re-evaluate this once LuaJIT supports it.
-		# https://github.com/LuaJIT/LuaJIT/issues/593
-		set(LOVE_JIT OFF CACHE BOOL "Enable LOVE JIT" FORCE)
-	endif()
 	add_subdirectory(${MEGA_LOVE} ${CMAKE_BINARY_DIR}/love)
 
 	# Turn off third-party warnings when building with LOVE.
