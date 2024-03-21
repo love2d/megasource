@@ -119,27 +119,43 @@ if(MSVC)
 	if(VSCOMNTOOLS STREQUAL "")
 		message(WARNING "Environment variable VSCOMNTOOLS not defined and vswhere.exe could not be found. Is Visual Studio properly installed?")
 	else()
-		# Find vcvarsall.bat.
-		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
-
+		# Find VsDevCmd.bat
+		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/VsDevCmd.bat ABSOLUTE)
 		if(NOT(EXISTS ${VS_VCVARSALL_BAT}))
-			# older VS versions have it here
-			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+			# Find vcvarsall.bat.
+			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
+
+			if(NOT(EXISTS ${VS_VCVARSALL_BAT}))
+				# older VS versions have it here
+				get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+			endif()
 		endif()
 
 		if(EXISTS ${VS_VCVARSALL_BAT})
-			message(STATUS "Found vcvarsall.bat")
 			set(MEGA_MSVC_VCVARSALL_BAT ${VS_VCVARSALL_BAT})
 
-			if(MEGA_X86)
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
-			elseif(MEGA_ARM64)
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_arm64")
+			if(VS_VCVARSALL_BAT MATCHES "VsDevCmd")
+				message(STATUS "Found VsDevCmd.bat")
+				if(MEGA_X86)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=x86")
+				else()
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=amd64")
+				endif()
+				math(EXPR VS_TOOLCHAIN_VERSION_MAJOR "${VSVERSION} / 10")
+				math(EXPR VS_TOOLCHAIN_VERSION_MINOR "${VSVERSION} % 10")
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "${MEGA_MSVC_VCVARSALL_BAT_ARG} -vcvars_ver=${VS_TOOLCHAIN_VERSION_MAJOR}.${VS_TOOLCHAIN_VERSION_MINOR}")
 			else()
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
+				message(STATUS "Found vcvarsall.bat")
+				if(MEGA_X86)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
+				elseif(MEGA_ARM64)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_arm64")
+				else()
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
+				endif()
 			endif()
 		else()
-			message(WARNING "Could not find vsvarsall.bat")
+			message(WARNING "Could not find VsDevCmd.bat nor vcvarsall.bat")
 		endif()
 	endif()
 
@@ -316,6 +332,7 @@ if(MSVC AND NOT MEGA_ARM64)
 			call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
 		)
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
+		cl
 		msvcbuild.bat debug amalg
 	")
 
