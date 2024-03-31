@@ -19,6 +19,10 @@ jobs:
         path: megasource/libs/love
         repository: love2d/love
         ref: 12.0-development
+    - name: Remove Strawbery Perl From Path
+      run: |
+        move /y C:\Strawberry C:\Strawberry_not_in_PATH
+        exit /b 0
     - name: Configure
       shell: cmd
       env:
