@@ -325,7 +325,7 @@ if(MSVC)
 	# Copy LuaJIT source to binary dir. LuaJIT builds in-source,
 	# and we don't want to modify the original source tree, so
 	# we copy it.
-	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION libs)
+	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION ${CMAKE_BINARY_DIR}/libs)
 
 	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
 
