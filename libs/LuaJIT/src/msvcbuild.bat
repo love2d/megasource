@@ -94,7 +94,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @shift
 @set BUILDTYPE=debug
 @set LJCOMPILE=%LJCOMPILE% /Zi %DEBUGCFLAGS%
-@set LJDYNBUILD=/MDd /DLUA_BUILD_AS_DLL
+@set LJDYNBUILD=/MD /DLUA_BUILD_AS_DLL
 @set LJLINK=%LJLINK% /opt:ref /opt:icf /incremental:no
 :NODEBUG
 @set LJLINK=%LJLINK% /%BUILDTYPE%
