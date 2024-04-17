@@ -11,6 +11,8 @@ project(megasource)
 
 set(MEGA TRUE)
 
+option(LOVE_USE_SDL3 "Use SDL3 instead of SDL2" OFF)
+
 set (CMAKE_CXX_STANDARD 11)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -222,6 +224,7 @@ set(MEGA_LIBVORBIS_VER "1.3.5")
 set(MEGA_LIBTHEORA_VER "1.1.1")
 set(MEGA_FREETYPE_VER "2.13.2")
 set(MEGA_SDL2_VER "2.28.5")
+set(MEGA_SDL3_VER "3.1.1-preview")
 set(MEGA_OPENAL_VER "1.23.1-bc7cb17")
 set(MEGA_MODPLUG_VER "0.8.8.4")
 
@@ -277,18 +280,29 @@ message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/harfbuzz" ${CMAKE_BINARY_DIR}/harfbuzz)
 set(MEGA_HARFBUZZ harfbuzz)
 
-message(STATUS "-----------------------------------------------------")
-message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
-message(STATUS "-----------------------------------------------------")
 if(WIN32 AND MEGA_ARM64)
 	# In Windows, SDL always tries to open OpenGL32.dll, which is not available in Windows ARM64.
 	# This will cause error later on which makes love.window.setMode unhappy even when
 	# LOVE_GRAPHICS_USE_OPENGLES is set, so disable OpenGL backend.
 	set(SDL_OPENGL OFF CACHE BOOL "(SDL) Enable OpenGL Backend" FORCE)
 endif()
-add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
-set(MEGA_SDL2 SDL2)
-set(MEGA_SDL2MAIN SDL2main)
+if (LOVE_USE_SDL3)
+	message(STATUS "-----------------------------------------------------")
+	message(STATUS "Configuring: SDL3 ${MEGA_SDL3_VER}")
+	message(STATUS "-----------------------------------------------------")
+	add_subdirectory("libs/SDL3" ${CMAKE_BINARY_DIR}/SDL3)
+	set(MEGA_SDL3 SDL3-shared)
+	set(MEGA_SDL2 )
+	set(MEGA_SDL2MAIN )
+else()
+	message(STATUS "-----------------------------------------------------")
+	message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
+	message(STATUS "-----------------------------------------------------")
+	add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
+	set(MEGA_SDL2 SDL2)
+	set(MEGA_SDL2MAIN SDL2main)
+	set(MEGA_SDL3 )
+endif()
 
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: openal-soft ${MEGA_OPENAL_VER}")
@@ -390,6 +404,7 @@ set(MEGA_3P
 	${MEGA_LIBVORBISFILE}
 	${MEGA_LIBTHEORA}
 	${MEGA_FREETYPE}
+	${MEGA_SDL3}
 	${MEGA_SDL2}
 	${MEGA_SDL2MAIN}
 	${MEGA_OPENAL}
@@ -423,6 +438,6 @@ link_directories(${SDL_LINK_DIR})
 add_executable(megatest src/test.cpp)
 target_link_libraries(megatest ${MEGA_3P})
 
-add_move_dll(megatest ${MEGA_SDL2})
+add_move_dll(megatest ${MEGA_SDL2} ${MEGA_SDL3})
 add_move_dll(megatest ${MEGA_OPENAL})
 add_move_dll(megatest ${MEGA_LUA51})
