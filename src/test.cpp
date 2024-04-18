@@ -82,17 +82,26 @@ int main(int argc, char **argv)
 		return "freetype";
 	};
 
-	vfunc SDL2 = [](strs &c, strs &l)
+	vfunc SDL = [](strs &c, strs &l)
 	{
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		SDL_Version compiled;
+		SDL_Version linked;
+#else
 		SDL_version compiled;
 		SDL_version linked;
+#endif
 
 		SDL_VERSION(&compiled);
 		SDL_GetVersion(&linked);
 
 		c << (int)compiled.major << "." << (int)compiled.minor << "." << (int)compiled.patch;
 		l << (int)linked.major << "." << (int)linked.minor << "." << (int)linked.patch;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		return "SDL3";
+#else
 		return "SDL2";
+#endif
 	};
 
 	vfunc OpenAL = [](strs &c, strs &l)
@@ -120,7 +129,7 @@ int main(int argc, char **argv)
 	funcs.push_back(vorbis);
 	funcs.push_back(vorbisfile);
 	funcs.push_back(freetype);
-	funcs.push_back(SDL2);
+	funcs.push_back(SDL);
 	funcs.push_back(OpenAL);
 	funcs.push_back(modplug);
 
