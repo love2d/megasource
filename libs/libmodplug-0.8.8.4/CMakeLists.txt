@@ -44,7 +44,7 @@ set(MODPLUG_SRC
 
 file(COPY src/modplug.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/libmodplug)
 
-if(APPLE)
+if(APPLE OR EMSCRIPTEN)
 	include(CheckFunctionExists)
 	include(CheckIncludeFiles)
 	include(CheckLibraryExists)

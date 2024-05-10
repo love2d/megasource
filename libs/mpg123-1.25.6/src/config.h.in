@@ -44,223 +44,227 @@
 #undef GAPLESS
 
 /* Define to 1 if you have the <alc.h> header file. */
-#undef HAVE_ALC_H
+#cmakedefine HAVE_ALC_H
 
 /* Define to 1 if you have the <Alib.h> header file. */
-#undef HAVE_ALIB_H
+#cmakedefine HAVE_ALIB_H
 
 /* Define to 1 if you have the <AL/alc.h> header file. */
-#undef HAVE_AL_ALC_H
+#cmakedefine HAVE_AL_ALC_H
 
 /* Define to 1 if you have the <AL/al.h> header file. */
-#undef HAVE_AL_AL_H
+#cmakedefine HAVE_AL_AL_H
 
 /* Define to 1 if you have the <al.h> header file. */
-#undef HAVE_AL_H
+#cmakedefine HAVE_AL_H
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
-#undef HAVE_ARPA_INET_H
+#cmakedefine HAVE_ARPA_INET_H
 
 /* Define to 1 if you have the <asm/audioio.h> header file. */
-#undef HAVE_ASM_AUDIOIO_H
+#cmakedefine HAVE_ASM_AUDIOIO_H
 
 /* Define to 1 if you have the `atoll' function. */
-#undef HAVE_ATOLL
+#cmakedefine HAVE_ATOLL
 
 /* Define to 1 if you have the <audios.h> header file. */
-#undef HAVE_AUDIOS_H
+#cmakedefine HAVE_AUDIOS_H
 
 /* Define to 1 if you have the <AudioToolbox/AudioToolbox.h> header file. */
-#undef HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H
+#cmakedefine HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H
 
 /* Define to 1 if you have the <AudioUnit/AudioUnit.h> header file. */
-#undef HAVE_AUDIOUNIT_AUDIOUNIT_H
+#cmakedefine HAVE_AUDIOUNIT_AUDIOUNIT_H
 
 /* Define to 1 if you have the <CoreServices/CoreServices.h> header file. */
-#undef HAVE_CORESERVICES_CORESERVICES_H
+#cmakedefine HAVE_CORESERVICES_CORESERVICES_H
 
 /* Define to 1 if you have the <CUlib.h> header file. */
-#undef HAVE_CULIB_H
+#cmakedefine HAVE_CULIB_H
 
-/* Define to 1 if you have the <dirent.h> header file. */
-#undef HAVE_DIRENT_H
+/* /\* Define to 1 if you have the <dirent.h> header file. *\/ */
+/* #undef HAVE_DIRENT_H */
 
-/* Define to 1 if you have the `dlclose' function. */
-#undef HAVE_DLCLOSE
+/* /\* Define to 1 if you have the `dlclose' function. *\/ */
+/* #undef HAVE_DLCLOSE */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
-#undef HAVE_DLFCN_H
+#cmakedefine HAVE_DLFCN_H
 
-/* Define to 1 if you have the `dlopen' function. */
-#undef HAVE_DLOPEN
+/* /\* Define to 1 if you have the `dlopen' function. *\/ */
+/* #undef HAVE_DLOPEN */
 
 /* Define to 1 if you have the `dlsym' function. */
-#undef HAVE_DLSYM
+/* #undef HAVE_DLSYM */
 
 /* Define if getaddrinfo accepts the AI_ADDRCONFIG flag */
-#undef HAVE_GAI_ADDRCONFIG
+#cmakedefine HAVE_GAI_ADDRCONFIG
 
 /* Define to 1 if you have the `getaddrinfo' function. */
-#undef HAVE_GETADDRINFO
+#cmakedefine HAVE_GETADDRINFO
 
 /* Define to 1 if you have the `getpagesize' function. */
-#undef HAVE_GETPAGESIZE
+#cmakedefine HAVE_GETPAGESIZE
 
 /* Define to 1 if you have the `getuid' function. */
-#undef HAVE_GETUID
+#cmakedefine HAVE_GETUID
 
 /* Define to 1 if you have the <inttypes.h> header file. */
-#undef HAVE_INTTYPES_H
+#cmakedefine HAVE_INTTYPES_H
 
 /* Define to 1 if you have the <langinfo.h> header file. */
-#undef HAVE_LANGINFO_H
+#cmakedefine HAVE_LANGINFO_H
 
 /* Define to 1 if you have the `m' library (-lm). */
-#undef HAVE_LIBM
+#cmakedefine HAVE_LIBM
 
 /* Define to 1 if you have the `mx' library (-lmx). */
-#undef HAVE_LIBMX
+#cmakedefine HAVE_LIBMX
 
 /* Define to 1 if you have the <limits.h> header file. */
-#undef HAVE_LIMITS_H
+#cmakedefine HAVE_LIMITS_H
 
 /* Define to 1 if you have the <linux/soundcard.h> header file. */
-#undef HAVE_LINUX_SOUNDCARD_H
+#cmakedefine HAVE_LINUX_SOUNDCARD_H
 
 /* Define to 1 if you have the <locale.h> header file. */
-#undef HAVE_LOCALE_H
+#cmakedefine HAVE_LOCALE_H
+
+#cmakedefine HAVE_LTDL
 
 /* Define to 1 if you have the <machine/soundcard.h> header file. */
-#undef HAVE_MACHINE_SOUNDCARD_H
+#cmakedefine HAVE_MACHINE_SOUNDCARD_H
 
 /* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
+#cmakedefine HAVE_MEMORY_H
 
 /* Define to 1 if you have the `mkfifo' function. */
-#undef HAVE_MKFIFO
+#cmakedefine HAVE_MKFIFO
 
 /* Define to 1 if you have a working `mmap' system call. */
-#undef HAVE_MMAP
+#cmakedefine HAVE_MMAP
 
 /* Define to 1 if you have the <netdb.h> header file. */
-#undef HAVE_NETDB_H
+#cmakedefine HAVE_NETDB_H
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
-#undef HAVE_NETINET_IN_H
+#cmakedefine HAVE_NETINET_IN_H
 
 /* Define to 1 if you have the <netinet/tcp.h> header file. */
-#undef HAVE_NETINET_TCP_H
+#cmakedefine HAVE_NETINET_TCP_H
 
 /* Define to 1 if you have the `nl_langinfo' function. */
-#undef HAVE_NL_LANGINFO
+#cmakedefine HAVE_NL_LANGINFO
 
 /* Define to 1 if you have the <OpenAL/alc.h> header file. */
-#undef HAVE_OPENAL_ALC_H
+#cmakedefine HAVE_OPENAL_ALC_H
 
 /* Define to 1 if you have the <OpenAL/al.h> header file. */
-#undef HAVE_OPENAL_AL_H
+#cmakedefine HAVE_OPENAL_AL_H
 
 /* Define to 1 if you have the <os2me.h> header file. */
-#undef HAVE_OS2ME_H
+#cmakedefine HAVE_OS2ME_H
 
 /* Define to 1 if you have the <os2.h> header file. */
-#undef HAVE_OS2_H
+#cmakedefine HAVE_OS2_H
 
 /* Define to 1 if you have the `random' function. */
-#undef HAVE_RANDOM
+#cmakedefine HAVE_RANDOM
 
 /* Define to 1 if you have the <sched.h> header file. */
-#undef HAVE_SCHED_H
+#cmakedefine HAVE_SCHED_H
 
 /* Define to 1 if you have the `sched_setscheduler' function. */
-#undef HAVE_SCHED_SETSCHEDULER
+#cmakedefine HAVE_SCHED_SETSCHEDULER
 
 /* Define to 1 if you have the `setlocale' function. */
-#undef HAVE_SETLOCALE
+#cmakedefine HAVE_SETLOCALE
 
 /* Define to 1 if you have the `setpriority' function. */
-#undef HAVE_SETPRIORITY
+#cmakedefine HAVE_SETPRIORITY
 
 /* Define to 1 if you have the `setuid' function. */
-#undef HAVE_SETUID
+#cmakedefine HAVE_SETUID
 
 /* Define to 1 if you have the <signal.h> header file. */
-#undef HAVE_SIGNAL_H
+#cmakedefine HAVE_SIGNAL_H
 
 /* Define to 1 if you have the <sndio.h> header file. */
-#undef HAVE_SNDIO_H
+#cmakedefine HAVE_SNDIO_H
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
 /* Define to 1 if you have the <stdio.h> header file. */
-#undef HAVE_STDIO_H
+#cmakedefine HAVE_STDIO_H
 
 /* Define to 1 if you have the <stdlib.h> header file. */
-#undef HAVE_STDLIB_H
+#cmakedefine HAVE_STDLIB_H
+
+#cmakedefine HAVE_STRDUP
 
 /* Define to 1 if you have the `strerror' function. */
-#undef HAVE_STRERROR
+#cmakedefine HAVE_STRERROR
 
 /* Define to 1 if you have the <strings.h> header file. */
-#undef HAVE_STRINGS_H
+#cmakedefine HAVE_STRINGS_H
 
 /* Define to 1 if you have the <string.h> header file. */
-#undef HAVE_STRING_H
+#cmakedefine HAVE_STRING_H
 
 /* Define to 1 if you have the <sun/audioio.h> header file. */
-#undef HAVE_SUN_AUDIOIO_H
+#cmakedefine HAVE_SUN_AUDIOIO_H
 
 /* Define to 1 if you have the <sys/audioio.h> header file. */
-#undef HAVE_SYS_AUDIOIO_H
+#cmakedefine HAVE_SYS_AUDIOIO_H
 
 /* Define to 1 if you have the <sys/audio.h> header file. */
-#undef HAVE_SYS_AUDIO_H
+#cmakedefine HAVE_SYS_AUDIO_H
 
 /* Define to 1 if you have the <sys/ioctl.h> header file. */
-#undef HAVE_SYS_IOCTL_H
+#cmakedefine HAVE_SYS_IOCTL_H
 
 /* Define to 1 if you have the <sys/param.h> header file. */
-#undef HAVE_SYS_PARAM_H
+#cmakedefine HAVE_SYS_PARAM_H
 
 /* Define to 1 if you have the <sys/resource.h> header file. */
-#undef HAVE_SYS_RESOURCE_H
+#cmakedefine HAVE_SYS_RESOURCE_H
 
 /* Define to 1 if you have the <sys/select.h> header file. */
-#undef HAVE_SYS_SELECT_H
+// #undef HAVE_SYS_SELECT_H
 
 /* Define to 1 if you have the <sys/signal.h> header file. */
-#undef HAVE_SYS_SIGNAL_H
+#cmakedefine HAVE_SYS_SIGNAL_H
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
-#undef HAVE_SYS_SOCKET_H
+#cmakedefine HAVE_SYS_SOCKET_H
 
 /* Define to 1 if you have the <sys/soundcard.h> header file. */
-#undef HAVE_SYS_SOUNDCARD_H
+#cmakedefine HAVE_SYS_SOUNDCARD_H
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
-#undef HAVE_SYS_STAT_H
+#cmakedefine HAVE_SYS_STAT_H
 
 /* Define to 1 if you have the <sys/time.h> header file. */
-#undef HAVE_SYS_TIME_H
+#cmakedefine HAVE_SYS_TIME_H
 
 /* Define to 1 if you have the <sys/types.h> header file. */
-#undef HAVE_SYS_TYPES_H
+#cmakedefine HAVE_SYS_TYPES_H
 
 /* Define to 1 if you have the <sys/wait.h> header file. */
-#undef HAVE_SYS_WAIT_H
+#cmakedefine HAVE_SYS_WAIT_H
 
 /* Define this if you have the POSIX termios library */
-#undef HAVE_TERMIOS
+#cmakedefine HAVE_TERMIOS
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#undef HAVE_UNISTD_H
+#cmakedefine HAVE_UNISTD_H
 
 /* Define to 1 if you have the <windows.h> header file. */
-#undef HAVE_WINDOWS_H
+#cmakedefine HAVE_WINDOWS_H
 
 /* Define to 1 if you have the <ws2tcpip.h> header file. */
-#undef HAVE_WS2TCPIP_H
+#cmakedefine HAVE_WS2TCPIP_H
 
 /* Define to indicate that float storage follows IEEE754. */
 #undef IEEE_FLOAT

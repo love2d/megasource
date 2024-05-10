@@ -28,6 +28,8 @@
 #ifdef HAVE_DIRENT_H
 #  include <dirent.h>
 #endif
+// this was included in previous emscripten versions
+#  include <dirent.h>
 
 /* Win32 is only supported with unicode now. These headers also cover
    module stuff. The WANT_WIN32_UNICODE macro is synonymous with
