@@ -21,16 +21,16 @@ Prerequisites
 Building
 --------
 
-To build just the dependencies for 64 bit x86 using Visual Studio 2019:
+To build just the dependencies for 64 bit x86 using Visual Studio 2022:
 
 	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
-	$ cmake -G "Visual Studio 16 2019" -A x64 -S. -Bbuild
+	$ cmake -G "Visual Studio 17 2022" -A x64 -S . -B build
 	$ cmake --build build --target megatest --config Release
 
 ... or you can open the solution file in Visual Studio and build from there instead of invoking cmake --build.
 
-To build for a different version of Visual Studio (or a different build tool), replace ```"Visual Studio 16 2019"``` with one of the other [build system generators][generators]. For example Visual Studio 2022 is ```"Visual Studio 17 2022"```.
+To build for a different version of Visual Studio (or a different build tool), replace ```"Visual Studio 17 2022"``` with one of the other [build system generators][generators]. For example Visual Studio 2019 is ```"Visual Studio 16 2019"```.
 
 Similarly, to build for a different architecture than 64 bit x86, use a different [architecture name][architectures] for the ```-A``` parameter.
 
@@ -39,7 +39,7 @@ If you want to build [LÖVE][love2d], clone LÖVE into the *libs* folder. Megaso
 	$ git clone https://github.com/love2d/megasource megasource
 	$ cd megasource
 	$ git clone https://github.com/love2d/love libs/love
-	$ cmake -G "Visual Studio 16 2019" -A x64 -S. -Bbuild
+	$ cmake -G "Visual Studio 17 2022" -A x64 -S . -B build
 	$ cmake --build build --target love/love --config Release
 
 The binaries can be found in *build/love/Release*.
