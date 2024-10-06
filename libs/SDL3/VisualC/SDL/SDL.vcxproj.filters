@@ -172,6 +172,9 @@
     <Filter Include="render\direct3d12">
       <UniqueIdentifier>{f48c2b17-1bee-4fec-a7c8-24cf619abe08}</UniqueIdentifier>
     </Filter>
+    <Filter Include="video\intrin">
+      <UniqueIdentifier>{653672cc-90ae-4eba-a256-6479f2c31804}</UniqueIdentifier>
+    </Filter>
     <Filter Include="main">
       <UniqueIdentifier>{00001967ea2801028a046a722a070000}</UniqueIdentifier>
     </Filter>
@@ -195,6 +198,18 @@
     </Filter>
     <Filter Include="time\windows">
       <UniqueIdentifier>{0000d7fda065b13b0ca4ab262c380000}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="gpu">
+      <UniqueIdentifier>{098fbef9-d8a0-4b3b-b57b-d157d395335d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dialog">
+      <UniqueIdentifier>{00008dfdfa0190856fbf3c7db52d0000}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="video\offscreen">
+      <UniqueIdentifier>{748cf015-00b8-4e71-ac48-02e947e4d93d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="main\windows">
+      <UniqueIdentifier>{00009d5ded166cc6c6680ec771a30000}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -333,10 +348,10 @@
     <ClInclude Include="..\..\include\SDL3\SDL_power.h">
       <Filter>API Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\SDL3\SDL_properties.h">
+    <ClInclude Include="..\..\include\SDL3\SDL_process.h">
       <Filter>API Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\SDL3\SDL_quit.h">
+    <ClInclude Include="..\..\include\SDL3\SDL_properties.h">
       <Filter>API Headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\SDL3\SDL_rect.h">
@@ -394,9 +409,6 @@
       <Filter>API Headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\SDL3\SDL_test_md5.h">
-      <Filter>API Headers</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\SDL3\SDL_test_random.h">
       <Filter>API Headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\SDL3\SDL_thread.h">
@@ -489,6 +501,9 @@
     <ClInclude Include="..\..\src\dynapi\SDL_dynapi_unsupported.h">
       <Filter>dynapi</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\events\SDL_categories.h">
+      <Filter>events</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\events\SDL_clipboardevents_c.h">
       <Filter>events</Filter>
     </ClInclude>
@@ -502,6 +517,9 @@
       <Filter>events</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\events\SDL_keyboard_c.h">
+      <Filter>events</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\events\SDL_keymap_c.h">
       <Filter>events</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\events\SDL_mouse_c.h">
@@ -606,6 +624,9 @@
     <ClInclude Include="..\..\src\video\SDL_RLEaccel_c.h">
       <Filter>video</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\video\SDL_surface_c.h">
+      <Filter>video</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\video\SDL_blit.h">
       <Filter>video</Filter>
     </ClInclude>
@@ -667,6 +688,9 @@
       <Filter>video\windows</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\video\windows\SDL_windowskeyboard.h">
+      <Filter>video\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\windows\SDL_windowsgameinput.h">
       <Filter>video\windows</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\video\windows\SDL_windowsmessagebox.h">
@@ -862,6 +886,7 @@
     </ClInclude>
     <ClInclude Include="..\..\src\hidapi\SDL_hidapi_c.h" />
     <ClInclude Include="..\..\src\thread\generic\SDL_sysrwlock_c.h" />
+    <ClInclude Include="..\..\src\thread\generic\SDL_sysrwlock_c.h" />
     <ClInclude Include="..\..\src\video\yuv2rgb\yuv_rgb_common.h" />
     <ClInclude Include="..\..\src\video\yuv2rgb\yuv_rgb_internal.h" />
     <ClInclude Include="..\..\src\video\yuv2rgb\yuv_rgb_lsx.h" />
@@ -870,6 +895,33 @@
     <ClInclude Include="..\..\src\video\yuv2rgb\yuv_rgb_std.h" />
     <ClInclude Include="..\..\src\render\vulkan\SDL_shaders_vulkan.h">
       <Filter>render\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\offscreen\SDL_offscreenevents_c.h">
+      <Filter>video\offscreen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\offscreen\SDL_offscreenframebuffer_c.h">
+      <Filter>video\offscreen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\offscreen\SDL_offscreenopengles.h">
+      <Filter>video\offscreen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\offscreen\SDL_offscreenvideo.h">
+      <Filter>video\offscreen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\offscreen\SDL_offscreenvulkan.h">
+      <Filter>video\offscreen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\video\offscreen\SDL_offscreenwindow.h">
+      <Filter>video\offscreen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\SDL3\SDL_gpu.h">
+      <Filter>API Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\gpu\SDL_sysgpu.h">
+      <Filter>gpu</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\gpu\vulkan\SDL_gpu_vulkan_vkfuncs.h">
+      <Filter>gpu</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -883,6 +935,9 @@
     <ClCompile Include="..\..\src\camera\SDL_camera.c">
       <Filter>camera</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\dialog\SDL_dialog_utils.c">
+      <Filter>dialog</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\filesystem\SDL_filesystem.c">
       <Filter>filesystem</Filter>
     </ClCompile>
@@ -894,6 +949,12 @@
     </ClCompile>
     <ClCompile Include="..\..\src\main\SDL_main_callbacks.c">
       <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\SDL_runapp.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\windows\SDL_sysmain_runapp.c">
+      <Filter>main\windows</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\SDL.c" />
     <ClCompile Include="..\..\src\SDL_assert.c" />
@@ -937,9 +998,6 @@
     <ClCompile Include="..\..\src\core\SDL_core_unsupported.c">
       <Filter>core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\core\SDL_runapp.c">
-      <Filter>core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\core\windows\SDL_hid.c">
       <Filter>core\windows</Filter>
     </ClCompile>
@@ -961,6 +1019,9 @@
     <ClCompile Include="..\..\src\dynapi\SDL_dynapi.c">
       <Filter>dynapi</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\events\SDL_categories.c">
+      <Filter>events</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\events\SDL_clipboardevents.c">
       <Filter>events</Filter>
     </ClCompile>
@@ -974,6 +1035,9 @@
       <Filter>events</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\events\SDL_keyboard.c">
+      <Filter>events</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\events\SDL_keymap.c">
       <Filter>events</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\events\SDL_mouse.c">
@@ -1066,6 +1130,18 @@
     <ClCompile Include="..\..\src\libm\s_floor.c">
       <Filter>libm</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\libm\s_isinf.c">
+      <Filter>libm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libm\s_isinff.c">
+      <Filter>libm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libm\s_isnan.c">
+      <Filter>libm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libm\s_isnanf.c">
+      <Filter>libm</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\libm\s_modf.c">
       <Filter>libm</Filter>
     </ClCompile>
@@ -1151,6 +1227,9 @@
       <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_steam.c">
+      <Filter>joystick\hidapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_steam_hori.c">
       <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_steamdeck.c">
@@ -1282,6 +1361,9 @@
     <ClCompile Include="..\..\src\video\windows\SDL_windowskeyboard.c">
       <Filter>video\windows</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\video\windows\SDL_windowsgameinput.c">
+      <Filter>video\windows</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\video\windows\SDL_windowsmessagebox.c">
       <Filter>video\windows</Filter>
     </ClCompile>
@@ -1366,7 +1448,13 @@
     <ClCompile Include="..\..\src\stdlib\SDL_memset.c">
       <Filter>stdlib</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\stdlib\SDL_murmur3.c">
+      <Filter>stdlib</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\stdlib\SDL_qsort.c">
+      <Filter>stdlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\stdlib\SDL_random.c">
       <Filter>stdlib</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\stdlib\SDL_stdlib.c">
@@ -1411,6 +1499,15 @@
     <ClCompile Include="..\..\src\render\direct3d11\SDL_shaders_d3d11.c">
       <Filter>render\direct3d11</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\render\gpu\SDL_pipeline_gpu.c">
+      <Filter>render\gpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\render\gpu\SDL_render_gpu.c">
+      <Filter>render\gpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\render\gpu\SDL_shaders_gpu.c">
+      <Filter>render\gpu</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\render\opengl\SDL_render_gl.c">
       <Filter>render\opengl</Filter>
     </ClCompile>
@@ -1450,10 +1547,16 @@
     <ClCompile Include="..\..\src\power\SDL_power.c">
       <Filter>power</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\SDL_log.c" />
     <ClCompile Include="..\..\src\power\windows\SDL_syspower.c">
       <Filter>power\windows</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\process\SDL_process.c">
+      <Filter>process</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\process\windows\SDL_windowsprocess.c">
+      <Filter>process\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\SDL_log.c" />
     <ClCompile Include="..\..\src\render\direct3d12\SDL_render_d3d12.c">
       <Filter>render\direct3d12</Filter>
     </ClCompile>
@@ -1467,6 +1570,7 @@
       <Filter>stdlib</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\thread\generic\SDL_sysrwlock.c" />
+    <ClCompile Include="..\..\src\thread\generic\SDL_sysrwlock.c" />
     <ClCompile Include="..\..\src\video\yuv2rgb\yuv_rgb_lsx.c" />
     <ClCompile Include="..\..\src\video\yuv2rgb\yuv_rgb_sse.c" />
     <ClCompile Include="..\..\src\video\yuv2rgb\yuv_rgb_std.c" />
@@ -1475,6 +1579,36 @@
     </ClCompile>
     <ClCompile Include="..\..\src\render\vulkan\SDL_shaders_vulkan.c">
       <Filter>render\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\video\offscreen\SDL_offscreenevents.c">
+      <Filter>video\offscreen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\video\offscreen\SDL_offscreenframebuffer.c">
+      <Filter>video\offscreen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\video\offscreen\SDL_offscreenopengles.c">
+      <Filter>video\offscreen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\video\offscreen\SDL_offscreenvideo.c">
+      <Filter>video\offscreen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\video\offscreen\SDL_offscreenvulkan.c">
+      <Filter>video\offscreen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\video\offscreen\SDL_offscreenwindow.c">
+      <Filter>video\offscreen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\gpu\SDL_gpu.c">
+      <Filter>gpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\gpu\d3d11\SDL_gpu_d3d11.c">
+      <Filter>gpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\gpu\d3d12\SDL_gpu_d3d12.c">
+      <Filter>gpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\gpu\vulkan\SDL_gpu_vulkan.c">
+      <Filter>gpu</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

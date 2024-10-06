@@ -29,19 +29,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     /* Parse commandline */
     if (!SDLTest_CommonDefaultArgs(state, argc, argv)) {
         return 1;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         exit(1);
     }
-    for (scancode = 0; scancode < SDL_NUM_SCANCODES; ++scancode) {
+    for (scancode = 0; scancode < SDL_SCANCODE_COUNT; ++scancode) {
         SDL_Log("Scancode #%d, \"%s\"\n", scancode,
                 SDL_GetScancodeName(scancode));
     }

@@ -91,11 +91,11 @@ struct VulkanVideoContext
 
     VulkanDeviceFeatures features;
 
-	PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
 #define VULKAN_GLOBAL_FUNCTION(name)   PFN_##name name;
 #define VULKAN_INSTANCE_FUNCTION(name) PFN_##name name;
 #define VULKAN_DEVICE_FUNCTION(name)   PFN_##name name;
-	VULKAN_FUNCTIONS()
+    VULKAN_FUNCTIONS()
 #undef VULKAN_GLOBAL_FUNCTION
 #undef VULKAN_INSTANCE_FUNCTION
 #undef VULKAN_DEVICE_FUNCTION
@@ -221,7 +221,7 @@ static int createInstance(VulkanVideoContext *context)
     {
         uint32_t extensionCount;
         if (context->vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL) == VK_SUCCESS && extensionCount > 0) {
-            VkExtensionProperties *extensionProperties = SDL_calloc(sizeof(VkExtensionProperties), extensionCount);
+            VkExtensionProperties *extensionProperties = SDL_calloc(extensionCount, sizeof(VkExtensionProperties));
             if (context->vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensionProperties) == VK_SUCCESS) {
                 for (uint32_t i = 0; i < SDL_arraysize(optional_extensions); ++i) {
                     for (uint32_t j = 0; j < extensionCount; ++j) {
@@ -253,10 +253,7 @@ static int createInstance(VulkanVideoContext *context)
 
 static int createSurface(VulkanVideoContext *context, SDL_Window *window)
 {
-    if (!SDL_Vulkan_CreateSurface(window,
-                                  context->instance,
-                                  NULL,
-                                  &context->surface)) {
+    if (!SDL_Vulkan_CreateSurface(window, context->instance, NULL, &context->surface)) {
         context->surface = VK_NULL_HANDLE;
         return -1;
     }
@@ -324,7 +321,7 @@ static int findPhysicalDevice(VulkanVideoContext *context)
         uint32_t queueFamiliesCount = 0;
         uint32_t queueFamilyIndex;
         uint32_t deviceExtensionCount = 0;
-        SDL_bool hasSwapchainExtension = SDL_FALSE;
+        bool hasSwapchainExtension = false;
         uint32_t i;
 
         VkPhysicalDevice physicalDevice = physicalDevices[physicalDeviceIndex];
@@ -427,7 +424,7 @@ static int findPhysicalDevice(VulkanVideoContext *context)
         }
         for (i = 0; i < deviceExtensionCount; i++) {
             if (SDL_strcmp(deviceExtensions[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) {
-                hasSwapchainExtension = SDL_TRUE;
+                hasSwapchainExtension = true;
                 break;
             }
         }
@@ -443,7 +440,7 @@ static int findPhysicalDevice(VulkanVideoContext *context)
     if (!context->physicalDevice) {
         return SDL_SetError("Vulkan: no viable physical devices found");
     }
-	return 0;
+    return 0;
 }
 
 static void initDeviceFeatures(VulkanDeviceFeatures *features)
@@ -561,7 +558,7 @@ static int createDevice(VulkanVideoContext *context)
         VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
         VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME,
         VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
-        "VK_MESA_video_decode_av1"
+        VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME
     };
     VkDeviceCreateInfo deviceCreateInfo = { 0 };
     VkDeviceQueueCreateInfo *queueCreateInfos = NULL;
@@ -598,7 +595,7 @@ static int createDevice(VulkanVideoContext *context)
     {
         uint32_t extensionCount;
         if (context->vkEnumerateDeviceExtensionProperties(context->physicalDevice, NULL, &extensionCount, NULL) == VK_SUCCESS && extensionCount > 0) {
-            VkExtensionProperties *extensionProperties = SDL_calloc(sizeof(VkExtensionProperties), extensionCount);
+            VkExtensionProperties *extensionProperties = SDL_calloc(extensionCount, sizeof(VkExtensionProperties));
             if (context->vkEnumerateDeviceExtensionProperties(context->physicalDevice, NULL, &extensionCount, extensionProperties) == VK_SUCCESS) {
                 for (uint32_t i = 0; i < SDL_arraysize(optional_extensions); ++i) {
                     for (uint32_t j = 0; j < extensionCount; ++j) {
@@ -652,32 +649,32 @@ done:
     if (result != VK_SUCCESS) {
         return -1;
     }
-	return 0;
+    return 0;
 }
 
 VulkanVideoContext *CreateVulkanVideoContext(SDL_Window *window)
 {
-	VulkanVideoContext *context = SDL_calloc(1, sizeof(*context));
-	if (!context) {
-		return NULL;
-	}
+    VulkanVideoContext *context = SDL_calloc(1, sizeof(*context));
+    if (!context) {
+        return NULL;
+    }
     if (loadGlobalFunctions(context) < 0 ||
         createInstance(context) < 0 ||
         createSurface(context, window) < 0 ||
         findPhysicalDevice(context) < 0 ||
         createDevice(context) < 0) {
-		DestroyVulkanVideoContext(context);
-		return NULL;
-	}
-	return context;
+        DestroyVulkanVideoContext(context);
+        return NULL;
+    }
+    return context;
 }
 
 void SetupVulkanRenderProperties(VulkanVideoContext *context, SDL_PropertiesID props)
 {
-    SDL_SetProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_INSTANCE_POINTER, context->instance);
+    SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_INSTANCE_POINTER, context->instance);
     SDL_SetNumberProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_SURFACE_NUMBER, (Sint64)context->surface);
-    SDL_SetProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_PHYSICAL_DEVICE_POINTER, context->physicalDevice);
-    SDL_SetProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_DEVICE_POINTER, context->device);
+    SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_PHYSICAL_DEVICE_POINTER, context->physicalDevice);
+    SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_DEVICE_POINTER, context->device);
     SDL_SetNumberProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_PRESENT_QUEUE_FAMILY_INDEX_NUMBER, context->presentQueueFamilyIndex);
     SDL_SetNumberProperty(props, SDL_PROP_RENDERER_CREATE_VULKAN_GRAPHICS_QUEUE_FAMILY_INDEX_NUMBER, context->graphicsQueueFamilyIndex);
 }

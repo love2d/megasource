@@ -31,7 +31,7 @@ typedef struct GL_Context
 static SDLTest_CommonState *state;
 static SDL_GLContext context;
 static GL_Context ctx;
-static SDL_bool suspend_when_occluded;
+static bool suspend_when_occluded;
 
 static int LoadContext(GL_Context *data)
 {
@@ -63,7 +63,7 @@ static void quit(int rc)
 {
     if (context) {
         /* SDL_GL_MakeCurrent(0, NULL); */ /* doesn't do anything */
-        SDL_GL_DeleteContext(context);
+        SDL_GL_DestroyContext(context);
     }
     SDLTest_CommonQuit(state);
     /* Let 'main()' return normally */
@@ -202,11 +202,10 @@ static void Render(void)
 static void LogSwapInterval(void)
 {
     int interval = 0;
-    const int ret_interval = SDL_GL_GetSwapInterval(&interval);
-    if (ret_interval < 0) {
-       SDL_Log("Swap Interval : %d error: %s\n", interval, SDL_GetError());
-    } else {
+    if (SDL_GL_GetSwapInterval(&interval)) {
        SDL_Log("Swap Interval : %d\n", interval);
+    } else {
+       SDL_Log("Swap Interval : %d error: %s\n", interval, SDL_GetError());
     }
 }
 
@@ -219,7 +218,6 @@ int main(int argc, char *argv[])
     SDL_Event event;
     Uint64 then, now;
     Uint32 frames;
-    int status;
     int dw, dh;
     int swap_interval = 0;
 
@@ -233,9 +231,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     for (i = 1; i < argc;) {
         int consumed;
 
@@ -248,7 +243,7 @@ int main(int argc, char *argv[])
                 accel = SDL_atoi(argv[i + 1]);
                 consumed = 2;
             } else if(SDL_strcasecmp(argv[i], "--suspend-when-occluded") == 0) {
-                suspend_when_occluded = SDL_TRUE;
+                suspend_when_occluded = true;
                 consumed = 1;
             } else {
                 consumed = -1;
@@ -295,18 +290,8 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if (state->render_flags & SDL_RENDERER_PRESENTVSYNC) {
-        /* try late-swap-tearing first. If not supported, try normal vsync. */
-        if (SDL_GL_SetSwapInterval(-1) == 0) {
-            swap_interval = -1;
-        } else {
-            SDL_GL_SetSwapInterval(1);
-            swap_interval = 1;
-        }
-    } else {
-        SDL_GL_SetSwapInterval(0); /* disable vsync. */
-        swap_interval = 0;
-    }
+    SDL_GL_SetSwapInterval(state->render_vsync);
+    swap_interval = state->render_vsync;
 
     mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
     if (mode) {
@@ -326,40 +311,34 @@ int main(int argc, char *argv[])
     SDL_Log("Extensions    : %s\n", ctx.glGetString(GL_EXTENSIONS));
     SDL_Log("\n");
 
-    status = SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value);
-    if (!status) {
+    if (SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value)) {
         SDL_Log("SDL_GL_RED_SIZE: requested %d, got %d\n", 5, value);
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get SDL_GL_RED_SIZE: %s\n", SDL_GetError());
     }
-    status = SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &value);
-    if (!status) {
+    if (SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &value)) {
         SDL_Log("SDL_GL_GREEN_SIZE: requested %d, got %d\n", 5, value);
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get SDL_GL_GREEN_SIZE: %s\n", SDL_GetError());
     }
-    status = SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &value);
-    if (!status) {
+    if (SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &value)) {
         SDL_Log("SDL_GL_BLUE_SIZE: requested %d, got %d\n", 5, value);
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get SDL_GL_BLUE_SIZE: %s\n", SDL_GetError());
     }
-    status = SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value);
-    if (!status) {
+    if (SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value)) {
         SDL_Log("SDL_GL_DEPTH_SIZE: requested %d, got %d\n", 16, value);
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get SDL_GL_DEPTH_SIZE: %s\n", SDL_GetError());
     }
     if (fsaa) {
-        status = SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &value);
-        if (!status) {
+        if (SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &value)) {
             SDL_Log("SDL_GL_MULTISAMPLEBUFFERS: requested 1, got %d\n", value);
         } else {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get SDL_GL_MULTISAMPLEBUFFERS: %s\n",
                          SDL_GetError());
         }
-        status = SDL_GL_GetAttribute(SDL_GL_MULTISAMPLESAMPLES, &value);
-        if (!status) {
+        if (SDL_GL_GetAttribute(SDL_GL_MULTISAMPLESAMPLES, &value)) {
             SDL_Log("SDL_GL_MULTISAMPLESAMPLES: requested %d, got %d\n", fsaa,
                     value);
         } else {
@@ -368,8 +347,7 @@ int main(int argc, char *argv[])
         }
     }
     if (accel >= 0) {
-        status = SDL_GL_GetAttribute(SDL_GL_ACCELERATED_VISUAL, &value);
-        if (!status) {
+        if (SDL_GL_GetAttribute(SDL_GL_ACCELERATED_VISUAL, &value)) {
             SDL_Log("SDL_GL_ACCELERATED_VISUAL: requested %d, got %d\n", accel,
                     value);
         } else {
@@ -393,7 +371,7 @@ int main(int argc, char *argv[])
     then = SDL_GetTicks();
     done = 0;
     while (!done) {
-        SDL_bool update_swap_interval = SDL_FALSE;
+        bool update_swap_interval = false;
         int active_windows = 0;
 
         /* Check for events */
@@ -401,12 +379,12 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event)) {
             SDLTest_CommonEvent(state, &event, &done);
             if (event.type == SDL_EVENT_KEY_DOWN) {
-                if (event.key.keysym.sym == SDLK_o) {
+                if (event.key.key == SDLK_O) {
                     swap_interval--;
-                    update_swap_interval = SDL_TRUE;
-                } else if (event.key.keysym.sym == SDLK_p) {
+                    update_swap_interval = true;
+                } else if (event.key.key == SDLK_P) {
                     swap_interval++;
-                    update_swap_interval = SDL_TRUE;
+                    update_swap_interval = true;
                 }
             }
         }

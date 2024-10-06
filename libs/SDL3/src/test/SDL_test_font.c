@@ -35,6 +35,8 @@
 ;
 */
 
+#define NUM_FONT_GLYPHS 257
+
 static unsigned char SDLTest_FontData[] = {
 
     /*
@@ -3110,14 +3112,26 @@ static unsigned char SDLTest_FontData[] = {
     0x30, /* 00001100 */
     0x1f, /* 11111000 */
 
+    /*
+     * 256 0x100 - missing character
+     */
+    0x55, /* 01010101 */
+    0xAA, /* 10101010 */
+    0x55, /* 01010101 */
+    0xAA, /* 10101010 */
+    0x55, /* 01010101 */
+    0xAA, /* 10101010 */
+    0x55, /* 01010101 */
+    0xAA, /* 10101010 */
 };
+SDL_COMPILE_TIME_ASSERT(SDLTest_FontDataSize, SDL_arraysize(SDLTest_FontData) == NUM_FONT_GLYPHS * 8);
 
 /* ---- Character */
 
 struct SDLTest_CharTextureCache
 {
     SDL_Renderer *renderer;
-    SDL_Texture *charTextureCache[256];
+    SDL_Texture *charTextureCache[NUM_FONT_GLYPHS];
     struct SDLTest_CharTextureCache *next;
 };
 
@@ -3128,13 +3142,13 @@ static struct SDLTest_CharTextureCache *SDLTest_CharTextureCacheList;
 
 int FONT_CHARACTER_SIZE = 8;
 
-int SDLTest_DrawCharacter(SDL_Renderer *renderer, float x, float y, Uint32 c)
+bool SDLTest_DrawCharacter(SDL_Renderer *renderer, float x, float y, Uint32 c)
 {
     const Uint32 charWidth = FONT_CHARACTER_SIZE;
     const Uint32 charHeight = FONT_CHARACTER_SIZE;
     SDL_FRect srect;
     SDL_FRect drect;
-    int result;
+    bool result;
     Uint32 ix, iy;
     const unsigned char *charpos;
     Uint32 *curpos;
@@ -3163,6 +3177,9 @@ int SDLTest_DrawCharacter(SDL_Renderer *renderer, float x, float y, Uint32 c)
 
     /* Character index in cache */
     ci = c;
+    if (ci >= NUM_FONT_GLYPHS) {
+        ci = (NUM_FONT_GLYPHS - 1);
+    }
 
     /* Search for this renderer's cache */
     for (cache = SDLTest_CharTextureCacheList; cache; cache = cache->next) {
@@ -3188,7 +3205,7 @@ int SDLTest_DrawCharacter(SDL_Renderer *renderer, float x, float y, Uint32 c)
          */
         character = SDL_CreateSurface(charWidth, charHeight, SDL_PIXELFORMAT_RGBA8888);
         if (!character) {
-            return -1;
+            return false;
         }
 
         charpos = SDLTest_FontData + ci * 8;
@@ -3220,7 +3237,7 @@ int SDLTest_DrawCharacter(SDL_Renderer *renderer, float x, float y, Uint32 c)
          * Check pointer
          */
         if (cache->charTextureCache[ci] == NULL) {
-            return -1;
+            return false;
         }
 
         SDL_SetTextureScaleMode(cache->charTextureCache[ci], SDL_SCALEMODE_NEAREST);
@@ -3229,15 +3246,15 @@ int SDLTest_DrawCharacter(SDL_Renderer *renderer, float x, float y, Uint32 c)
     /*
      * Set color
      */
-    result = 0;
-    result |= SDL_GetRenderDrawColor(renderer, &r, &g, &b, &a);
-    result |= SDL_SetTextureColorMod(cache->charTextureCache[ci], r, g, b);
-    result |= SDL_SetTextureAlphaMod(cache->charTextureCache[ci], a);
+    result = true;
+    result &= SDL_GetRenderDrawColor(renderer, &r, &g, &b, &a);
+    result &= SDL_SetTextureColorMod(cache->charTextureCache[ci], r, g, b);
+    result &= SDL_SetTextureAlphaMod(cache->charTextureCache[ci], a);
 
     /*
      * Draw texture onto destination
      */
-    result |= SDL_RenderTexture(renderer, cache->charTextureCache[ci], &srect, &drect);
+    result &= SDL_RenderTexture(renderer, cache->charTextureCache[ci], &srect, &drect);
 
     return result;
 }
@@ -3250,8 +3267,8 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
     const Uint8 *p = (const Uint8 *)src;
     size_t left = 0;
     size_t save_srclen = srclen;
-    SDL_bool overlong = SDL_FALSE;
-    SDL_bool underflow = SDL_FALSE;
+    bool overlong = false;
+    bool underflow = false;
     Uint32 ch = UNKNOWN_UNICODE;
 
     if (srclen == 0) {
@@ -3260,7 +3277,7 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
     if (p[0] >= 0xFC) {
         if ((p[0] & 0xFE) == 0xFC) {
             if (p[0] == 0xFC && (p[1] & 0xFC) == 0x80) {
-                overlong = SDL_TRUE;
+                overlong = true;
             }
             ch = (Uint32)(p[0] & 0x01);
             left = 5;
@@ -3268,7 +3285,7 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
     } else if (p[0] >= 0xF8) {
         if ((p[0] & 0xFC) == 0xF8) {
             if (p[0] == 0xF8 && (p[1] & 0xF8) == 0x80) {
-                overlong = SDL_TRUE;
+                overlong = true;
             }
             ch = (Uint32)(p[0] & 0x03);
             left = 4;
@@ -3276,7 +3293,7 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
     } else if (p[0] >= 0xF0) {
         if ((p[0] & 0xF8) == 0xF0) {
             if (p[0] == 0xF0 && (p[1] & 0xF0) == 0x80) {
-                overlong = SDL_TRUE;
+                overlong = true;
             }
             ch = (Uint32)(p[0] & 0x07);
             left = 3;
@@ -3284,7 +3301,7 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
     } else if (p[0] >= 0xE0) {
         if ((p[0] & 0xF0) == 0xE0) {
             if (p[0] == 0xE0 && (p[1] & 0xE0) == 0x80) {
-                overlong = SDL_TRUE;
+                overlong = true;
             }
             ch = (Uint32)(p[0] & 0x0F);
             left = 2;
@@ -3292,7 +3309,7 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
     } else if (p[0] >= 0xC0) {
         if ((p[0] & 0xE0) == 0xC0) {
             if ((p[0] & 0xDE) == 0xC0) {
-                overlong = SDL_TRUE;
+                overlong = true;
             }
             ch = (Uint32)(p[0] & 0x1F);
             left = 1;
@@ -3315,7 +3332,7 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
         --left;
     }
     if (left > 0) {
-        underflow = SDL_TRUE;
+        underflow = true;
     }
 
     if (overlong || underflow ||
@@ -3331,20 +3348,18 @@ static Uint32 UTF8_getch(const char *src, size_t srclen, int *inc)
 
 #define UTF8_IsTrailingByte(c) ((c) >= 0x80 && (c) <= 0xBF)
 
-int SDLTest_DrawString(SDL_Renderer *renderer, float x, float y, const char *s)
+bool SDLTest_DrawString(SDL_Renderer *renderer, float x, float y, const char *s)
 {
     const Uint32 charWidth = FONT_CHARACTER_SIZE;
-    int result = 0;
+    bool result = true;
     float curx = x;
     float cury = y;
     size_t len = SDL_strlen(s);
 
-    while (len > 0 && !result) {
+    while (len > 0 && result) {
         int advance = 0;
         Uint32 ch = UTF8_getch(s, len, &advance);
-        if (ch < 256) {
-            result |= SDLTest_DrawCharacter(renderer, curx, cury, ch);
-        }
+        result &= SDLTest_DrawCharacter(renderer, curx, cury, ch);
         curx += charWidth;
         s += advance;
         len -= advance;
@@ -3402,12 +3417,12 @@ void SDLTest_TextWindowAddText(SDLTest_TextWindow *textwin, const char *fmt, ...
 void SDLTest_TextWindowAddTextWithLength(SDLTest_TextWindow *textwin, const char *text, size_t len)
 {
     size_t existing;
-    SDL_bool newline = SDL_FALSE;
+    bool newline = false;
     char *line;
 
     if (len > 0 && text[len - 1] == '\n') {
         --len;
-        newline = SDL_TRUE;
+        newline = true;
     }
 
     if (textwin->lines[textwin->current]) {

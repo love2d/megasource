@@ -21,12 +21,9 @@
 #include <emscripten/emscripten.h>
 #endif
 
-#include <stdlib.h>
-#include <time.h>
-
 static SDL_Renderer *renderer = NULL;
 static SDL_Window *window = NULL;
-static int done = SDL_FALSE;
+static int done = false;
 static int frame_number = 0;
 static int width = 640;
 static int height = 480;
@@ -72,7 +69,7 @@ static void loop(void)
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_EVENT_QUIT:
-            done = SDL_TRUE;
+            done = true;
             break;
         default:
             break;
@@ -103,20 +100,17 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     /* Parse commandline */
     if (!SDLTest_CommonDefaultArgs(state, argc, argv)) {
         return 1;
     }
 
     /* Force the offscreen renderer, if it cannot be created then fail out */
-    SDL_SetHint("SDL_VIDEO_DRIVER", "offscreen");
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) < 0) {
+    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         SDL_Log("Couldn't initialize the offscreen video driver: %s\n",
                 SDL_GetError());
-        return SDL_FALSE;
+        return 1;
     }
 
     /* If OPENGL fails to init it will fallback to using a framebuffer for rendering */
@@ -124,20 +118,18 @@ int main(int argc, char *argv[])
 
     if (!window) {
         SDL_Log("Couldn't create window: %s\n", SDL_GetError());
-        return SDL_FALSE;
+        return 1;
     }
 
-    renderer = SDL_CreateRenderer(window, NULL, 0);
+    renderer = SDL_CreateRenderer(window, NULL);
 
     if (!renderer) {
         SDL_Log("Couldn't create renderer: %s\n",
                 SDL_GetError());
-        return SDL_FALSE;
+        return 1;
     }
 
     SDL_RenderClear(renderer);
-
-    srand((unsigned int)time(NULL));
 
 #ifndef SDL_PLATFORM_EMSCRIPTEN
     /* Main render loop */

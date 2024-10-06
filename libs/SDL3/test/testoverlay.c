@@ -156,7 +156,7 @@ static int window_h;
 static int paused = 0;
 static int done = 0;
 static int fpsdelay;
-static SDL_bool streaming = SDL_TRUE;
+static bool streaming = true;
 static Uint8 *RawMooseData = NULL;
 
 /* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
@@ -255,6 +255,7 @@ static void loop(void)
     /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
+        SDL_ConvertEventToRenderCoordinates(SDL_GetRenderer(SDL_GetWindowFromEvent(&event)), &event);
 
         switch (event.type) {
         case SDL_EVENT_WINDOW_RESIZED:
@@ -275,11 +276,11 @@ static void loop(void)
             }
             break;
         case SDL_EVENT_KEY_DOWN:
-            if (event.key.keysym.sym == SDLK_SPACE) {
+            if (event.key.key == SDLK_SPACE) {
                 paused = !paused;
                 break;
             }
-            if (event.key.keysym.sym != SDLK_ESCAPE) {
+            if (event.key.key != SDLK_ESCAPE) {
                 break;
             }
             break;
@@ -362,7 +363,7 @@ int main(int argc, char **argv)
                 nodelay = 1;
             } else if (SDL_strcmp(argv[i], "--nostreaming") == 0) {
                 consumed = 1;
-                streaming = SDL_FALSE;
+                streaming = false;
             } else if (SDL_strcmp(argv[i], "--scale") == 0) {
                 consumed = 2;
                 if (argv[i + 1]) {
@@ -499,7 +500,7 @@ int main(int argc, char **argv)
         }
 
         /* Convert to YUV SDL_Surface */
-        MooseYUVSurfaces[i] = SDL_ConvertSurfaceFormat(mooseRGBSurface, yuv_format);
+        MooseYUVSurfaces[i] = SDL_ConvertSurface(mooseRGBSurface, yuv_format);
         if (MooseYUVSurfaces[i] == NULL) {
             quit(7);
         }
@@ -524,7 +525,7 @@ int main(int argc, char **argv)
     displayrect.h = (float)window_h;
 
     /* Ignore key up events, they don't even get filtered */
-    SDL_SetEventEnabled(SDL_EVENT_KEY_UP, SDL_FALSE);
+    SDL_SetEventEnabled(SDL_EVENT_KEY_UP, false);
 
     /* Main render loop */
     frames = 0;

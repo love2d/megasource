@@ -37,7 +37,7 @@ static const char *GetSensorTypeString(SDL_SensorType type)
 
 static void HandleSensorEvent(SDL_SensorEvent *event)
 {
-    SDL_Sensor *sensor = SDL_GetSensorFromInstanceID(event->which);
+    SDL_Sensor *sensor = SDL_GetSensorFromID(event->which);
     if (!sensor) {
         SDL_Log("Couldn't get sensor for sensor event\n");
         return;
@@ -68,17 +68,16 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     if (!SDLTest_CommonDefaultArgs(state, argc, argv)) {
+        SDL_Quit();
         SDLTest_CommonDestroyState(state);
         return 1;
     }
 
     /* Load the SDL library */
-    if (SDL_Init(SDL_INIT_SENSOR) < 0) {
+    if (!SDL_Init(SDL_INIT_SENSOR)) {
         SDL_Log("Couldn't initialize SDL: %s\n", SDL_GetError());
+        SDL_Quit();
         SDLTest_CommonDestroyState(state);
         return 1;
     }
@@ -91,11 +90,11 @@ int main(int argc, char **argv)
         for (i = 0; i < num_sensors; ++i) {
             SDL_Log("Sensor %" SDL_PRIu32 ": %s, type %s, platform type %d\n",
                     sensors[i],
-                    SDL_GetSensorInstanceName(sensors[i]),
-                    GetSensorTypeString(SDL_GetSensorInstanceType(sensors[i])),
-                    SDL_GetSensorInstanceNonPortableType(sensors[i]));
+                    SDL_GetSensorNameForID(sensors[i]),
+                    GetSensorTypeString(SDL_GetSensorTypeForID(sensors[i])),
+                    SDL_GetSensorNonPortableTypeForID(sensors[i]));
 
-            if (SDL_GetSensorInstanceType(sensors[i]) != SDL_SENSOR_UNKNOWN) {
+            if (SDL_GetSensorTypeForID(sensors[i]) != SDL_SENSOR_UNKNOWN) {
                 SDL_Sensor *sensor = SDL_OpenSensor(sensors[i]);
                 if (!sensor) {
                     SDL_Log("Couldn't open sensor %" SDL_PRIu32 ": %s\n", sensors[i], SDL_GetError());
@@ -109,7 +108,7 @@ int main(int argc, char **argv)
     SDL_Log("Opened %d sensors\n", num_opened);
 
     if (num_opened > 0) {
-        SDL_bool done = SDL_FALSE;
+        bool done = false;
         SDL_Event event;
 
         SDL_CreateWindow("Sensor Test", 0, 0, SDL_WINDOW_FULLSCREEN);
@@ -126,7 +125,7 @@ int main(int argc, char **argv)
                 case SDL_EVENT_MOUSE_BUTTON_UP:
                 case SDL_EVENT_KEY_UP:
                 case SDL_EVENT_QUIT:
-                    done = SDL_TRUE;
+                    done = true;
                     break;
                 default:
                     break;

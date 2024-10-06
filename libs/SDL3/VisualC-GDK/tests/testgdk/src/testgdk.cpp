@@ -35,8 +35,8 @@ extern "C" {
 static SDLTest_CommonState *state;
 static int num_sprites;
 static SDL_Texture **sprites;
-static SDL_bool cycle_color;
-static SDL_bool cycle_alpha;
+static bool cycle_color;
+static bool cycle_alpha;
 static int cycle_direction = 1;
 static int current_alpha = 0;
 static int current_color = 0;
@@ -193,11 +193,11 @@ LoadSprite(const char *file)
 
     for (i = 0; i < state->num_windows; ++i) {
         /* This does the SDL_LoadBMP step repeatedly, but that's OK for test code. */
-        sprites[i] = LoadTexture(state->renderers[i], file, SDL_TRUE, &sprite_w, &sprite_h);
+        sprites[i] = LoadTexture(state->renderers[i], file, true, &sprite_w, &sprite_h);
         if (!sprites[i]) {
             return -1;
         }
-        if (SDL_SetTextureBlendMode(sprites[i], blendMode) < 0) {
+        if (!SDL_SetTextureBlendMode(sprites[i], blendMode)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't set blend mode: %s\n", SDL_GetError());
             SDL_DestroyTexture(sprites[i]);
             return -1;
@@ -309,7 +309,7 @@ loop()
     /* Check for events */
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
-            SDL_Log("Initial SDL_EVENT_KEY_DOWN: %s", SDL_GetScancodeName(event.key.keysym.scancode));
+            SDL_Log("Initial SDL_EVENT_KEY_DOWN: %s", SDL_GetScancodeName(event.key.scancode));
         }
 #if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
         /* On Xbox, ignore the keydown event because the features aren't supported */
@@ -371,10 +371,10 @@ main(int argc, char *argv[])
                     }
                 }
             } else if (SDL_strcasecmp(argv[i], "--cyclecolor") == 0) {
-                cycle_color = SDL_TRUE;
+                cycle_color = true;
                 consumed = 1;
             } else if (SDL_strcasecmp(argv[i], "--cyclealpha") == 0) {
-                cycle_alpha = SDL_TRUE;
+                cycle_alpha = true;
                 consumed = 1;
             } else if (SDL_isdigit(*argv[i])) {
                 num_sprites = SDL_atoi(argv[i]);
@@ -425,7 +425,7 @@ main(int argc, char *argv[])
     }
 
     /* Load the wave file into memory */
-    if (SDL_LoadWAV(soundname, &wave.spec, &wave.sound, &wave.soundlen) == -1) {
+    if (!SDL_LoadWAV(soundname, &wave.spec, &wave.sound, &wave.soundlen)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load %s: %s\n", soundname, SDL_GetError());
         quit(1);
     }
@@ -438,7 +438,7 @@ main(int argc, char *argv[])
 
     SDL_Log("Using audio driver: %s\n", SDL_GetCurrentAudioDriver());
 
-    stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_OUTPUT, &wave.spec, NULL, NULL);
+    stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &wave.spec, NULL, NULL);
     if (!stream) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create audio stream: %s\n", SDL_GetError());
         return -1;

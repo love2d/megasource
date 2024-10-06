@@ -23,26 +23,29 @@
 
 #if defined(SDL_FSOPS_WINDOWS)
 
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+// System dependent filesystem routines
+
 #include "../../core/windows/SDL_windows.h"
 #include "../SDL_sysfilesystem.h"
 
-int SDL_SYS_EnumerateDirectory(const char *path, const char *dirname, SDL_EnumerateDirectoryCallback cb, void *userdata)
+bool SDL_SYS_EnumerateDirectory(const char *path, const char *dirname, SDL_EnumerateDirectoryCallback cb, void *userdata)
 {
-    int retval = 1;
+    SDL_EnumerationResult result = SDL_ENUM_CONTINUE;
     if (*path == '\0') {  // if empty (completely at the root), we need to enumerate drive letters.
         const DWORD drives = GetLogicalDrives();
         char name[3] = { 0, ':', '\0' };
-        for (int i = 'A'; (retval == 1) && (i <= 'Z'); i++) {
+        for (int i = 'A'; (result == SDL_ENUM_CONTINUE) && (i <= 'Z'); i++) {
             if (drives & (1 << (i - 'A'))) {
                 name[0] = (char) i;
-                retval = cb(userdata, dirname, name);
+                result = cb(userdata, dirname, name);
             }
         }
     } else {
         const size_t patternlen = SDL_strlen(path) + 3;
         char *pattern = (char *) SDL_malloc(patternlen);
         if (!pattern) {
-            return -1;
+            return false;
         }
 
         // you need a wildcard to enumerate through FindFirstFileEx(), but the wildcard is only checked in the
@@ -50,10 +53,10 @@ int SDL_SYS_EnumerateDirectory(const char *path, const char *dirname, SDL_Enumer
         // also prevent any wildcards inserted by the app from being respected.
         SDL_snprintf(pattern, patternlen, "%s\\*", path);
 
-        WCHAR *wpattern = WIN_UTF8ToString(pattern);
+        WCHAR *wpattern = WIN_UTF8ToStringW(pattern);
         SDL_free(pattern);
         if (!wpattern) {
-            return -1;
+            return false;
         }
 
         WIN32_FIND_DATAW entw;
@@ -72,33 +75,34 @@ int SDL_SYS_EnumerateDirectory(const char *path, const char *dirname, SDL_Enumer
                 }
             }
 
-            char *utf8fn = WIN_StringToUTF8(fn);
+            char *utf8fn = WIN_StringToUTF8W(fn);
             if (!utf8fn) {
-                retval = -1;
+                result = SDL_ENUM_FAILURE;
             } else {
-                retval = cb(userdata, dirname, utf8fn);
+                result = cb(userdata, dirname, utf8fn);
                 SDL_free(utf8fn);
             }
-        } while ((retval == 1) && (FindNextFileW(dir, &entw) != 0));
+        } while ((result == SDL_ENUM_CONTINUE) && (FindNextFileW(dir, &entw) != 0));
 
         FindClose(dir);
     }
 
-    return retval;
+    return (result != SDL_ENUM_FAILURE);
 }
 
-int SDL_SYS_RemovePath(const char *path)
+bool SDL_SYS_RemovePath(const char *path)
 {
-    WCHAR *wpath = WIN_UTF8ToString(path);
+    WCHAR *wpath = WIN_UTF8ToStringW(path);
     if (!wpath) {
-        return -1;
+        return false;
     }
 
     WIN32_FILE_ATTRIBUTE_DATA info;
     if (!GetFileAttributesExW(wpath, GetFileExInfoStandard, &info)) {
+        SDL_free(wpath);
         if (GetLastError() == ERROR_FILE_NOT_FOUND) {
             // Note that ERROR_PATH_NOT_FOUND means a parent dir is missing, and we consider that an error.
-            return 0;  // thing is already gone, call it a success.
+            return true;  // thing is already gone, call it a success.
         }
         return WIN_SetError("Couldn't get path's attributes");
     }
@@ -106,45 +110,85 @@ int SDL_SYS_RemovePath(const char *path)
     const int isdir = (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
     const BOOL rc = isdir ? RemoveDirectoryW(wpath) : DeleteFileW(wpath);
     SDL_free(wpath);
-    return !rc ? WIN_SetError("Couldn't remove path") : 0;
+    if (!rc) {
+        return WIN_SetError("Couldn't remove path");
+    }
+    return true;
 }
 
-int SDL_SYS_RenamePath(const char *oldpath, const char *newpath)
+bool SDL_SYS_RenamePath(const char *oldpath, const char *newpath)
 {
-    WCHAR *woldpath = WIN_UTF8ToString(oldpath);
+    WCHAR *woldpath = WIN_UTF8ToStringW(oldpath);
     if (!woldpath) {
-        return -1;
+        return false;
     }
 
-    WCHAR *wnewpath = WIN_UTF8ToString(newpath);
+    WCHAR *wnewpath = WIN_UTF8ToStringW(newpath);
     if (!wnewpath) {
         SDL_free(woldpath);
-        return -1;
+        return false;
     }
 
     const BOOL rc = MoveFileExW(woldpath, wnewpath, MOVEFILE_REPLACE_EXISTING);
     SDL_free(wnewpath);
     SDL_free(woldpath);
-    return !rc ? WIN_SetError("Couldn't rename path") : 0;
+    if (!rc) {
+        return WIN_SetError("Couldn't rename path");
+    }
+    return true;
 }
 
-int SDL_SYS_CreateDirectory(const char *path)
+bool SDL_SYS_CopyFile(const char *oldpath, const char *newpath)
 {
-    WCHAR *wpath = WIN_UTF8ToString(path);
-    if (!wpath) {
-        return -1;
+    WCHAR *woldpath = WIN_UTF8ToStringW(oldpath);
+    if (!woldpath) {
+        return false;
     }
 
-    const DWORD rc = CreateDirectoryW(wpath, NULL);
-    SDL_free(wpath);
-    return !rc ? WIN_SetError("Couldn't create directory") : 0;
+    WCHAR *wnewpath = WIN_UTF8ToStringW(newpath);
+    if (!wnewpath) {
+        SDL_free(woldpath);
+        return false;
+    }
+
+    const BOOL rc = CopyFileExW(woldpath, wnewpath, NULL, NULL, NULL, COPY_FILE_ALLOW_DECRYPTED_DESTINATION|COPY_FILE_NO_BUFFERING);
+    SDL_free(wnewpath);
+    SDL_free(woldpath);
+    if (!rc) {
+        return WIN_SetError("Couldn't copy path");
+    }
+    return true;
 }
 
-int SDL_SYS_GetPathInfo(const char *path, SDL_PathInfo *info)
+bool SDL_SYS_CreateDirectory(const char *path)
 {
-    WCHAR *wpath = WIN_UTF8ToString(path);
+    WCHAR *wpath = WIN_UTF8ToStringW(path);
     if (!wpath) {
-        return -1;
+        return false;
+    }
+
+    DWORD rc = CreateDirectoryW(wpath, NULL);
+    if (!rc && (GetLastError() == ERROR_ALREADY_EXISTS)) {
+        WIN32_FILE_ATTRIBUTE_DATA winstat;
+        if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &winstat)) {
+            if (winstat.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                rc = 1;  // exists and is already a directory: cool.
+            }
+        }
+    }
+
+    SDL_free(wpath);
+    if (!rc) {
+        return WIN_SetError("Couldn't create directory");
+    }
+    return true;
+}
+
+bool SDL_SYS_GetPathInfo(const char *path, SDL_PathInfo *info)
+{
+    WCHAR *wpath = WIN_UTF8ToStringW(path);
+    if (!wpath) {
+        return false;
     }
 
     WIN32_FILE_ATTRIBUTE_DATA winstat;
@@ -169,7 +213,7 @@ int SDL_SYS_GetPathInfo(const char *path, SDL_PathInfo *info)
     info->modify_time = SDL_TimeFromWindows(winstat.ftLastWriteTime.dwLowDateTime, winstat.ftLastWriteTime.dwHighDateTime);
     info->access_time = SDL_TimeFromWindows(winstat.ftLastAccessTime.dwLowDateTime, winstat.ftLastAccessTime.dwHighDateTime);
 
-    return 1;
+    return true;
 }
 
 #endif // SDL_FSOPS_WINDOWS

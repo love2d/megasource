@@ -28,6 +28,9 @@
 
 #include <linux/input.h>
 
+#ifndef INPUT_PROP_SEMI_MT
+#define INPUT_PROP_SEMI_MT          0x03
+#endif
 #ifndef INPUT_PROP_TOPBUTTONPAD
 #define INPUT_PROP_TOPBUTTONPAD     0x04
 #endif
@@ -41,7 +44,7 @@
 #define INPUT_PROP_MAX 0x1f
 #endif
 
-/* A device can be any combination of these classes */
+// A device can be any combination of these classes
 typedef enum
 {
     SDL_UDEV_DEVICE_UNKNOWN = 0x0000,
@@ -68,6 +71,6 @@ extern int SDL_EVDEV_GuessDeviceClass(const unsigned long bitmask_props[NBITS(IN
                                       const unsigned long bitmask_key[NBITS(KEY_MAX)],
                                       const unsigned long bitmask_rel[NBITS(REL_MAX)]);
 
-#endif /* HAVE_LINUX_INPUT_H */
+#endif // HAVE_LINUX_INPUT_H
 
-#endif /* SDL_evdev_capabilities_h_ */
+#endif // SDL_evdev_capabilities_h_

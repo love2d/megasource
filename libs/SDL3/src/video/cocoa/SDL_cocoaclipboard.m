@@ -26,7 +26,7 @@
 #include "../../events/SDL_clipboardevents_c.h"
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 101300
-typedef NSString *NSPasteboardType; /* Defined in macOS 10.13+ */
+typedef NSString *NSPasteboardType; // Defined in macOS 10.13+
 #endif
 
 @interface Cocoa_PasteboardDataProvider : NSObject<NSPasteboardItemDataProvider>
@@ -83,17 +83,18 @@ void Cocoa_CheckClipboardUpdate(SDL_CocoaVideoData *data)
         count = [pasteboard changeCount];
         if (count != data.clipboard_count) {
             if (data.clipboard_count) {
-                SDL_SendClipboardUpdate();
+                // TODO: compute mime types
+                SDL_SendClipboardUpdate(false, NULL, 0);
             }
             data.clipboard_count = count;
         }
     }
 }
 
-int Cocoa_SetClipboardData(SDL_VideoDevice *_this)
+bool Cocoa_SetClipboardData(SDL_VideoDevice *_this)
 {
     @autoreleasepool {
-        SDL_CocoaVideoData *data = (__bridge SDL_CocoaVideoData *)_this->driverdata;
+        SDL_CocoaVideoData *data = (__bridge SDL_CocoaVideoData *)_this->internal;
         NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
         NSPasteboardItem *newItem = [NSPasteboardItem new];
         NSMutableArray *utiTypes = [NSMutableArray new];
@@ -125,7 +126,7 @@ int Cocoa_SetClipboardData(SDL_VideoDevice *_this)
         }
         data.clipboard_count = [pasteboard changeCount];
     }
-    return 0;
+    return true;
 }
 
 void *Cocoa_GetClipboardData(SDL_VideoDevice *_this, const char *mime_type, size_t *size)
@@ -156,16 +157,16 @@ void *Cocoa_GetClipboardData(SDL_VideoDevice *_this, const char *mime_type, size
     }
 }
 
-SDL_bool Cocoa_HasClipboardData(SDL_VideoDevice *_this, const char *mime_type)
+bool Cocoa_HasClipboardData(SDL_VideoDevice *_this, const char *mime_type)
 {
-    SDL_bool result = SDL_FALSE;
+    bool result = false;
     @autoreleasepool {
         NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
         CFStringRef mimeType = CFStringCreateWithCString(NULL, mime_type, kCFStringEncodingUTF8);
         CFStringRef utiType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, mimeType, NULL);
         CFRelease(mimeType);
         if ([pasteboard canReadItemWithDataConformingToTypes: @[(__bridge NSString *)utiType]]) {
-            result = SDL_TRUE;
+            result = true;
         }
         CFRelease(utiType);
     }
@@ -173,4 +174,4 @@ SDL_bool Cocoa_HasClipboardData(SDL_VideoDevice *_this, const char *mime_type)
 
 }
 
-#endif /* SDL_VIDEO_DRIVER_COCOA */
+#endif // SDL_VIDEO_DRIVER_COCOA

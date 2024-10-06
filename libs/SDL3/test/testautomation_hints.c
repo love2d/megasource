@@ -14,7 +14,6 @@ static const char *HintsEnum[] = {
     SDL_HINT_MOUSE_RELATIVE_MODE_WARP,
     SDL_HINT_ORIENTATIONS,
     SDL_HINT_RENDER_DIRECT3D_THREADSAFE,
-    SDL_HINT_RENDER_DRIVER,
     SDL_HINT_RENDER_VSYNC,
     SDL_HINT_TIMER_RESOLUTION,
     SDL_HINT_VIDEO_ALLOW_SCREENSAVER,
@@ -32,7 +31,6 @@ static const char *HintsVerbose[] = {
     "SDL_MOUSE_RELATIVE_MODE_WARP",
     "SDL_ORIENTATIONS",
     "SDL_RENDER_DIRECT3D_THREADSAFE",
-    "SDL_RENDER_DRIVER",
     "SDL_RENDER_VSYNC",
     "SDL_TIMER_RESOLUTION",
     "SDL_VIDEO_ALLOW_SCREENSAVER",
@@ -52,7 +50,7 @@ static const int numHintsEnum = SDL_arraysize(HintsEnum);
 /**
  * Call to SDL_GetHint
  */
-static int hints_getHint(void *arg)
+static int SDLCALL hints_getHint(void *arg)
 {
     const char *result1;
     const char *result2;
@@ -81,14 +79,14 @@ static void SDLCALL hints_testHintChanged(void *userdata, const char *name, cons
 /**
  * Call to SDL_SetHint
  */
-static int hints_setHint(void *arg)
+static int SDLCALL hints_setHint(void *arg)
 {
     const char *testHint = "SDL_AUTOMATED_TEST_HINT";
     const char *originalValue;
     char *value;
     const char *testValue;
     char *callbackValue;
-    SDL_bool result;
+    bool result;
     int i, j;
 
     /* Create random values to set */
@@ -107,7 +105,7 @@ static int hints_setHint(void *arg)
             result = SDL_SetHint(HintsEnum[i], value);
             SDLTest_AssertPass("Call to SDL_SetHint(%s, %s) (iteration %i)", HintsEnum[i], value, j);
             SDLTest_AssertCheck(
-                result == SDL_TRUE || result == SDL_FALSE,
+                result == true || result == false,
                 "Verify valid result was returned, got: %i",
                 (int)result);
             testValue = SDL_GetHint(HintsEnum[i]);
@@ -123,7 +121,7 @@ static int hints_setHint(void *arg)
         result = SDL_SetHint(HintsEnum[i], originalValue);
         SDLTest_AssertPass("Call to SDL_SetHint(%s, originalValue)", HintsEnum[i]);
         SDLTest_AssertCheck(
-            result == SDL_TRUE || result == SDL_FALSE,
+            result == true || result == false,
             "Verify valid result was returned, got: %i",
             (int)result);
         SDL_free((void *)originalValue);
@@ -132,7 +130,7 @@ static int hints_setHint(void *arg)
     SDL_free(value);
 
     /* Set default value in environment */
-    SDL_setenv(testHint, "original", 1);
+    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), testHint, "original", 1);
 
     SDLTest_AssertPass("Call to SDL_GetHint() after saving and restoring hint");
     originalValue = SDL_GetHint(testHint);
@@ -217,7 +215,7 @@ static int hints_setHint(void *arg)
 
     SDLTest_AssertPass("Call to SDL_ResetHint(), after clearing callback");
     callbackValue = NULL;
-    SDL_DelHintCallback(testHint, hints_testHintChanged, &callbackValue);
+    SDL_RemoveHintCallback(testHint, hints_testHintChanged, &callbackValue);
     SDL_ResetHint(testHint);
     SDLTest_AssertCheck(
         callbackValue == NULL,
@@ -231,11 +229,11 @@ static int hints_setHint(void *arg)
 
 /* Hints test cases */
 static const SDLTest_TestCaseReference hintsTest1 = {
-    (SDLTest_TestCaseFp)hints_getHint, "hints_getHint", "Call to SDL_GetHint", TEST_ENABLED
+    hints_getHint, "hints_getHint", "Call to SDL_GetHint", TEST_ENABLED
 };
 
 static const SDLTest_TestCaseReference hintsTest2 = {
-    (SDLTest_TestCaseFp)hints_setHint, "hints_setHint", "Call to SDL_SetHint", TEST_ENABLED
+    hints_setHint, "hints_setHint", "Call to SDL_SetHint", TEST_ENABLED
 };
 
 /* Sequence of Hints test cases */

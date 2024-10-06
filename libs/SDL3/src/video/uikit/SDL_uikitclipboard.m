@@ -27,14 +27,14 @@
 
 #import <UIKit/UIPasteboard.h>
 
-int UIKit_SetClipboardText(SDL_VideoDevice *_this, const char *text)
+bool UIKit_SetClipboardText(SDL_VideoDevice *_this, const char *text)
 {
 #ifdef SDL_PLATFORM_TVOS
     return SDL_SetError("The clipboard is not available on tvOS");
 #else
     @autoreleasepool {
         [UIPasteboard generalPasteboard].string = @(text);
-        return 0;
+        return true;
     }
 #endif
 }
@@ -57,15 +57,15 @@ char *UIKit_GetClipboardText(SDL_VideoDevice *_this)
 #endif
 }
 
-SDL_bool UIKit_HasClipboardText(SDL_VideoDevice *_this)
+bool UIKit_HasClipboardText(SDL_VideoDevice *_this)
 {
     @autoreleasepool {
 #ifndef SDL_PLATFORM_TVOS
         if ([UIPasteboard generalPasteboard].string != nil) {
-            return SDL_TRUE;
+            return true;
         }
 #endif
-        return SDL_FALSE;
+        return false;
     }
 }
 
@@ -73,14 +73,15 @@ void UIKit_InitClipboard(SDL_VideoDevice *_this)
 {
 #ifndef SDL_PLATFORM_TVOS
     @autoreleasepool {
-        SDL_UIKitVideoData *data = (__bridge SDL_UIKitVideoData *)_this->driverdata;
+        SDL_UIKitVideoData *data = (__bridge SDL_UIKitVideoData *)_this->internal;
         NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
 
         id observer = [center addObserverForName:UIPasteboardChangedNotification
                                           object:nil
                                            queue:nil
                                       usingBlock:^(NSNotification *note) {
-                                        SDL_SendClipboardUpdate();
+                                        // TODO: compute mime types
+                                        SDL_SendClipboardUpdate(false, NULL, 0);
                                       }];
 
         data.pasteboardObserver = observer;
@@ -91,7 +92,7 @@ void UIKit_InitClipboard(SDL_VideoDevice *_this)
 void UIKit_QuitClipboard(SDL_VideoDevice *_this)
 {
     @autoreleasepool {
-        SDL_UIKitVideoData *data = (__bridge SDL_UIKitVideoData *)_this->driverdata;
+        SDL_UIKitVideoData *data = (__bridge SDL_UIKitVideoData *)_this->internal;
 
         if (data.pasteboardObserver != nil) {
             [[NSNotificationCenter defaultCenter] removeObserver:data.pasteboardObserver];
@@ -101,4 +102,4 @@ void UIKit_QuitClipboard(SDL_VideoDevice *_this)
     }
 }
 
-#endif /* SDL_VIDEO_DRIVER_UIKIT */
+#endif // SDL_VIDEO_DRIVER_UIKIT

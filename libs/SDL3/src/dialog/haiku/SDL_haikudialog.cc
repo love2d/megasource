@@ -19,6 +19,9 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 #include "SDL_internal.h"
+extern "C" {
+#include "../SDL_dialog_utils.h"
+}
 #include "../../core/haiku/SDL_BeApp.h"
 
 #include <string>
@@ -40,26 +43,27 @@ bool StringEndsWith(const std::string& str, const std::string& end)
 
 std::vector<std::string> StringSplit(const std::string& str, const std::string& split)
 {
-    std::vector<std::string> retval;
+    std::vector<std::string> result;
     std::string s = str;
     size_t pos = 0;
 
     while ((pos = s.find(split)) != std::string::npos) {
-        retval.push_back(s.substr(0, pos));
+        result.push_back(s.substr(0, pos));
         s = s.substr(pos + split.size());
     }
 
-    retval.push_back(s);
+    result.push_back(s);
 
-    return retval;
+    return result;
 }
 
 class SDLBRefFilter : public BRefFilter
 {
 public:
-    SDLBRefFilter(const SDL_DialogFileFilter *filters) :
+    SDLBRefFilter(const SDL_DialogFileFilter *filters, int nfilters) :
         BRefFilter(),
-        m_filters(filters)
+        m_filters(filters),
+        m_nfilters(nfilters)
     {
     }
 
@@ -78,14 +82,12 @@ public:
         if (S_ISDIR(info.st_mode))
             return true;
 
-        const auto *filter = m_filters;
-        while (filter->name && filter->pattern) {
-            for (const auto& suffix : StringSplit(filter->pattern, ";")) {
+        for (int i = 0; i < m_nfilters; i++) {
+            for (const auto& suffix : StringSplit(m_filters[i].pattern, ";")) {
                 if (StringEndsWith(result, std::string(".") + suffix)) {
                     return true;
                 }
             }
-            filter++;
         }
 
         return false;
@@ -93,6 +95,7 @@ public:
 
 private:
     const SDL_DialogFileFilter * const m_filters;
+    int m_nfilters;
 };
 
 class CallbackLooper : public BLooper
@@ -187,9 +190,9 @@ private:
     SDLBRefFilter *m_filter;
 };
 
-void ShowDialog(bool save, SDL_DialogFileCallback callback, void *userdata, bool many, bool modal, const SDL_DialogFileFilter *filters, bool folder, const char *location)
+void ShowDialog(bool save, SDL_DialogFileCallback callback, void *userdata, bool many, bool modal, const SDL_DialogFileFilter *filters, int nfilters, bool folder, const char *location)
 {
-    if (SDL_InitBeApp()) {
+    if (!SDL_InitBeApp()) {
         char* err = SDL_strdup(SDL_GetError());
         SDL_SetError("Couldn't init Be app: %s", err);
         SDL_free(err);
@@ -197,10 +200,35 @@ void ShowDialog(bool save, SDL_DialogFileCallback callback, void *userdata, bool
         return;
     }
 
+    if (filters) {
+        const char *msg = validate_filters(filters, nfilters);
+
+        if (msg) {
+            SDL_SetError("%s", msg);
+            callback(userdata, NULL, -1);
+            return;
+        }
+    }
+
+    if (SDL_GetHint(SDL_HINT_FILE_DIALOG_DRIVER) != NULL) {
+        SDL_SetError("File dialog driver unsupported");
+        callback(userdata, NULL, -1);
+        return;
+    }
+
     // No unique_ptr's because they need to survive the end of the function
-    CallbackLooper *looper = new CallbackLooper(callback, userdata);
-    BMessenger *messenger = new BMessenger(NULL, looper);
-    SDLBRefFilter *filter = new SDLBRefFilter(filters);
+    CallbackLooper *looper = new(std::nothrow) CallbackLooper(callback, userdata);
+    BMessenger *messenger = new(std::nothrow) BMessenger(NULL, looper);
+    SDLBRefFilter *filter = new(std::nothrow) SDLBRefFilter(filters, nfilters);
+
+    if (looper == NULL || messenger == NULL || filter == NULL) {
+        SDL_free(looper);
+        SDL_free(messenger);
+        SDL_free(filter);
+        SDL_OutOfMemory();
+        callback(userdata, NULL, -1);
+        return;
+    }
 
     BEntry entry;
     entry_ref entryref;
@@ -215,19 +243,17 @@ void ShowDialog(bool save, SDL_DialogFileCallback callback, void *userdata, bool
     panel->Show();
 }
 
-void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, const char *default_location, SDL_bool allow_many)
+void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, int nfilters, const char *default_location, bool allow_many)
 {
-    ShowDialog(false, callback, userdata, allow_many == SDL_TRUE, !!window, filters, false, default_location);
+    ShowDialog(false, callback, userdata, allow_many == true, !!window, filters, nfilters, false, default_location);
 }
 
-void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, const char *default_location)
+void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const SDL_DialogFileFilter *filters, int nfilters, const char *default_location)
 {
-    ShowDialog(true, callback, userdata, false, !!window, filters, false, default_location);
+    ShowDialog(true, callback, userdata, false, !!window, filters, nfilters, false, default_location);
 }
 
-void SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const char* default_location, SDL_bool allow_many)
+void SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void *userdata, SDL_Window *window, const char* default_location, bool allow_many)
 {
-    // Use a dummy filter to avoid showing files in the dialog
-    SDL_DialogFileFilter filter[] = {{}};
-    ShowDialog(false, callback, userdata, allow_many == SDL_TRUE, !!window, filter, true, default_location);
+    ShowDialog(false, callback, userdata, allow_many == true, !!window, NULL, 0, true, default_location);
 }

@@ -20,9 +20,29 @@
 */
 
 /**
- *  \file SDL_error.h
+ * # CategoryError
  *
- *  Simple error message routines for SDL.
+ * Simple error message routines for SDL.
+ *
+ * Most apps will interface with these APIs in exactly one function: when
+ * almost any SDL function call reports failure, you can get a human-readable
+ * string of the problem from SDL_GetError().
+ *
+ * These strings are maintained per-thread, and apps are welcome to set their
+ * own errors, which is popular when building libraries on top of SDL for
+ * other apps to consume. These strings are set by calling SDL_SetError().
+ *
+ * A common usage pattern is to have a function that returns true for success
+ * and false for failure, and do this when something fails:
+ *
+ * ```c
+ * if (something_went_wrong) {
+ *    return SDL_SetError("The thing broke in this specific way: %d", errcode);
+ * }
+ * ```
+ *
+ * It's also common to just return `false` in this case if the failing thing
+ * is known to call SDL_SetError(), so errors simply propagate through.
  */
 
 #ifndef SDL_error_h_
@@ -44,8 +64,8 @@ extern "C" {
  *
  * Calling this function will replace any previous error message that was set.
  *
- * This function always returns -1, since SDL frequently uses -1 to signify an
- * failing result, leading to this idiom:
+ * This function always returns false, since SDL frequently uses false to
+ * signify a failing result, leading to this idiom:
  *
  * ```c
  * if (error_code) {
@@ -53,17 +73,28 @@ extern "C" {
  * }
  * ```
  *
- * \param fmt a printf()-style message format string
+ * \param fmt a printf()-style message format string.
  * \param ... additional parameters matching % tokens in the `fmt` string, if
- *            any
- * \returns always -1.
+ *            any.
+ * \returns false.
  *
  * \since This function is available since SDL 3.0.0.
  *
  * \sa SDL_ClearError
  * \sa SDL_GetError
  */
-extern DECLSPEC int SDLCALL SDL_SetError(SDL_PRINTF_FORMAT_STRING const char *fmt, ...) SDL_PRINTF_VARARG_FUNC(1);
+extern SDL_DECLSPEC bool SDLCALL SDL_SetError(SDL_PRINTF_FORMAT_STRING const char *fmt, ...) SDL_PRINTF_VARARG_FUNC(1);
+
+/**
+ * Set an error indicating that memory allocation failed.
+ *
+ * This function does not do any memory allocation.
+ *
+ * \returns false.
+ *
+ * \since This function is available since SDL 3.0.0.
+ */
+extern SDL_DECLSPEC bool SDLCALL SDL_OutOfMemory(void);
 
 /**
  * Retrieve a message about the last error that occurred on the current
@@ -85,32 +116,32 @@ extern DECLSPEC int SDLCALL SDL_SetError(SDL_PRINTF_FORMAT_STRING const char *fm
  * Error strings are set per-thread, so an error set in a different thread
  * will not interfere with the current thread's operation.
  *
- * The returned string is internally allocated and must not be freed by the
- * application.
+ * The returned value is a thread-local string which will remain valid until
+ * the current thread's error string is changed. The caller should make a copy
+ * if the value is needed after the next SDL API call.
  *
  * \returns a message with information about the specific error that occurred,
  *          or an empty string if there hasn't been an error message set since
- *          the last call to SDL_ClearError(). The message is only applicable
- *          when an SDL function has signaled an error. You must check the
- *          return values of SDL function calls to determine when to
- *          appropriately call SDL_GetError().
+ *          the last call to SDL_ClearError().
  *
  * \since This function is available since SDL 3.0.0.
  *
  * \sa SDL_ClearError
  * \sa SDL_SetError
  */
-extern DECLSPEC const char *SDLCALL SDL_GetError(void);
+extern SDL_DECLSPEC const char * SDLCALL SDL_GetError(void);
 
 /**
  * Clear any previous error message for this thread.
+ *
+ * \returns true.
  *
  * \since This function is available since SDL 3.0.0.
  *
  * \sa SDL_GetError
  * \sa SDL_SetError
  */
-extern DECLSPEC void SDLCALL SDL_ClearError(void);
+extern SDL_DECLSPEC bool SDLCALL SDL_ClearError(void);
 
 /**
  *  \name Internal error functions
@@ -119,28 +150,8 @@ extern DECLSPEC void SDLCALL SDL_ClearError(void);
  *  Private error reporting function - used internally.
  */
 /* @{ */
-#define SDL_OutOfMemory()   SDL_Error(SDL_ENOMEM)
-#define SDL_Unsupported()   SDL_Error(SDL_UNSUPPORTED)
+#define SDL_Unsupported()               SDL_SetError("That operation is not supported")
 #define SDL_InvalidParamError(param)    SDL_SetError("Parameter '%s' is invalid", (param))
-typedef enum
-{
-    SDL_ENOMEM,
-    SDL_EFREAD,
-    SDL_EFWRITE,
-    SDL_EFSEEK,
-    SDL_UNSUPPORTED,
-    SDL_LASTERROR
-} SDL_errorcode;
-
-/**
- * SDL_Error()
- *
- * \param code Error code
- * \returns unconditionally -1.
- *
- * \since This function is available since SDL 3.0.0.
- */
-extern DECLSPEC int SDLCALL SDL_Error(SDL_errorcode code);
 /* @} *//* Internal error functions */
 
 /* Ends C function definitions when using C++ */

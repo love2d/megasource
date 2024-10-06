@@ -51,15 +51,16 @@ static Uint8 *GenerateShapeMask(SDL_Surface *shape)
     }
     return mask;
 }
-#endif /* SDL_VIDEO_DRIVER_X11_XSHAPE */
+#endif // SDL_VIDEO_DRIVER_X11_XSHAPE
 
-int X11_UpdateWindowShape(SDL_VideoDevice *_this, SDL_Window *window, SDL_Surface *shape)
+bool X11_UpdateWindowShape(SDL_VideoDevice *_this, SDL_Window *window, SDL_Surface *shape)
 {
-#ifdef SDL_VIDEO_DRIVER_X11_XSHAPE
-    SDL_WindowData *windowdata = window->driverdata;
-    int result = -1;
+    bool result = false;
 
-    /* Generate a set of spans for the region */
+#ifdef SDL_VIDEO_DRIVER_X11_XSHAPE
+    SDL_WindowData *windowdata = window->internal;
+
+    // Generate a set of spans for the region
     if (shape) {
         SDL_Surface *stretched = NULL;
         Uint8 *mask;
@@ -68,11 +69,11 @@ int X11_UpdateWindowShape(SDL_VideoDevice *_this, SDL_Window *window, SDL_Surfac
         if (shape->w != window->w || shape->h != window->h) {
             stretched = SDL_CreateSurface(window->w, window->h, SDL_PIXELFORMAT_ARGB32);
             if (!stretched) {
-                return -1;
+                return false;
             }
-            if (SDL_SoftStretch(shape, NULL, stretched, NULL, SDL_SCALEMODE_LINEAR) < 0) {
+            if (!SDL_SoftStretch(shape, NULL, stretched, NULL, SDL_SCALEMODE_LINEAR)) {
                 SDL_DestroySurface(stretched);
-                return -1;
+                return false;
             }
             shape = stretched;
         }
@@ -83,7 +84,7 @@ int X11_UpdateWindowShape(SDL_VideoDevice *_this, SDL_Window *window, SDL_Surfac
             X11_XShapeCombineMask(windowdata->videodata->display, windowdata->xwindow, ShapeInput, 0, 0, pixmap, ShapeSet);
             SDL_free(mask);
 
-            result = 0;
+            result = true;
         }
 
         if (stretched) {
@@ -100,11 +101,11 @@ int X11_UpdateWindowShape(SDL_VideoDevice *_this, SDL_Window *window, SDL_Surfac
         X11_XUnionRectWithRegion(&rect, region, region);
         X11_XShapeCombineRegion(windowdata->videodata->display, windowdata->xwindow, ShapeInput, 0, 0, region, ShapeSet);
         X11_XDestroyRegion(region);
-        result = 0;
+        result = true;
     }
-#endif /* SDL_VIDEO_DRIVER_X11_XSHAPE */
+#endif // SDL_VIDEO_DRIVER_X11_XSHAPE
 
     return result;
 }
 
-#endif /* SDL_VIDEO_DRIVER_X11 */
+#endif // SDL_VIDEO_DRIVER_X11

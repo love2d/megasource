@@ -19,6 +19,7 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 #include "SDL_internal.h"
+#include "../SDL_dialog_utils.h"
 
 #import <Cocoa/Cocoa.h>
 #import <UniformTypeIdentifiers/UTType.h>
@@ -30,13 +31,29 @@ typedef enum
     FDT_OPENFOLDER
 } cocoa_FileDialogType;
 
-void show_file_dialog(cocoa_FileDialogType type, SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, const char* default_location, SDL_bool allow_many)
+void show_file_dialog(cocoa_FileDialogType type, SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, int nfilters, const char* default_location, bool allow_many)
 {
 #if defined(SDL_PLATFORM_TVOS) || defined(SDL_PLATFORM_IOS)
     SDL_SetError("tvOS and iOS don't support path-based file dialogs");
     callback(userdata, NULL, -1);
 #else
-    /* NSOpenPanel inherits from NSSavePanel */
+    if (filters) {
+        const char *msg = validate_filters(filters, nfilters);
+
+        if (msg) {
+            SDL_SetError("%s", msg);
+            callback(userdata, NULL, -1);
+            return;
+        }
+    }
+
+    if (SDL_GetHint(SDL_HINT_FILE_DIALOG_DRIVER) != NULL) {
+        SDL_SetError("File dialog driver unsupported");
+        callback(userdata, NULL, -1);
+        return;
+    }
+
+    // NSOpenPanel inherits from NSSavePanel
     NSSavePanel *dialog;
     NSOpenPanel *dialog_as_open;
 
@@ -46,69 +63,64 @@ void show_file_dialog(cocoa_FileDialogType type, SDL_DialogFileCallback callback
         break;
     case FDT_OPEN:
         dialog_as_open = [NSOpenPanel openPanel];
-        [dialog_as_open setAllowsMultipleSelection:((allow_many == SDL_TRUE) ? YES : NO)];
+        [dialog_as_open setAllowsMultipleSelection:((allow_many == true) ? YES : NO)];
         dialog = dialog_as_open;
         break;
     case FDT_OPENFOLDER:
         dialog_as_open = [NSOpenPanel openPanel];
         [dialog_as_open setCanChooseFiles:NO];
         [dialog_as_open setCanChooseDirectories:YES];
-        [dialog_as_open setAllowsMultipleSelection:((allow_many == SDL_TRUE) ? YES : NO)];
+        [dialog_as_open setAllowsMultipleSelection:((allow_many == true) ? YES : NO)];
         dialog = dialog_as_open;
         break;
     };
 
-    int n = -1;
-    while (filters[++n].name && filters[n].pattern);
-    // On macOS 11.0 and up, this is an array of UTType. Prior to that, it's an array of NSString
-    NSMutableArray *types = [[NSMutableArray alloc] initWithCapacity:n ];
+    if (filters) {
+        // On macOS 11.0 and up, this is an array of UTType. Prior to that, it's an array of NSString
+        NSMutableArray *types = [[NSMutableArray alloc] initWithCapacity:nfilters ];
 
-    int has_all_files = 0;
-    for (int i = 0; i < n; i++) {
-        char *pattern = SDL_strdup(filters[i].pattern);
-        char *pattern_ptr = pattern;
+        int has_all_files = 0;
+        for (int i = 0; i < nfilters; i++) {
+            char *pattern = SDL_strdup(filters[i].pattern);
+            char *pattern_ptr = pattern;
 
-        if (!pattern_ptr) {
-            SDL_OutOfMemory();
-            callback(userdata, NULL, -1);
-            return;
+            if (!pattern_ptr) {
+                callback(userdata, NULL, -1);
+                return;
+            }
+
+            for (char *c = pattern; *c; c++) {
+                if (*c == ';') {
+                    *c = '\0';
+                    if(@available(macOS 11.0, *)) {
+                        [types addObject: [UTType typeWithFilenameExtension:[NSString stringWithFormat: @"%s", pattern_ptr]]];
+                    } else {
+                        [types addObject: [NSString stringWithFormat: @"%s", pattern_ptr]];
+                    }
+                    pattern_ptr = c + 1;
+                } else if (*c == '*') {
+                    has_all_files = 1;
+                }
+            }
+            if(@available(macOS 11.0, *)) {
+                [types addObject: [UTType typeWithFilenameExtension:[NSString stringWithFormat: @"%s", pattern_ptr]]];
+            } else {
+                [types addObject: [NSString stringWithFormat: @"%s", pattern_ptr]];
+            }
+
+            SDL_free(pattern);
         }
 
-        for (char *c = pattern; *c; c++) {
-            if (*c == ';') {
-                *c = '\0';
-                if(@available(macOS 11.0, *)) {
-                    [types addObject: [UTType typeWithFilenameExtension:[NSString stringWithFormat: @"%s", pattern_ptr]]];
-                } else {
-                    [types addObject: [NSString stringWithFormat: @"%s", pattern_ptr]];
-                }
-                pattern_ptr = c + 1;
-            } else if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '.' || *c == '_' || *c == '-' || (*c == '*' && (c[1] == '\0' || c[1] == ';')))) {
-                SDL_SetError("Illegal character in pattern name: %c (Only alphanumeric characters, periods, underscores and hyphens allowed)", *c);
-                callback(userdata, NULL, -1);
-                SDL_free(pattern);
-            } else if (*c == '*') {
-                has_all_files = 1;
+        if (!has_all_files) {
+            if (@available(macOS 11.0, *)) {
+                [dialog setAllowedContentTypes:types];
+            } else {
+                [dialog setAllowedFileTypes:types];
             }
         }
-        if(@available(macOS 11.0, *)) {
-            [types addObject: [UTType typeWithFilenameExtension:[NSString stringWithFormat: @"%s", pattern_ptr]]];
-        } else {
-            [types addObject: [NSString stringWithFormat: @"%s", pattern_ptr]];
-        }
-
-        SDL_free(pattern);
     }
 
-    if (!has_all_files) {
-        if (@available(macOS 11.0, *)) {
-            [dialog setAllowedContentTypes:types];
-        } else {
-            [dialog setAllowedFileTypes:types];
-        }
-    }
-
-    /* Keep behavior consistent with other platforms */
+    // Keep behavior consistent with other platforms
     [dialog setAllowsOtherFileTypes:YES];
 
     if (default_location) {
@@ -118,7 +130,7 @@ void show_file_dialog(cocoa_FileDialogType type, SDL_DialogFileCallback callback
     NSWindow *w = NULL;
 
     if (window) {
-        w = (__bridge NSWindow *)SDL_GetProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
+        w = (__bridge NSWindow *)SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
     }
 
     if (w) {
@@ -166,17 +178,17 @@ void show_file_dialog(cocoa_FileDialogType type, SDL_DialogFileCallback callback
 #endif // defined(SDL_PLATFORM_TVOS) || defined(SDL_PLATFORM_IOS)
 }
 
-void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, const char* default_location, SDL_bool allow_many)
+void SDL_ShowOpenFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, int nfilters, const char* default_location, bool allow_many)
 {
-    show_file_dialog(FDT_OPEN, callback, userdata, window, filters, default_location, allow_many);
+    show_file_dialog(FDT_OPEN, callback, userdata, window, filters, nfilters, default_location, allow_many);
 }
 
-void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, const char* default_location)
+void SDL_ShowSaveFileDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const SDL_DialogFileFilter *filters, int nfilters, const char* default_location)
 {
-    show_file_dialog(FDT_SAVE, callback, userdata, window, filters, default_location, 0);
+    show_file_dialog(FDT_SAVE, callback, userdata, window, filters, nfilters, default_location, 0);
 }
 
-void SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const char* default_location, SDL_bool allow_many)
+void SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void* userdata, SDL_Window* window, const char* default_location, bool allow_many)
 {
-    show_file_dialog(FDT_OPENFOLDER, callback, userdata, window, NULL, default_location, allow_many);
+    show_file_dialog(FDT_OPENFOLDER, callback, userdata, window, NULL, 0, default_location, allow_many);
 }

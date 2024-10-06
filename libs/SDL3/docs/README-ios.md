@@ -22,7 +22,7 @@ Using the Simple DirectMedia Layer for iOS
 5. Select the project in the main view, go to the "Build Settings" tab, select "All", and edit "Header Search Path" and drag over the SDL "Public Headers" folder from the left
 6. Select the project in the main view, go to the "Build Phases" tab, select "Link Binary With Libraries", and add SDL3.framework from "Framework-iOS"
 7. Select the project in the main view, go to the "General" tab, scroll down to "Frameworks, Libraries, and Embedded Content", and select "Embed & Sign" for the SDL library.
-8. Add the source files that you would normally have for an SDL program, making sure to have #include "SDL.h" at the top of the file containing your main() function.
+8. Add the source files that you would normally have for an SDL program, making sure to have #include <SDL3/SDL_main.h> at the top of the file containing your main() function.
 9. Add any assets that your application needs.
 10. Enjoy!
 
@@ -117,12 +117,7 @@ e.g.
     }
 
 
-Notes -- Accelerometer as Joystick
-==============================================================================
-
-SDL for iPhone supports polling the built in accelerometer as a joystick device.  For an example on how to do this, see the accelerometer.c in the demos directory.
-
-The main thing to note when using the accelerometer with SDL is that while the iPhone natively reports accelerometer as floating point values in units of g-force, SDL_GetJoystickAxis() reports joystick values as signed integers.  Hence, in order to convert between the two, some clamping and scaling is necessary on the part of the iPhone SDL joystick driver.  To convert SDL_GetJoystickAxis() reported values BACK to units of g-force, simply multiply the values by SDL_IPHONE_MAX_GFORCE / 0x7FFF.
+Note that if you are using main callbacks instead of a standard C main() function, your SDL_AppEvent() callback will run as these events arrive and you do not need to use SDL_SetEventFilter.
 
 
 Notes -- Keyboard
@@ -136,7 +131,7 @@ void SDL_StartTextInput()
 void SDL_StopTextInput()
 	-- disables text events and hides the onscreen keyboard.
 
-SDL_bool SDL_TextInputActive()
+bool SDL_TextInputActive()
 	-- returns whether or not text events are enabled (and the onscreen keyboard is visible)
 
 
@@ -222,7 +217,7 @@ Game Center
 
 Game Center integration might require that you break up your main loop in order to yield control back to the system. In other words, instead of running an endless main loop, you run each frame in a callback function, using:
 
-    int SDL_iPhoneSetAnimationCallback(SDL_Window * window, int interval, void (*callback)(void*), void *callbackParam);
+    bool SDL_SetiOSAnimationCallback(SDL_Window * window, int interval, SDL_iOSAnimationCallback callback, void *callbackParam);
 
 This will set up the given function to be called back on the animation callback, and then you have to return from main() to let the Cocoa event loop run.
 
@@ -244,7 +239,7 @@ e.g.
 
         // Set up the game to run in the window animation callback on iOS
         // so that Game Center and so forth works correctly.
-        SDL_iPhoneSetAnimationCallback(window, 1, ShowFrame, NULL);
+        SDL_SetiOSAnimationCallback(window, 1, ShowFrame, NULL);
     #else
         while ( running ) {
             ShowFrame(0);
@@ -253,6 +248,9 @@ e.g.
     #endif
         return 0;
     }
+
+
+Note that if you are using main callbacks instead of a standard C main() function, your SDL_AppIterate() callback is already doing this and you don't need to use SDL_SetiOSAnimationCallback.
 
 
 Deploying to older versions of iOS

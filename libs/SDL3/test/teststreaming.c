@@ -63,7 +63,7 @@ static Uint8 MooseFrames[MOOSEFRAMES_COUNT][MOOSEFRAME_SIZE];
 static SDL_Renderer *renderer;
 static int frame;
 static SDL_Texture *MooseTexture;
-static SDL_bool done = SDL_FALSE;
+static bool done = false;
 static SDLTest_CommonState *state;
 
 static void quit(int rc)
@@ -85,7 +85,7 @@ static void UpdateTexture(SDL_Texture *texture)
     void *pixels;
     int pitch;
 
-    if (SDL_LockTexture(texture, NULL, &pixels, &pitch) < 0) {
+    if (!SDL_LockTexture(texture, NULL, &pixels, &pitch)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't lock texture: %s\n", SDL_GetError());
         quit(5);
     }
@@ -107,12 +107,12 @@ static void loop(void)
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_EVENT_KEY_DOWN:
-            if (event.key.keysym.sym == SDLK_ESCAPE) {
-                done = SDL_TRUE;
+            if (event.key.key == SDLK_ESCAPE) {
+                done = true;
             }
             break;
         case SDL_EVENT_QUIT:
-            done = SDL_TRUE;
+            done = true;
             break;
         default:
             break;
@@ -145,15 +145,13 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     if (!SDLTest_CommonDefaultArgs(state, argc, argv)) {
+        SDL_Quit();
         SDLTest_CommonDestroyState(state);
         return 1;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
     }
@@ -180,7 +178,7 @@ int main(int argc, char **argv)
         quit(3);
     }
 
-    renderer = SDL_CreateRenderer(window, NULL, 0);
+    renderer = SDL_CreateRenderer(window, NULL);
     if (!renderer) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't set create renderer: %s\n", SDL_GetError());
         quit(4);

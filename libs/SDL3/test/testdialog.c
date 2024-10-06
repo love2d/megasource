@@ -15,11 +15,10 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_test.h>
 
-const SDL_DialogFileFilter filters[4] = {
+const SDL_DialogFileFilter filters[3] = {
     { "All files", "*" },
     { "JPG images", "jpg;jpeg" },
-    { "PNG images", "png" },
-    { NULL, NULL }
+    { "PNG images", "png" }
 };
 
 static void SDLCALL callback(void* userdata, const char* const* files, int filter) {
@@ -45,7 +44,8 @@ static void SDLCALL callback(void* userdata, const char* const* files, int filte
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     SDL_Window *w;
     SDL_Renderer *r;
     SDLTest_CommonState *state;
@@ -53,8 +53,8 @@ int main(int argc, char *argv[]) {
     const SDL_FRect save_file_rect = { 50, 290, 220, 140 };
     const SDL_FRect open_folder_rect = { 370, 50, 220, 140 };
     int i;
-    char *initial_path = NULL;
-    char path_with_trailing_slash[2048];
+    const char *initial_path = NULL;
+    const int nfilters = sizeof(filters) / sizeof(*filters);
 
     /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, 0);
@@ -62,16 +62,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     /* Parse commandline */
     for (i = 1; i < argc;) {
         int consumed;
 
         consumed = SDLTest_CommonArg(state, i);
-        if (!consumed) {
-        }
+
         if (consumed <= 0) {
             static const char *options[] = { NULL };
             SDLTest_CommonLogUsage(state, argv[0], options);
@@ -81,12 +77,13 @@ int main(int argc, char *argv[]) {
         i += consumed;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init failed (%s)", SDL_GetError());
         return 1;
     }
-    if (SDL_CreateWindowAndRenderer(640, 480, 0, &w, &r) < 0) {
+    if (!SDL_CreateWindowAndRenderer("testdialog", 640, 480, 0, &w, &r)) {
         SDL_Log("Failed to create window and/or renderer: %s\n", SDL_GetError());
+        SDL_Quit();
         return 1;
     }
 
@@ -94,10 +91,6 @@ int main(int argc, char *argv[]) {
 
     if (!initial_path) {
         SDL_Log("Will not use an initial path, couldn't get the home directory path: %s\n", SDL_GetError());
-        path_with_trailing_slash[0] = '\0';
-    } else {
-        SDL_snprintf(path_with_trailing_slash, sizeof(path_with_trailing_slash), "%s/", initial_path);
-        SDL_free(initial_path);
     }
 
     while (1) {
@@ -119,11 +112,11 @@ int main(int argc, char *argv[]) {
                  * - Nonzero if the user is allowed to choose multiple entries (not for SDL_ShowSaveFileDialog)
                  */
                 if (SDL_PointInRectFloat(&p, &open_file_rect)) {
-                    SDL_ShowOpenFileDialog(callback, NULL, w, filters, path_with_trailing_slash, 1);
+                    SDL_ShowOpenFileDialog(callback, NULL, w, filters, nfilters, initial_path, 1);
                 } else if (SDL_PointInRectFloat(&p, &open_folder_rect)) {
-                    SDL_ShowOpenFolderDialog(callback, NULL, w, path_with_trailing_slash, 1);
+                    SDL_ShowOpenFolderDialog(callback, NULL, w, initial_path, 1);
                 } else if (SDL_PointInRectFloat(&p, &save_file_rect)) {
-                    SDL_ShowSaveFileDialog(callback, NULL, w, filters, path_with_trailing_slash);
+                    SDL_ShowSaveFileDialog(callback, NULL, w, filters, nfilters, initial_path);
                 }
             }
         }
@@ -152,9 +145,9 @@ int main(int argc, char *argv[]) {
         SDL_RenderPresent(r);
     }
 
+    SDLTest_CleanupTextDrawing();
     SDL_DestroyRenderer(r);
     SDL_DestroyWindow(w);
-    SDLTest_CleanupTextDrawing();
     SDL_Quit();
     SDLTest_CommonDestroyState(state);
     return 0;

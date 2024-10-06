@@ -33,16 +33,24 @@ static SDL_HitTestResult SDLCALL
 hitTest(SDL_Window *window, const SDL_Point *pt, void *data)
 {
     int i;
-    int w, h;
+    int w, h, p_w;
+    SDL_Point adj_pt;
+    float scale;
+
+    SDL_GetWindowSize(window, &w, &h);
+    SDL_GetWindowSizeInPixels(window, &p_w, NULL);
+
+    scale = (float)p_w / (float)w;
+
+    adj_pt.x = (int)SDL_floorf(pt->x * scale);
+    adj_pt.y = (int)SDL_floorf(pt->y * scale);
 
     for (i = 0; i < numareas; i++) {
-        if (SDL_PointInRect(pt, &areas[i])) {
+        if (SDL_PointInRect(&adj_pt, &areas[i])) {
             SDL_Log("HIT-TEST: DRAGGABLE\n");
             return SDL_HITTEST_DRAGGABLE;
         }
     }
-
-    SDL_GetWindowSize(window, &w, &h);
 
 #define REPORT_RESIZE_HIT(name)                  \
     {                                            \
@@ -86,9 +94,6 @@ int main(int argc, char **argv)
 
     state->window_flags = SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE;
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     /* Parse commandline */
     if (!SDLTest_CommonDefaultArgs(state, argc, argv)) {
         return 1;
@@ -99,7 +104,7 @@ int main(int argc, char **argv)
     }
 
     for (i = 0; i < state->num_windows; i++) {
-        if (SDL_SetWindowHitTest(state->windows[i], hitTest, NULL) == -1) {
+        if (!SDL_SetWindowHitTest(state->windows[i], hitTest, NULL)) {
             SDL_Log("Enabling hit-testing failed for window %d: %s", i, SDL_GetError());
             SDL_Quit();
             return 1;
@@ -137,9 +142,9 @@ int main(int argc, char **argv)
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (e.key.keysym.sym == SDLK_ESCAPE) {
+                if (e.key.key == SDLK_ESCAPE) {
                     done = 1;
-                } else if (e.key.keysym.sym == SDLK_x) {
+                } else if (e.key.key == SDLK_X) {
                     if (!areas) {
                         areas = drag_areas;
                         numareas = SDL_arraysize(drag_areas);

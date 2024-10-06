@@ -12,15 +12,12 @@
 
 /* Simple program:  draw as many random objects on the screen as possible */
 
-#include <SDL3/SDL_test_common.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_test_common.h>
 
 #ifdef SDL_PLATFORM_EMSCRIPTEN
 #include <emscripten/emscripten.h>
 #endif
-
-#include <stdlib.h>
-#include <time.h>
 
 #define SWAP(typ, a, b) \
     do {                \
@@ -32,8 +29,8 @@
 
 static SDLTest_CommonState *state;
 static int num_objects;
-static SDL_bool cycle_color;
-static SDL_bool cycle_alpha;
+static bool cycle_color;
+static bool cycle_alpha;
 static int cycle_direction = 1;
 static int current_alpha = 255;
 static int current_color = 255;
@@ -77,8 +74,8 @@ static void DrawPoints(SDL_Renderer *renderer)
         SDL_SetRenderDrawColor(renderer, 255, (Uint8)current_color,
                                (Uint8)current_color, (Uint8)current_alpha);
 
-        x = (float)(rand() % viewport.w);
-        y = (float)(rand() % viewport.h);
+        x = (float)SDL_rand(viewport.w);
+        y = (float)SDL_rand(viewport.h);
         SDL_RenderPoint(renderer, x, y);
     }
 }
@@ -209,11 +206,12 @@ static void loop(void *arg)
 {
     int i;
     SDL_Event event;
-    int *done = (int*)arg;
+    int *done = (int *)arg;
 
     /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, done);
+        SDL_ConvertEventToRenderCoordinates(SDL_GetRenderer(SDL_GetWindowFromEvent(&event)), &event);
         switch (event.type) {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             mouse_begin_x = event.button.x;
@@ -228,27 +226,27 @@ static void loop(void *arg)
             }
             break;
         case SDL_EVENT_KEY_DOWN:
-            switch (event.key.keysym.sym) {
-            case 'l':
-                if (event.key.keysym.mod & SDL_KMOD_SHIFT) {
+            switch (event.key.key) {
+            case SDLK_L:
+                if (event.key.mod & SDL_KMOD_SHIFT) {
                     num_lines = 0;
                 } else {
                     add_line(
-                        (float)(rand() % 640),
-                        (float)(rand() % 480),
-                        (float)(rand() % 640),
-                        (float)(rand() % 480));
+                        (float)SDL_rand(640),
+                        (float)SDL_rand(480),
+                        (float)SDL_rand(640),
+                        (float)SDL_rand(480));
                 }
                 break;
-            case 'r':
-                if (event.key.keysym.mod & SDL_KMOD_SHIFT) {
+            case SDLK_R:
+                if (event.key.mod & SDL_KMOD_SHIFT) {
                     num_rects = 0;
                 } else {
                     add_rect(
-                        (float)(rand() % 640),
-                        (float)(rand() % 480),
-                        (float)(rand() % 640),
-                        (float)(rand() % 480));
+                        (float)SDL_rand(640),
+                        (float)SDL_rand(480),
+                        (float)SDL_rand(640),
+                        (float)SDL_rand(480));
                 }
                 break;
             default:
@@ -290,16 +288,13 @@ int main(int argc, char *argv[])
     int done;
 
     /* Initialize parameters */
-    num_objects = -1;  /* -1 means not initialized */
+    num_objects = -1; /* -1 means not initialized */
 
     /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (!state) {
         return 1;
     }
-
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     for (i = 1; i < argc;) {
         int consumed;
@@ -315,8 +310,14 @@ int main(int argc, char *argv[])
                     } else if (SDL_strcasecmp(argv[i + 1], "blend") == 0) {
                         blendMode = SDL_BLENDMODE_BLEND;
                         consumed = 2;
+                    } else if (SDL_strcasecmp(argv[i + 1], "blend_premultiplied") == 0) {
+                        blendMode = SDL_BLENDMODE_BLEND_PREMULTIPLIED;
+                        consumed = 2;
                     } else if (SDL_strcasecmp(argv[i + 1], "add") == 0) {
                         blendMode = SDL_BLENDMODE_ADD;
+                        consumed = 2;
+                    } else if (SDL_strcasecmp(argv[i + 1], "add_premultiplied") == 0) {
+                        blendMode = SDL_BLENDMODE_ADD_PREMULTIPLIED;
                         consumed = 2;
                     } else if (SDL_strcasecmp(argv[i + 1], "mod") == 0) {
                         blendMode = SDL_BLENDMODE_MOD;
@@ -327,10 +328,10 @@ int main(int argc, char *argv[])
                     }
                 }
             } else if (SDL_strcasecmp(argv[i], "--cyclecolor") == 0) {
-                cycle_color = SDL_TRUE;
+                cycle_color = true;
                 consumed = 1;
             } else if (SDL_strcasecmp(argv[i], "--cyclealpha") == 0) {
-                cycle_alpha = SDL_TRUE;
+                cycle_alpha = true;
                 consumed = 1;
             } else if (num_objects < 0 && SDL_isdigit(*argv[i])) {
                 char *endptr = NULL;
@@ -341,7 +342,7 @@ int main(int argc, char *argv[])
             }
         }
         if (consumed < 0) {
-            static const char *options[] = { "[--blend none|blend|add|mod|mul]", "[--cyclecolor]", "[--cyclealpha]", "[count]", NULL };
+            static const char *options[] = { "[--blend none|blend|blend_premultiplied|add|add_premultiplied|mod|mul]", "[--cyclecolor]", "[--cyclealpha]", "[count]", NULL };
             SDLTest_CommonLogUsage(state, argv[0], options);
             return 1;
         }
@@ -362,8 +363,6 @@ int main(int argc, char *argv[])
         SDL_SetRenderDrawColor(renderer, 0xA0, 0xA0, 0xA0, 0xFF);
         SDL_RenderClear(renderer);
     }
-
-    srand((unsigned int)time(NULL));
 
     /* Main render loop */
     frames = 0;

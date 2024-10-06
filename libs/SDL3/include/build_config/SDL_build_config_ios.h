@@ -34,6 +34,7 @@
 #define HAVE_MATH_H 1
 #define HAVE_SIGNAL_H 1
 #define HAVE_STDARG_H 1
+#define HAVE_STDBOOL_H 1
 #define HAVE_STDDEF_H 1
 #define HAVE_STDINT_H 1
 #define HAVE_STDIO_H 1
@@ -50,7 +51,6 @@
 #define HAVE_REALLOC    1
 #define HAVE_FREE   1
 #define HAVE_GETENV 1
-#define HAVE_SETENV 1
 #define HAVE_PUTENV 1
 #define HAVE_SETENV 1
 #define HAVE_UNSETENV   1
@@ -76,6 +76,7 @@
 #define HAVE_ATOF   1
 #define HAVE_STRCMP 1
 #define HAVE_STRNCMP    1
+#define HAVE_STRPBRK    1
 #define HAVE_STRCASESTR 1
 #define HAVE_VSSCANF 1
 #define HAVE_VSNPRINTF  1
@@ -101,6 +102,10 @@
 #define HAVE_FLOORF 1
 #define HAVE_FMOD   1
 #define HAVE_FMODF  1
+#define HAVE_ISINF  1
+#define HAVE_ISINF_FLOAT_MACRO 1
+#define HAVE_ISNAN  1
+#define HAVE_ISNAN_FLOAT_MACRO 1
 #define HAVE_LOG    1
 #define HAVE_LOGF   1
 #define HAVE_LOG10  1
@@ -147,6 +152,9 @@
 #define SDL_JOYSTICK_MFI 1
 #define SDL_JOYSTICK_VIRTUAL    1
 
+/* Enable various process implementations */
+#define SDL_PROCESS_DUMMY 1
+
 #ifdef SDL_PLATFORM_TVOS
 #define SDL_SENSOR_DUMMY    1
 #else
@@ -182,9 +190,9 @@
    Also supported in simulator from iOS 13.0 and tvOS 13.0
  */
 #if (TARGET_OS_SIMULATOR && ((__IPHONE_OS_VERSION_MIN_REQUIRED >= 130000) || (__TV_OS_VERSION_MIN_REQUIRED >= 130000))) || (!TARGET_CPU_ARM && ((__IPHONE_OS_VERSION_MIN_REQUIRED >= 80000) || (__TV_OS_VERSION_MIN_REQUIRED >= 90000)))
-#define SDL_PLATFORM_SUPPORTS_METAL	1
+#define SDL_PLATFORM_SUPPORTS_METAL 1
 #else
-#define SDL_PLATFORM_SUPPORTS_METAL	0
+#define SDL_PLATFORM_SUPPORTS_METAL 0
 #endif
 
 #if SDL_PLATFORM_SUPPORTS_METAL

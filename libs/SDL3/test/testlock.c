@@ -48,7 +48,7 @@ static void printid(void)
 static void terminate(int sig)
 {
     (void)signal(SIGINT, terminate);
-    SDL_AtomicSet(&doterminate, 1);
+    SDL_SetAtomicInt(&doterminate, 1);
 }
 
 static void closemutex(int sig)
@@ -56,7 +56,7 @@ static void closemutex(int sig)
     SDL_ThreadID id = SDL_GetCurrentThreadID();
     int i;
     SDL_Log("Thread %" SDL_PRIu64 ":  Cleaning up...\n", id == mainthread ? 0 : id);
-    SDL_AtomicSet(&doterminate, 1);
+    SDL_SetAtomicInt(&doterminate, 1);
     if (threads) {
         for (i = 0; i < nb_threads; ++i) {
             SDL_WaitThread(threads[i], NULL);
@@ -80,7 +80,7 @@ Run(void *data)
         (void)signal(SIGTERM, closemutex);
     }
     SDL_Log("Thread %" SDL_PRIu64 ": starting up", current_thread);
-    while (!SDL_AtomicGet(&doterminate)) {
+    while (!SDL_GetAtomicInt(&doterminate)) {
         SDL_Log("Thread %" SDL_PRIu64 ": ready to work\n", current_thread);
         SDL_LockMutex(mutex);
         SDL_Log("Thread %" SDL_PRIu64 ": start work!\n", current_thread);
@@ -91,7 +91,7 @@ Run(void *data)
         /* If this sleep isn't done, then threads may starve */
         SDL_Delay(10);
     }
-    if (current_thread == mainthread && SDL_AtomicGet(&doterminate)) {
+    if (current_thread == mainthread && SDL_GetAtomicInt(&doterminate)) {
         SDL_Log("Thread %" SDL_PRIu64 ": raising SIGTERM\n", current_thread);
         (void)raise(SIGTERM);
     }
@@ -100,9 +100,9 @@ Run(void *data)
 }
 
 #ifndef _WIN32
-static Uint32 hit_timeout(Uint32 interval, void *param) {
+static Uint32 hit_timeout(void *param, SDL_TimerID timerID, Uint32 interval) {
     SDL_Log("Hit timeout! Sending SIGINT!");
-    kill(0, SIGINT);
+    (void)raise(SIGINT);
     return 0;
 }
 #endif
@@ -120,8 +120,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
     /* Parse commandline */
     for (i = 1; i < argc;) {
         int consumed;
@@ -175,13 +173,13 @@ int main(int argc, char *argv[])
     threads = SDL_malloc(nb_threads * sizeof(SDL_Thread*));
 
     /* Load the SDL library */
-    if (SDL_Init(0) < 0) {
+    if (!SDL_Init(0)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s\n", SDL_GetError());
         exit(1);
     }
     (void)atexit(SDL_Quit_Wrapper);
 
-    SDL_AtomicSet(&doterminate, 0);
+    SDL_SetAtomicInt(&doterminate, 0);
 
     mutex = SDL_CreateMutex();
     if (!mutex) {

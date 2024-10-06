@@ -20,7 +20,6 @@ freely.
 #endif
 
 #include <stdlib.h>
-#include <time.h>
 
 #define MENU_WIDTH  120
 #define MENU_HEIGHT 300
@@ -56,6 +55,7 @@ static void quit(int rc)
     SDL_free(menus);
     menus = NULL;
 
+    SDLTest_CleanupTextDrawing();
     SDLTest_CommonQuit(state);
     /* Let 'main()' return normally */
     if (rc != 0) {
@@ -75,19 +75,19 @@ static int get_menu_index_by_window(SDL_Window *window)
     return -1;
 }
 
-static SDL_bool window_is_root(SDL_Window *window)
+static bool window_is_root(SDL_Window *window)
 {
     int i;
     for (i = 0; i < state->num_windows; ++i) {
         if (window == state->windows[i]) {
-            return SDL_TRUE;
+            return true;
         }
     }
 
-    return SDL_FALSE;
+    return false;
 }
 
-static SDL_bool create_popup(struct PopupWindow *new_popup, SDL_bool is_menu)
+static bool create_popup(struct PopupWindow *new_popup, bool is_menu)
 {
     SDL_Window *focus;
     SDL_Window *new_win;
@@ -105,17 +105,17 @@ static SDL_bool create_popup(struct PopupWindow *new_popup, SDL_bool is_menu)
                                     (int)x, (int)y + v_off, w, h, flags);
 
     if (new_win) {
-        new_renderer = SDL_CreateRenderer(new_win, state->renderdriver, state->render_flags);
+        new_renderer = SDL_CreateRenderer(new_win, state->renderdriver);
 
         new_popup->win = new_win;
         new_popup->renderer = new_renderer;
         new_popup->parent = focus;
 
-        return SDL_TRUE;
+        return true;
     }
 
     SDL_zerop(new_popup);
-    return SDL_FALSE;
+    return false;
 }
 
 static void close_popups(void)
@@ -167,12 +167,12 @@ static void loop(void)
             } else if (event.button.button == SDL_BUTTON_RIGHT) {
                 /* Create a new popup menu */
                 menus = SDL_realloc(menus, sizeof(struct PopupWindow) * (num_menus + 1));
-                if (create_popup(&menus[num_menus], SDL_TRUE)) {
+                if (create_popup(&menus[num_menus], true)) {
                     ++num_menus;
                 }
             }
         } else if (event.type == SDL_EVENT_KEY_DOWN) {
-            if (event.key.keysym.sym == SDLK_SPACE) {
+            if (event.key.key == SDLK_SPACE) {
                 for (i = 0; i < num_menus; ++i) {
                     if (SDL_GetWindowFlags(menus[i].win) & SDL_WINDOW_HIDDEN) {
                         SDL_ShowWindow(menus[i].win);
@@ -195,7 +195,7 @@ static void loop(void)
     /* Show the tooltip if the delay period has elapsed */
     if (SDL_GetTicks() > tooltip_timer) {
         if (!tooltip.win) {
-            create_popup(&tooltip, SDL_FALSE);
+            create_popup(&tooltip, false);
         }
     }
 
@@ -247,9 +247,6 @@ int main(int argc, char *argv[])
     if (!state) {
         return 1;
     }
-
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     /* Parse commandline */
     if (!SDLTest_CommonDefaultArgs(state, argc, argv)) {

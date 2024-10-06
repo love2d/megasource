@@ -124,9 +124,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Enable standard application logging */
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-
     if (!SDLTest_CommonDefaultArgs(state, argc, argv) || !SDLTest_CommonInit(state)) {
         SDLTest_CommonQuit(state);
         return 1;
@@ -135,18 +132,15 @@ int main(int argc, char *argv[])
     drawstates = SDL_stack_alloc(DrawState, state->num_windows);
     for (i = 0; i < state->num_windows; ++i) {
         DrawState *drawstate = &drawstates[i];
-        int w, h;
 
         drawstate->window = state->windows[i];
         drawstate->renderer = state->renderers[i];
-        drawstate->sprite = LoadTexture(drawstate->renderer, "icon.bmp", SDL_TRUE, NULL, NULL);
-        drawstate->background = LoadTexture(drawstate->renderer, "sample.bmp", SDL_FALSE, NULL, NULL);
+        drawstate->sprite = LoadTexture(drawstate->renderer, "icon.bmp", true, NULL, NULL);
+        drawstate->background = LoadTexture(drawstate->renderer, "sample.bmp", false, NULL, NULL);
         if (!drawstate->sprite || !drawstate->background) {
             quit(2);
         }
-        SDL_QueryTexture(drawstate->sprite, NULL, NULL, &w, &h);
-        drawstate->sprite_rect.w = (float)w;
-        drawstate->sprite_rect.h = (float)h;
+        SDL_GetTextureSize(drawstate->sprite, &drawstate->sprite_rect.w, &drawstate->sprite_rect.h);
         drawstate->scale_direction = 1;
     }
 
