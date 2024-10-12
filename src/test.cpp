@@ -10,7 +10,11 @@
 #include <vorbis/vorbisfile.h>
 #include <freetype/config/ftconfig.h>
 #include <freetype/freetype.h>
+#if __has_include(<SDL3/SDL.h>)
+#include <SDL3/SDL.h>
+#else
 #include <SDL.h>
+#endif
 #include <AL/al.h>
 #include <AL/alext.h>
 #include <modplug.h>
