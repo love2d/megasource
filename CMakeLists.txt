@@ -11,7 +11,7 @@ project(megasource)
 
 set(MEGA TRUE)
 
-option(LOVE_USE_SDL3 "Use SDL3 instead of SDL2" OFF)
+option(LOVE_USE_SDL3 "Use SDL3 instead of SDL2" ON)
 
 set (CMAKE_CXX_STANDARD 11)
 
