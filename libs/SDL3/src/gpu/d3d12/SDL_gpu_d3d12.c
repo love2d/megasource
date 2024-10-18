@@ -312,6 +312,48 @@ static DXGI_FORMAT SDLToD3D12_TextureFormat[] = {
     DXGI_FORMAT_D32_FLOAT,            // D32_FLOAT
     DXGI_FORMAT_D24_UNORM_S8_UINT,    // D24_UNORM_S8_UINT
     DXGI_FORMAT_D32_FLOAT_S8X24_UINT, // D32_FLOAT_S8_UINT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_4x4_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_5x4_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_5x5_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_6x5_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_6x6_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x5_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x6_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x8_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x5_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x6_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x8_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x10_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_12x10_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_12x12_UNORM
+    DXGI_FORMAT_UNKNOWN,              // ASTC_4x4_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_5x4_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_5x5_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_6x5_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_6x6_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x5_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x6_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x8_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x5_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x6_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x8_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x10_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_12x10_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_12x12_UNORM_SRGB
+    DXGI_FORMAT_UNKNOWN,              // ASTC_4x4_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_5x4_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_5x5_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_6x5_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_6x6_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x5_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x6_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_8x8_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x5_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x6_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x8_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_10x10_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_12x10_FLOAT
+    DXGI_FORMAT_UNKNOWN,              // ASTC_12x12_FLOAT
 };
 SDL_COMPILE_TIME_ASSERT(SDLToD3D12_TextureFormat, SDL_arraysize(SDLToD3D12_TextureFormat) == SDL_GPU_TEXTUREFORMAT_MAX_ENUM_VALUE);
 
@@ -6105,6 +6147,8 @@ static bool D3D12_INTERNAL_CreateSwapchain(
     windowData->swapchainComposition = swapchain_composition;
     windowData->swapchainColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
     windowData->frameCounter = 0;
+    windowData->width = width;
+    windowData->height = height;
 
     // Precache blit pipelines for the swapchain format
     for (Uint32 i = 0; i < 5; i += 1) {
@@ -6303,19 +6347,12 @@ static bool D3D12_INTERNAL_ResizeSwapchain(
         SDL_free(windowData->textureContainers[i].textures);
     }
 
-    int w, h;
-    SDL_SyncWindow(windowData->window);
-    SDL_GetWindowSizeInPixels(
-        windowData->window,
-        &w,
-        &h);
-
     // Resize the swapchain
     HRESULT res = IDXGISwapChain_ResizeBuffers(
         windowData->swapchain,
         0, // Keep buffer count the same
-        w,
-        h,
+        0, // use client window width
+        0, // use client window height
         DXGI_FORMAT_UNKNOWN, // Keep the old format
         renderer->supportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
     CHECK_D3D12_ERROR_AND_RETURN("Could not resize swapchain buffers", false)
@@ -6332,8 +6369,12 @@ static bool D3D12_INTERNAL_ResizeSwapchain(
         }
     }
 
-    windowData->width = w;
-    windowData->height = h;
+    DXGI_SWAP_CHAIN_DESC1 swapchainDesc;
+    IDXGISwapChain3_GetDesc1(windowData->swapchain, &swapchainDesc);
+    CHECK_D3D12_ERROR_AND_RETURN("Failed to retrieve swapchain descriptor!", false)
+
+    windowData->width = swapchainDesc.Width;
+    windowData->height = swapchainDesc.Height;
     windowData->needsSwapchainRecreate = false;
     return true;
 }
@@ -6385,12 +6426,9 @@ static bool D3D12_INTERNAL_CreateSwapchain(
 
     swapchainFormat = SwapchainCompositionToTextureFormat[swapchainComposition];
 
-    int w, h;
-    SDL_GetWindowSizeInPixels(windowData->window, &w, &h);
-
     // Initialize the swapchain buffer descriptor
-    swapchainDesc.Width = 0;
-    swapchainDesc.Height = 0;
+    swapchainDesc.Width = 0;  // use client window width
+    swapchainDesc.Height = 0; // use client window height
     swapchainDesc.Format = swapchainFormat;
     swapchainDesc.SampleDesc.Count = 1;
     swapchainDesc.SampleDesc.Quality = 0;
@@ -6477,14 +6515,17 @@ static bool D3D12_INTERNAL_CreateSwapchain(
         IDXGIFactory1_Release(pParent);
     }
 
+    IDXGISwapChain3_GetDesc1(swapchain3, &swapchainDesc);
+    CHECK_D3D12_ERROR_AND_RETURN("Failed to retrieve swapchain descriptor!", false)
+
     // Initialize the swapchain data
     windowData->swapchain = swapchain3;
     windowData->present_mode = presentMode;
     windowData->swapchainComposition = swapchainComposition;
     windowData->swapchainColorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
     windowData->frameCounter = 0;
-    windowData->width = w;
-    windowData->height = h;
+    windowData->width = swapchainDesc.Width;
+    windowData->height = swapchainDesc.Height;
 
     // Precache blit pipelines for the swapchain format
     for (Uint32 i = 0; i < 5; i += 1) {

@@ -128,10 +128,9 @@
  * explaining this situation.
  *
  * It is optimal for apps to pre-compile the shader formats they might use,
- * but for ease of use SDL provides a
- * [satellite single-header library](https://github.com/libsdl-org/SDL_gpu_shadercross
- * )
- * for performing runtime shader cross-compilation.
+ * but for ease of use SDL provides a separate project,
+ * [SDL_gpu_shadercross](https://github.com/libsdl-org/SDL_gpu_shadercross)
+ * , for performing runtime shader cross-compilation.
  *
  * This is an extremely quick overview that leaves out several important
  * details. Already, though, one can see that GPU programming can be quite
@@ -302,9 +301,8 @@ typedef struct SDL_GPUGraphicsPipeline SDL_GPUGraphicsPipeline;
  * buffer A and then command buffer B all commands in A will begin executing
  * before any command in B begins executing.
  *
- * In multi-threading scenarios, you should acquire and submit a command
- * buffer on the same thread. As long as you satisfy this requirement, all
- * functionality related to command buffers is thread-safe.
+ * In multi-threading scenarios, you should only access a command buffer on
+ * the thread you acquired it from.
  *
  * \since This struct is available since SDL 3.0.0
  *
@@ -588,7 +586,52 @@ typedef enum SDL_GPUTextureFormat
     SDL_GPU_TEXTUREFORMAT_D24_UNORM,
     SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
     SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT,
-    SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT
+    SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
+    /* Compressed ASTC Normalized Float Color Formats*/
+    SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_5x4_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_5x5_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_6x5_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_6x6_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x5_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x6_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x8_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x5_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x6_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x8_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x10_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_12x10_UNORM,
+    SDL_GPU_TEXTUREFORMAT_ASTC_12x12_UNORM,
+    /* Compressed SRGB ASTC Normalized Float Color Formats*/
+    SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_5x4_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_5x5_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_6x5_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_6x6_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x5_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x6_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x8_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x5_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x6_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x8_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x10_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_12x10_UNORM_SRGB,
+    SDL_GPU_TEXTUREFORMAT_ASTC_12x12_UNORM_SRGB,
+    /* Compressed ASTC Signed Float Color Formats*/
+    SDL_GPU_TEXTUREFORMAT_ASTC_4x4_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_5x4_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_5x5_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_6x5_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_6x6_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x5_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x6_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_8x8_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x5_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x6_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x8_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_10x10_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_12x10_FLOAT,
+    SDL_GPU_TEXTUREFORMAT_ASTC_12x12_FLOAT
 } SDL_GPUTextureFormat;
 
 /**
@@ -1904,26 +1947,26 @@ extern SDL_DECLSPEC SDL_GPUDevice *SDLCALL SDL_CreateGPUDevice(
  *
  * These are the supported properties:
  *
- * - `SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOL`: enable debug mode properties
- *   and validations, defaults to true.
- * - `SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOL`: enable to prefer energy
- *   efficiency over maximum GPU performance, defaults to false.
+ * - `SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN`: enable debug mode
+ *   properties and validations, defaults to true.
+ * - `SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN`: enable to prefer
+ *   energy efficiency over maximum GPU performance, defaults to false.
  * - `SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING`: the name of the GPU driver to
  *   use, if a specific one is desired.
  *
  * These are the current shader format properties:
  *
- * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_PRIVATE_BOOL`: The app is able to
+ * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_PRIVATE_BOOLEAN`: The app is able to
  *   provide shaders for an NDA platform.
- * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOL`: The app is able to
+ * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN`: The app is able to
  *   provide SPIR-V shaders if applicable.
- * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXBC_BOOL`: The app is able to
+ * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXBC_BOOLEAN`: The app is able to
  *   provide DXBC shaders if applicable
- *   `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOL`: The app is able to
+ *   `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN`: The app is able to
  *   provide DXIL shaders if applicable.
- * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOL`: The app is able to provide
- *   MSL shaders if applicable.
- * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_METALLIB_BOOL`: The app is able to
+ * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN`: The app is able to
+ *   provide MSL shaders if applicable.
+ * - `SDL_PROP_GPU_DEVICE_CREATE_SHADERS_METALLIB_BOOLEAN`: The app is able to
  *   provide Metal shader libraries if applicable.
  *
  * With the D3D12 renderer:
@@ -1945,15 +1988,15 @@ extern SDL_DECLSPEC SDL_GPUDevice *SDLCALL SDL_CreateGPUDevice(
 extern SDL_DECLSPEC SDL_GPUDevice *SDLCALL SDL_CreateGPUDeviceWithProperties(
     SDL_PropertiesID props);
 
-#define SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOL             "SDL.gpu.device.create.debugmode"
-#define SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOL        "SDL.gpu.device.create.preferlowpower"
+#define SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN          "SDL.gpu.device.create.debugmode"
+#define SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN     "SDL.gpu.device.create.preferlowpower"
 #define SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING                "SDL.gpu.device.create.name"
-#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_PRIVATE_BOOL       "SDL.gpu.device.create.shaders.private"
-#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOL         "SDL.gpu.device.create.shaders.spirv"
-#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXBC_BOOL          "SDL.gpu.device.create.shaders.dxbc"
-#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOL          "SDL.gpu.device.create.shaders.dxil"
-#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOL           "SDL.gpu.device.create.shaders.msl"
-#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_METALLIB_BOOL      "SDL.gpu.device.create.shaders.metallib"
+#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_PRIVATE_BOOLEAN    "SDL.gpu.device.create.shaders.private"
+#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN      "SDL.gpu.device.create.shaders.spirv"
+#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXBC_BOOLEAN       "SDL.gpu.device.create.shaders.dxbc"
+#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN       "SDL.gpu.device.create.shaders.dxil"
+#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN        "SDL.gpu.device.create.shaders.msl"
+#define SDL_PROP_GPU_DEVICE_CREATE_SHADERS_METALLIB_BOOLEAN   "SDL.gpu.device.create.shaders.metallib"
 #define SDL_PROP_GPU_DEVICE_CREATE_D3D12_SEMANTIC_NAME_STRING "SDL.gpu.device.create.d3d12.semantic"
 
 /**
@@ -3669,6 +3712,23 @@ extern SDL_DECLSPEC bool SDLCALL SDL_GPUTextureSupportsSampleCount(
     SDL_GPUDevice *device,
     SDL_GPUTextureFormat format,
     SDL_GPUSampleCount sample_count);
+
+/**
+ * Calculate the size in bytes of a texture format with dimensions.
+ *
+ * \param format a texture format.
+ * \param width width in pixels.
+ * \param height height in pixels.
+ * \param depth_or_layer_count depth for 3D textures or layer count otherwise.
+ * \returns the size of a texture with this format and dimensions.
+ *
+ * \since This function is available since SDL 3.1.4.
+ */
+extern SDL_DECLSPEC Uint32 SDLCALL SDL_CalculateGPUTextureFormatSize(
+    SDL_GPUTextureFormat format,
+    Uint32 width,
+    Uint32 height,
+    Uint32 depth_or_layer_count);
 
 #ifdef SDL_PLATFORM_GDK
 

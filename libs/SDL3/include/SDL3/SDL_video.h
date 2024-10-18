@@ -939,7 +939,7 @@ extern SDL_DECLSPEC SDL_Window ** SDLCALL SDL_GetWindows(int *count);
  * corresponding UnloadLibrary function is called by SDL_DestroyWindow().
  *
  * If SDL_WINDOW_VULKAN is specified and there isn't a working Vulkan driver,
- * SDL_CreateWindow() will fail because SDL_Vulkan_LoadLibrary() will fail.
+ * SDL_CreateWindow() will fail, because SDL_Vulkan_LoadLibrary() will fail.
  *
  * If SDL_WINDOW_METAL is specified on an OS that does not support Metal,
  * SDL_CreateWindow() will fail.
@@ -961,6 +961,7 @@ extern SDL_DECLSPEC SDL_Window ** SDLCALL SDL_GetWindows(int *count);
  *
  * \since This function is available since SDL 3.0.0.
  *
+ * \sa SDL_CreateWindowAndRenderer
  * \sa SDL_CreatePopupWindow
  * \sa SDL_CreateWindowWithProperties
  * \sa SDL_DestroyWindow
@@ -970,36 +971,41 @@ extern SDL_DECLSPEC SDL_Window * SDLCALL SDL_CreateWindow(const char *title, int
 /**
  * Create a child popup window of the specified parent window.
  *
- * 'flags' **must** contain exactly one of the following: -
- * 'SDL_WINDOW_TOOLTIP': The popup window is a tooltip and will not pass any
- * input events. - 'SDL_WINDOW_POPUP_MENU': The popup window is a popup menu.
- * The topmost popup menu will implicitly gain the keyboard focus.
+ * The flags parameter **must** contain at least one of the following:
+ *
+ * - `SDL_WINDOW_TOOLTIP`: The popup window is a tooltip and will not pass any
+ *   input events.
+ * - `SDL_WINDOW_POPUP_MENU`: The popup window is a popup menu. The topmost
+ *   popup menu will implicitly gain the keyboard focus.
  *
  * The following flags are not relevant to popup window creation and will be
  * ignored:
  *
- * - 'SDL_WINDOW_MINIMIZED'
- * - 'SDL_WINDOW_MAXIMIZED'
- * - 'SDL_WINDOW_FULLSCREEN'
- * - 'SDL_WINDOW_BORDERLESS'
+ * - `SDL_WINDOW_MINIMIZED`
+ * - `SDL_WINDOW_MAXIMIZED`
+ * - `SDL_WINDOW_FULLSCREEN`
+ * - `SDL_WINDOW_BORDERLESS`
+ *
+ * The following flags are incompatible with popup window creation and will
+ * cause it to fail:
+ *
+ * - `SDL_WINDOW_UTILITY`
+ * - `SDL_WINDOW_MODAL`
  *
  * The parent parameter **must** be non-null and a valid window. The parent of
  * a popup window can be either a regular, toplevel window, or another popup
  * window.
  *
  * Popup windows cannot be minimized, maximized, made fullscreen, raised,
- * flash, be made a modal window, be the parent of a modal window, or grab the
- * mouse and/or keyboard. Attempts to do so will fail.
+ * flash, be made a modal window, be the parent of a toplevel window, or grab
+ * the mouse and/or keyboard. Attempts to do so will fail.
  *
  * Popup windows implicitly do not have a border/decorations and do not appear
  * on the taskbar/dock or in lists of windows such as alt-tab menus.
  *
- * If a parent window is hidden, any child popup windows will be recursively
- * hidden as well. Child popup windows not explicitly hidden will be restored
- * when the parent is shown.
- *
- * If the parent window is destroyed, any child popup windows will be
- * recursively destroyed as well.
+ * If a parent window is hidden or destroyed, any child popup windows will be
+ * recursively hidden or destroyed as well. Child popup windows not explicitly
+ * hidden will be restored when the parent is shown.
  *
  * \param parent the parent of the window, must not be NULL.
  * \param offset_x the x position of the popup window relative to the origin
@@ -1056,7 +1062,7 @@ extern SDL_DECLSPEC SDL_Window * SDLCALL SDL_CreatePopupWindow(SDL_Window *paren
  * - `SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN`: true if the window will be used
  *   with OpenGL rendering
  * - `SDL_PROP_WINDOW_CREATE_PARENT_POINTER`: an SDL_Window that will be the
- *   parent of this window, required for windows with the "toolip", "menu",
+ *   parent of this window, required for windows with the "tooltip", "menu",
  *   and "modal" properties
  * - `SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN`: true if the window should be
  *   resizable
@@ -1093,8 +1099,9 @@ extern SDL_DECLSPEC SDL_Window * SDLCALL SDL_CreatePopupWindow(SDL_Window *paren
  *   [README/wayland](README/wayland) for more information on using custom
  *   surfaces.
  * - `SDL_PROP_WINDOW_CREATE_WAYLAND_CREATE_EGL_WINDOW_BOOLEAN` - true if the
- *   application wants an associated `wl_egl_window` object to be created,
- *   even if the window does not have the OpenGL property or flag set.
+ *   application wants an associated `wl_egl_window` object to be created and
+ *   attached to the window, even if the window does not have the OpenGL
+ *   property or `SDL_WINDOW_OPENGL` flag set.
  * - `SDL_PROP_WINDOW_CREATE_WAYLAND_WL_SURFACE_POINTER` - the wl_surface
  *   associated with the window, if you want to wrap an existing window. See
  *   [README/wayland](README/wayland) for more information.
@@ -1250,7 +1257,7 @@ extern SDL_DECLSPEC SDL_Window * SDLCALL SDL_GetWindowParent(SDL_Window *window)
  * - `SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER`: the `(__unsafe_unretained)`
  *   UIWindow associated with the window
  * - `SDL_PROP_WINDOW_UIKIT_METAL_VIEW_TAG_NUMBER`: the NSInteger tag
- *   assocated with metal views on the window
+ *   associated with metal views on the window
  * - `SDL_PROP_WINDOW_UIKIT_OPENGL_FRAMEBUFFER_NUMBER`: the OpenGL view's
  *   framebuffer object. It must be bound when rendering to the screen using
  *   OpenGL.
@@ -1560,7 +1567,7 @@ extern SDL_DECLSPEC bool SDLCALL SDL_GetWindowSize(SDL_Window *window, int *w, i
  * Some devices have portions of the screen which are partially obscured or
  * not interactive, possibly due to on-screen controls, curved edges, camera
  * notches, TV overscan, etc. This function provides the area of the window
- * which is safe to have interactible content. You should continue rendering
+ * which is safe to have interactable content. You should continue rendering
  * into the rest of the window, but it should not contain visually important
  * or interactible content.
  *
@@ -1889,7 +1896,7 @@ extern SDL_DECLSPEC bool SDLCALL SDL_MaximizeWindow(SDL_Window *window);
  * Request that the window be minimized to an iconic representation.
  *
  * On some windowing systems this request is asynchronous and the new window
- * state may not have have been applied immediately upon the return of this
+ * state may not have been applied immediately upon the return of this
  * function. If an immediate change is required, call SDL_SyncWindow() to
  * block until the changes have taken effect.
  *
@@ -2292,9 +2299,16 @@ extern SDL_DECLSPEC float SDLCALL SDL_GetWindowOpacity(SDL_Window *window);
  * reparented to the new owner. Setting the parent window to NULL unparents
  * the window and removes child window status.
  *
+ * If a parent window is hidden or destroyed, the operation will be
+ * recursively applied to child windows. Child windows hidden with the parent
+ * that did not have their hidden status explicitly set will be restored when
+ * the parent is shown.
+ *
  * Attempting to set the parent of a window that is currently in the modal
- * state will fail. Use SDL_SetWindowModalFor() to cancel the modal status
- * before attempting to change the parent.
+ * state will fail. Use SDL_SetWindowModal() to cancel the modal status before
+ * attempting to change the parent.
+ *
+ * Popup windows cannot change parents and attempts to do so will fail.
  *
  * Setting a parent window that is currently the sibling or descendent of the
  * child window results in undefined behavior.
@@ -2445,12 +2459,14 @@ extern SDL_DECLSPEC bool SDLCALL SDL_SetWindowHitTest(SDL_Window *window, SDL_Hi
  *
  * This sets the alpha channel of a transparent window and any fully
  * transparent areas are also transparent to mouse clicks. If you are using
- * something besides the SDL render API, then you are responsible for setting
- * the alpha channel of the window yourself.
+ * something besides the SDL render API, then you are responsible for drawing
+ * the alpha channel of the window to match the shape alpha channel to get
+ * consistent cross-platform results.
  *
  * The shape is copied inside this function, so you can free it afterwards. If
  * your shape surface changes, you should call SDL_SetWindowShape() again to
- * update the window.
+ * update the window. This is an expensive operation, so should be done
+ * sparingly.
  *
  * The window must have been created with the SDL_WINDOW_TRANSPARENT flag.
  *
@@ -2479,8 +2495,8 @@ extern SDL_DECLSPEC bool SDLCALL SDL_FlashWindow(SDL_Window *window, SDL_FlashOp
 /**
  * Destroy a window.
  *
- * Any popups or modal windows owned by the window will be recursively
- * destroyed as well.
+ * Any child windows owned by the window will be recursively destroyed as
+ * well.
  *
  * \param window the window to destroy.
  *

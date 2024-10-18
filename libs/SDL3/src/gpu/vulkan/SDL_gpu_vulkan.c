@@ -60,6 +60,8 @@ typedef struct VulkanExtensions
     Uint8 EXT_vertex_attribute_divisor;
     // Only required for special implementations (i.e. MoltenVK)
     Uint8 KHR_portability_subset;
+    // Only required for decoding HDR ASTC textures
+    Uint8 EXT_texture_compression_astc_hdr;
 } VulkanExtensions;
 
 // Defines
@@ -135,69 +137,111 @@ static VkPresentModeKHR SDLToVK_PresentMode[] = {
 };
 
 static VkFormat SDLToVK_TextureFormat[] = {
-    VK_FORMAT_UNDEFINED,                // INVALID
-    VK_FORMAT_R8_UNORM,                 // A8_UNORM
-    VK_FORMAT_R8_UNORM,                 // R8_UNORM
-    VK_FORMAT_R8G8_UNORM,               // R8G8_UNORM
-    VK_FORMAT_R8G8B8A8_UNORM,           // R8G8B8A8_UNORM
-    VK_FORMAT_R16_UNORM,                // R16_UNORM
-    VK_FORMAT_R16G16_UNORM,             // R16G16_UNORM
-    VK_FORMAT_R16G16B16A16_UNORM,       // R16G16B16A16_UNORM
-    VK_FORMAT_A2B10G10R10_UNORM_PACK32, // R10G10B10A2_UNORM
-    VK_FORMAT_R5G6B5_UNORM_PACK16,      // B5G6R5_UNORM
-    VK_FORMAT_A1R5G5B5_UNORM_PACK16,    // B5G5R5A1_UNORM
-    VK_FORMAT_B4G4R4A4_UNORM_PACK16,    // B4G4R4A4_UNORM
-    VK_FORMAT_B8G8R8A8_UNORM,           // B8G8R8A8_UNORM
-    VK_FORMAT_BC1_RGBA_UNORM_BLOCK,     // BC1_UNORM
-    VK_FORMAT_BC2_UNORM_BLOCK,          // BC2_UNORM
-    VK_FORMAT_BC3_UNORM_BLOCK,          // BC3_UNORM
-    VK_FORMAT_BC4_UNORM_BLOCK,          // BC4_UNORM
-    VK_FORMAT_BC5_UNORM_BLOCK,          // BC5_UNORM
-    VK_FORMAT_BC7_UNORM_BLOCK,          // BC7_UNORM
-    VK_FORMAT_BC6H_SFLOAT_BLOCK,        // BC6H_FLOAT
-    VK_FORMAT_BC6H_UFLOAT_BLOCK,        // BC6H_UFLOAT
-    VK_FORMAT_R8_SNORM,                 // R8_SNORM
-    VK_FORMAT_R8G8_SNORM,               // R8G8_SNORM
-    VK_FORMAT_R8G8B8A8_SNORM,           // R8G8B8A8_SNORM
-    VK_FORMAT_R16_SNORM,                // R16_SNORM
-    VK_FORMAT_R16G16_SNORM,             // R16G16_SNORM
-    VK_FORMAT_R16G16B16A16_SNORM,       // R16G16B16A16_SNORM
-    VK_FORMAT_R16_SFLOAT,               // R16_FLOAT
-    VK_FORMAT_R16G16_SFLOAT,            // R16G16_FLOAT
-    VK_FORMAT_R16G16B16A16_SFLOAT,      // R16G16B16A16_FLOAT
-    VK_FORMAT_R32_SFLOAT,               // R32_FLOAT
-    VK_FORMAT_R32G32_SFLOAT,            // R32G32_FLOAT
-    VK_FORMAT_R32G32B32A32_SFLOAT,      // R32G32B32A32_FLOAT
-    VK_FORMAT_B10G11R11_UFLOAT_PACK32,  // R11G11B10_UFLOAT
-    VK_FORMAT_R8_UINT,                  // R8_UINT
-    VK_FORMAT_R8G8_UINT,                // R8G8_UINT
-    VK_FORMAT_R8G8B8A8_UINT,            // R8G8B8A8_UINT
-    VK_FORMAT_R16_UINT,                 // R16_UINT
-    VK_FORMAT_R16G16_UINT,              // R16G16_UINT
-    VK_FORMAT_R16G16B16A16_UINT,        // R16G16B16A16_UINT
-    VK_FORMAT_R32_UINT,                 // R32_UINT
-    VK_FORMAT_R32G32_UINT,              // R32G32_UINT
-    VK_FORMAT_R32G32B32A32_UINT,        // R32G32B32A32_UINT
-    VK_FORMAT_R8_SINT,                  // R8_INT
-    VK_FORMAT_R8G8_SINT,                // R8G8_INT
-    VK_FORMAT_R8G8B8A8_SINT,            // R8G8B8A8_INT
-    VK_FORMAT_R16_SINT,                 // R16_INT
-    VK_FORMAT_R16G16_SINT,              // R16G16_INT
-    VK_FORMAT_R16G16B16A16_SINT,        // R16G16B16A16_INT
-    VK_FORMAT_R32_SINT,                 // R32_INT
-    VK_FORMAT_R32G32_SINT,              // R32G32_INT
-    VK_FORMAT_R32G32B32A32_SINT,        // R32G32B32A32_INT
-    VK_FORMAT_R8G8B8A8_SRGB,            // R8G8B8A8_UNORM_SRGB
-    VK_FORMAT_B8G8R8A8_SRGB,            // B8G8R8A8_UNORM_SRGB
-    VK_FORMAT_BC1_RGBA_SRGB_BLOCK,      // BC1_UNORM_SRGB
-    VK_FORMAT_BC2_SRGB_BLOCK,           // BC3_UNORM_SRGB
-    VK_FORMAT_BC3_SRGB_BLOCK,           // BC3_UNORM_SRGB
-    VK_FORMAT_BC7_SRGB_BLOCK,           // BC7_UNORM_SRGB
-    VK_FORMAT_D16_UNORM,                // D16_UNORM
-    VK_FORMAT_X8_D24_UNORM_PACK32,      // D24_UNORM
-    VK_FORMAT_D32_SFLOAT,               // D32_FLOAT
-    VK_FORMAT_D24_UNORM_S8_UINT,        // D24_UNORM_S8_UINT
-    VK_FORMAT_D32_SFLOAT_S8_UINT,       // D32_FLOAT_S8_UINT
+    VK_FORMAT_UNDEFINED,                   // INVALID
+    VK_FORMAT_R8_UNORM,                    // A8_UNORM
+    VK_FORMAT_R8_UNORM,                    // R8_UNORM
+    VK_FORMAT_R8G8_UNORM,                  // R8G8_UNORM
+    VK_FORMAT_R8G8B8A8_UNORM,              // R8G8B8A8_UNORM
+    VK_FORMAT_R16_UNORM,                   // R16_UNORM
+    VK_FORMAT_R16G16_UNORM,                // R16G16_UNORM
+    VK_FORMAT_R16G16B16A16_UNORM,          // R16G16B16A16_UNORM
+    VK_FORMAT_A2B10G10R10_UNORM_PACK32,    // R10G10B10A2_UNORM
+    VK_FORMAT_R5G6B5_UNORM_PACK16,         // B5G6R5_UNORM
+    VK_FORMAT_A1R5G5B5_UNORM_PACK16,       // B5G5R5A1_UNORM
+    VK_FORMAT_B4G4R4A4_UNORM_PACK16,       // B4G4R4A4_UNORM
+    VK_FORMAT_B8G8R8A8_UNORM,              // B8G8R8A8_UNORM
+    VK_FORMAT_BC1_RGBA_UNORM_BLOCK,        // BC1_UNORM
+    VK_FORMAT_BC2_UNORM_BLOCK,             // BC2_UNORM
+    VK_FORMAT_BC3_UNORM_BLOCK,             // BC3_UNORM
+    VK_FORMAT_BC4_UNORM_BLOCK,             // BC4_UNORM
+    VK_FORMAT_BC5_UNORM_BLOCK,             // BC5_UNORM
+    VK_FORMAT_BC7_UNORM_BLOCK,             // BC7_UNORM
+    VK_FORMAT_BC6H_SFLOAT_BLOCK,           // BC6H_FLOAT
+    VK_FORMAT_BC6H_UFLOAT_BLOCK,           // BC6H_UFLOAT
+    VK_FORMAT_R8_SNORM,                    // R8_SNORM
+    VK_FORMAT_R8G8_SNORM,                  // R8G8_SNORM
+    VK_FORMAT_R8G8B8A8_SNORM,              // R8G8B8A8_SNORM
+    VK_FORMAT_R16_SNORM,                   // R16_SNORM
+    VK_FORMAT_R16G16_SNORM,                // R16G16_SNORM
+    VK_FORMAT_R16G16B16A16_SNORM,          // R16G16B16A16_SNORM
+    VK_FORMAT_R16_SFLOAT,                  // R16_FLOAT
+    VK_FORMAT_R16G16_SFLOAT,               // R16G16_FLOAT
+    VK_FORMAT_R16G16B16A16_SFLOAT,         // R16G16B16A16_FLOAT
+    VK_FORMAT_R32_SFLOAT,                  // R32_FLOAT
+    VK_FORMAT_R32G32_SFLOAT,               // R32G32_FLOAT
+    VK_FORMAT_R32G32B32A32_SFLOAT,         // R32G32B32A32_FLOAT
+    VK_FORMAT_B10G11R11_UFLOAT_PACK32,     // R11G11B10_UFLOAT
+    VK_FORMAT_R8_UINT,                     // R8_UINT
+    VK_FORMAT_R8G8_UINT,                   // R8G8_UINT
+    VK_FORMAT_R8G8B8A8_UINT,               // R8G8B8A8_UINT
+    VK_FORMAT_R16_UINT,                    // R16_UINT
+    VK_FORMAT_R16G16_UINT,                 // R16G16_UINT
+    VK_FORMAT_R16G16B16A16_UINT,           // R16G16B16A16_UINT
+    VK_FORMAT_R32_UINT,                    // R32_UINT
+    VK_FORMAT_R32G32_UINT,                 // R32G32_UINT
+    VK_FORMAT_R32G32B32A32_UINT,           // R32G32B32A32_UINT
+    VK_FORMAT_R8_SINT,                     // R8_INT
+    VK_FORMAT_R8G8_SINT,                   // R8G8_INT
+    VK_FORMAT_R8G8B8A8_SINT,               // R8G8B8A8_INT
+    VK_FORMAT_R16_SINT,                    // R16_INT
+    VK_FORMAT_R16G16_SINT,                 // R16G16_INT
+    VK_FORMAT_R16G16B16A16_SINT,           // R16G16B16A16_INT
+    VK_FORMAT_R32_SINT,                    // R32_INT
+    VK_FORMAT_R32G32_SINT,                 // R32G32_INT
+    VK_FORMAT_R32G32B32A32_SINT,           // R32G32B32A32_INT
+    VK_FORMAT_R8G8B8A8_SRGB,               // R8G8B8A8_UNORM_SRGB
+    VK_FORMAT_B8G8R8A8_SRGB,               // B8G8R8A8_UNORM_SRGB
+    VK_FORMAT_BC1_RGBA_SRGB_BLOCK,         // BC1_UNORM_SRGB
+    VK_FORMAT_BC2_SRGB_BLOCK,              // BC3_UNORM_SRGB
+    VK_FORMAT_BC3_SRGB_BLOCK,              // BC3_UNORM_SRGB
+    VK_FORMAT_BC7_SRGB_BLOCK,              // BC7_UNORM_SRGB
+    VK_FORMAT_D16_UNORM,                   // D16_UNORM
+    VK_FORMAT_X8_D24_UNORM_PACK32,         // D24_UNORM
+    VK_FORMAT_D32_SFLOAT,                  // D32_FLOAT
+    VK_FORMAT_D24_UNORM_S8_UINT,           // D24_UNORM_S8_UINT
+    VK_FORMAT_D32_SFLOAT_S8_UINT,          // D32_FLOAT_S8_UINT
+    VK_FORMAT_ASTC_4x4_UNORM_BLOCK,        // ASTC_4x4_UNORM
+    VK_FORMAT_ASTC_5x4_UNORM_BLOCK,        // ASTC_5x4_UNORM
+    VK_FORMAT_ASTC_5x5_UNORM_BLOCK,        // ASTC_5x5_UNORM
+    VK_FORMAT_ASTC_6x5_UNORM_BLOCK,        // ASTC_6x5_UNORM
+    VK_FORMAT_ASTC_6x6_UNORM_BLOCK,        // ASTC_6x6_UNORM
+    VK_FORMAT_ASTC_8x5_UNORM_BLOCK,        // ASTC_8x5_UNORM
+    VK_FORMAT_ASTC_8x6_UNORM_BLOCK,        // ASTC_8x6_UNORM
+    VK_FORMAT_ASTC_8x8_UNORM_BLOCK,        // ASTC_8x8_UNORM
+    VK_FORMAT_ASTC_10x5_UNORM_BLOCK,       // ASTC_10x5_UNORM
+    VK_FORMAT_ASTC_10x6_UNORM_BLOCK,       // ASTC_10x6_UNORM
+    VK_FORMAT_ASTC_10x8_UNORM_BLOCK,       // ASTC_10x8_UNORM
+    VK_FORMAT_ASTC_10x10_UNORM_BLOCK,      // ASTC_10x10_UNORM
+    VK_FORMAT_ASTC_12x10_UNORM_BLOCK,      // ASTC_12x10_UNORM
+    VK_FORMAT_ASTC_12x12_UNORM_BLOCK,      // ASTC_12x12_UNORM
+    VK_FORMAT_ASTC_4x4_SRGB_BLOCK,         // ASTC_4x4_UNORM_SRGB
+    VK_FORMAT_ASTC_5x4_SRGB_BLOCK,         // ASTC_5x4_UNORM_SRGB
+    VK_FORMAT_ASTC_5x5_SRGB_BLOCK,         // ASTC_5x5_UNORM_SRGB
+    VK_FORMAT_ASTC_6x5_SRGB_BLOCK,         // ASTC_6x5_UNORM_SRGB
+    VK_FORMAT_ASTC_6x6_SRGB_BLOCK,         // ASTC_6x6_UNORM_SRGB
+    VK_FORMAT_ASTC_8x5_SRGB_BLOCK,         // ASTC_8x5_UNORM_SRGB
+    VK_FORMAT_ASTC_8x6_SRGB_BLOCK,         // ASTC_8x6_UNORM_SRGB
+    VK_FORMAT_ASTC_8x8_SRGB_BLOCK,         // ASTC_8x8_UNORM_SRGB
+    VK_FORMAT_ASTC_10x5_SRGB_BLOCK,        // ASTC_10x5_UNORM_SRGB
+    VK_FORMAT_ASTC_10x6_SRGB_BLOCK,        // ASTC_10x6_UNORM_SRGB
+    VK_FORMAT_ASTC_10x8_SRGB_BLOCK,        // ASTC_10x8_UNORM_SRGB
+    VK_FORMAT_ASTC_10x10_SRGB_BLOCK,       // ASTC_10x10_UNORM_SRGB
+    VK_FORMAT_ASTC_12x10_SRGB_BLOCK,       // ASTC_12x10_UNORM_SRGB
+    VK_FORMAT_ASTC_12x12_SRGB_BLOCK,       // ASTC_12x12_UNORM_SRGB
+    VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK_EXT,   // ASTC_4x4_FLOAT
+    VK_FORMAT_ASTC_5x4_SFLOAT_BLOCK_EXT,   // ASTC_5x4_FLOAT
+    VK_FORMAT_ASTC_5x5_SFLOAT_BLOCK_EXT,   // ASTC_5x5_FLOAT
+    VK_FORMAT_ASTC_6x5_SFLOAT_BLOCK_EXT,   // ASTC_6x5_FLOAT
+    VK_FORMAT_ASTC_6x6_SFLOAT_BLOCK_EXT,   // ASTC_6x6_FLOAT
+    VK_FORMAT_ASTC_8x5_SFLOAT_BLOCK_EXT,   // ASTC_8x5_FLOAT
+    VK_FORMAT_ASTC_8x6_SFLOAT_BLOCK_EXT,   // ASTC_8x6_FLOAT
+    VK_FORMAT_ASTC_8x8_SFLOAT_BLOCK_EXT,   // ASTC_8x8_FLOAT
+    VK_FORMAT_ASTC_10x5_SFLOAT_BLOCK_EXT,  // ASTC_10x5_FLOAT
+    VK_FORMAT_ASTC_10x6_SFLOAT_BLOCK_EXT,  // ASTC_10x6_FLOAT
+    VK_FORMAT_ASTC_10x8_SFLOAT_BLOCK_EXT,  // ASTC_10x8_FLOAT
+    VK_FORMAT_ASTC_10x10_SFLOAT_BLOCK_EXT, // ASTC_10x10_FLOAT
+    VK_FORMAT_ASTC_12x10_SFLOAT_BLOCK_EXT, // ASTC_12x10_FLOAT
+    VK_FORMAT_ASTC_12x12_SFLOAT_BLOCK      // ASTC_12x12_FLOAT
 };
 SDL_COMPILE_TIME_ASSERT(SDLToVK_TextureFormat, SDL_arraysize(SDLToVK_TextureFormat) == SDL_GPU_TEXTUREFORMAT_MAX_ENUM_VALUE);
 
@@ -670,6 +714,8 @@ typedef struct WindowData
     SDL_GPUSwapchainComposition swapchainComposition;
     SDL_GPUPresentMode presentMode;
     bool needsSwapchainRecreate;
+    Uint32 swapchainCreateWidth;
+    Uint32 swapchainCreateHeight;
 
     // Window surface
     VkSurfaceKHR surface;
@@ -2941,6 +2987,9 @@ static void VULKAN_INTERNAL_DestroyTexture(
         }
 
         if (texture->subresources[subresourceIndex].depthStencilView != VK_NULL_HANDLE) {
+            VULKAN_INTERNAL_RemoveFramebuffersContainingView(
+                renderer,
+                texture->subresources[subresourceIndex].depthStencilView);
             renderer->vkDestroyImageView(
                 renderer->logicalDevice,
                 texture->subresources[subresourceIndex].depthStencilView,
@@ -4381,13 +4430,12 @@ static Uint32 VULKAN_INTERNAL_CreateSwapchain(
     VkSemaphoreCreateInfo semaphoreCreateInfo;
     SwapchainSupportDetails swapchainSupportDetails;
     bool hasValidSwapchainComposition, hasValidPresentMode;
-    Sint32 drawableWidth, drawableHeight;
     Uint32 i;
-    SDL_VideoDevice *_this = SDL_GetVideoDevice();
-
-    SDL_assert(_this && _this->Vulkan_CreateSurface);
 
     windowData->frameCounter = 0;
+
+    SDL_VideoDevice *_this = SDL_GetVideoDevice();
+    SDL_assert(_this && _this->Vulkan_CreateSurface);
 
     // Each swapchain must have its own surface.
     if (!_this->Vulkan_CreateSurface(
@@ -4491,16 +4539,20 @@ static Uint32 VULKAN_INTERNAL_CreateSwapchain(
         return VULKAN_INTERNAL_TRY_AGAIN;
     }
 
-    // Sync now to be sure that our swapchain size is correct
-    SDL_SyncWindow(windowData->window);
-    SDL_GetWindowSizeInPixels(
-        windowData->window,
-        &drawableWidth,
-        &drawableHeight);
-
     windowData->imageCount = MAX_FRAMES_IN_FLIGHT;
-    windowData->width = drawableWidth;
-    windowData->height = drawableHeight;
+
+#ifdef SDL_PLATFORM_APPLE
+    windowData->width = swapchainSupportDetails.capabilities.currentExtent.width;
+    windowData->height = swapchainSupportDetails.capabilities.currentExtent.height;
+#else
+    windowData->width = SDL_clamp(
+        windowData->swapchainCreateWidth,
+        swapchainSupportDetails.capabilities.minImageExtent.width,
+        swapchainSupportDetails.capabilities.maxImageExtent.width);
+    windowData->height = SDL_clamp(windowData->swapchainCreateHeight,
+        swapchainSupportDetails.capabilities.minImageExtent.height,
+        swapchainSupportDetails.capabilities.maxImageExtent.height);
+#endif
 
     if (swapchainSupportDetails.capabilities.maxImageCount > 0 &&
         windowData->imageCount > swapchainSupportDetails.capabilities.maxImageCount) {
@@ -4528,8 +4580,8 @@ static Uint32 VULKAN_INTERNAL_CreateSwapchain(
     swapchainCreateInfo.minImageCount = windowData->imageCount;
     swapchainCreateInfo.imageFormat = windowData->format;
     swapchainCreateInfo.imageColorSpace = windowData->colorSpace;
-    swapchainCreateInfo.imageExtent.width = drawableWidth;
-    swapchainCreateInfo.imageExtent.height = drawableHeight;
+    swapchainCreateInfo.imageExtent.width = windowData->width;
+    swapchainCreateInfo.imageExtent.height = windowData->height;
     swapchainCreateInfo.imageArrayLayers = 1;
     swapchainCreateInfo.imageUsage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -4603,8 +4655,8 @@ static Uint32 VULKAN_INTERNAL_CreateSwapchain(
         // Initialize dummy container
         SDL_zero(windowData->textureContainers[i]);
         windowData->textureContainers[i].canBeCycled = false;
-        windowData->textureContainers[i].header.info.width = drawableWidth;
-        windowData->textureContainers[i].header.info.height = drawableHeight;
+        windowData->textureContainers[i].header.info.width = windowData->width;
+        windowData->textureContainers[i].header.info.height = windowData->height;
         windowData->textureContainers[i].header.info.layer_count_or_depth = 1;
         windowData->textureContainers[i].header.info.format = SwapchainCompositionToSDLFormat(
             windowData->swapchainComposition,
@@ -8900,6 +8952,7 @@ static void VULKAN_Blit(
     // Using BeginRenderPass to clear because vkCmdClearColorImage requires barriers anyway
     if (info->load_op == SDL_GPU_LOADOP_CLEAR) {
         SDL_GPUColorTargetInfo targetInfo;
+        SDL_zero(targetInfo);
         targetInfo.texture = info->destination.texture;
         targetInfo.mip_level = info->destination.mip_level;
         targetInfo.layer_or_depth_plane = info->destination.layer_or_depth_plane;
@@ -9367,6 +9420,8 @@ static bool VULKAN_INTERNAL_OnWindowResize(void *userdata, SDL_Event *e)
     if (e->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED && e->window.windowID == SDL_GetWindowID(w)) {
         data = VULKAN_INTERNAL_FetchWindowData(w);
         data->needsSwapchainRecreate = true;
+        data->swapchainCreateWidth = e->window.data1;
+        data->swapchainCreateHeight = e->window.data2;
     }
 
     return true;
@@ -9464,6 +9519,16 @@ static bool VULKAN_ClaimWindow(
         windowData->window = window;
         windowData->presentMode = SDL_GPU_PRESENTMODE_VSYNC;
         windowData->swapchainComposition = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
+
+        // On non-Apple platforms the swapchain capability currentExtent can be different from the window,
+        // so we have to query the window size.
+#ifndef SDL_PLATFORM_APPLE
+        int w, h;
+        SDL_SyncWindow(window);
+        SDL_GetWindowSizeInPixels(window, &w, &h);
+        windowData->swapchainCreateWidth = w;
+        windowData->swapchainCreateHeight = h;
+#endif
 
         Uint32 createSwapchainResult = VULKAN_INTERNAL_CreateSwapchain(renderer, windowData);
         if (createSwapchainResult == 1) {
@@ -10232,20 +10297,21 @@ static bool VULKAN_Submit(
             renderer->unifiedQueue,
             &presentInfo);
 
-        presentData->windowData->frameCounter =
-            (presentData->windowData->frameCounter + 1) % MAX_FRAMES_IN_FLIGHT;
-
-        if (presentResult == VK_SUCCESS || presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+        if (presentResult == VK_SUCCESS || presentResult == VK_SUBOPTIMAL_KHR || presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
             // If presenting, the swapchain is using the in-flight fence
             presentData->windowData->inFlightFences[presentData->windowData->frameCounter] = (SDL_GPUFence*)vulkanCommandBuffer->inFlightFence;
             (void)SDL_AtomicIncRef(&vulkanCommandBuffer->inFlightFence->referenceCount);
 
-            if (presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+            if (presentResult == VK_SUBOPTIMAL_KHR || presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
                 presentData->windowData->needsSwapchainRecreate = true;
             }
         } else {
             CHECK_VULKAN_ERROR_AND_RETURN(presentResult, vkQueuePresentKHR, false)
         }
+
+        presentData->windowData->frameCounter =
+            (presentData->windowData->frameCounter + 1) % MAX_FRAMES_IN_FLIGHT;
+
     }
 
     // Check if we can perform any cleanups
@@ -10568,7 +10634,7 @@ static inline Uint8 CheckDeviceExtensions(
         supports->ext = 1;                   \
     }
         CHECK(KHR_swapchain)
-        else CHECK(KHR_maintenance1) else CHECK(KHR_driver_properties) else CHECK(EXT_vertex_attribute_divisor) else CHECK(KHR_portability_subset)
+        else CHECK(KHR_maintenance1) else CHECK(KHR_driver_properties) else CHECK(EXT_vertex_attribute_divisor) else CHECK(KHR_portability_subset) else CHECK(EXT_texture_compression_astc_hdr)
 #undef CHECK
     }
 
@@ -10583,7 +10649,8 @@ static inline Uint32 GetDeviceExtensionCount(VulkanExtensions *supports)
         supports->KHR_maintenance1 +
         supports->KHR_driver_properties +
         supports->EXT_vertex_attribute_divisor +
-        supports->KHR_portability_subset);
+        supports->KHR_portability_subset +
+        supports->EXT_texture_compression_astc_hdr);
 }
 
 static inline void CreateDeviceExtensionArray(
@@ -10600,6 +10667,7 @@ static inline void CreateDeviceExtensionArray(
     CHECK(KHR_driver_properties)
     CHECK(EXT_vertex_attribute_divisor)
     CHECK(KHR_portability_subset)
+    CHECK(EXT_texture_compression_astc_hdr)
 #undef CHECK
 }
 

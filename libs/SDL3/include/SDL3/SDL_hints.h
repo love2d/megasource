@@ -1244,8 +1244,10 @@ extern "C" {
  *
  * The variable can be set to the following values:
  *
- * - "0": GameInput is not used. (default)
+ * - "0": GameInput is not used.
  * - "1": GameInput is used.
+ *
+ * The default is "1" on GDK platforms, and "0" otherwise.
  *
  * This hint should be set before SDL is initialized.
  *
@@ -2299,9 +2301,9 @@ extern "C" {
  *
  * This hint needs to be set before SDL_Init().
  *
- * \since This hint is available since SDL 3.0.0.
+ * \since This hint is available since SDL 3.1.4.
  */
-#define SDL_HINT_MAC_SCROLL_MOMENTUM "SDL_HINT_MAC_SCROLL_MOMENTUM"
+#define SDL_HINT_MAC_SCROLL_MOMENTUM "SDL_MAC_SCROLL_MOMENTUM"
 
 /**
  * Request SDL_AppIterate() be called at a specific rate.
@@ -3128,6 +3130,29 @@ extern "C" {
  * \since This hint is available since SDL 3.0.0.
  */
 #define SDL_HINT_VIDEO_ALLOW_SCREENSAVER "SDL_VIDEO_ALLOW_SCREENSAVER"
+
+/**
+ * A comma separated list containing the names of the displays that SDL should
+ * sort to the front of the display list.
+ *
+ * When this hint is set, displays with matching name strings will be
+ * prioritized in the list of displays, as exposed by calling
+ * SDL_GetDisplays(), with the first listed becoming the primary display. The
+ * naming convention can vary depending on the environment, but it is usually
+ * a connector name (e.g. 'DP-1', 'DP-2', 'HDMI-1', etc...).
+ *
+ * On X11 and Wayland desktops, the connector names associated with displays
+ * can typically be found by using the `xrandr` utility.
+ *
+ * This hint is currently supported on the following drivers:
+ *
+ * - Wayland (wayland)
+ *
+ * This hint should be set before SDL is initialized.
+ *
+ * \since This hint is available since SDL 3.1.5.
+ */
+#define SDL_HINT_VIDEO_DISPLAY_PRIORITY "SDL_VIDEO_DISPLAY_PRIORITY"
 
 /**
  * Tell the video driver that we only want a double buffer.

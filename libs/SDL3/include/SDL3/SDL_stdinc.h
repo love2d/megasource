@@ -428,7 +428,7 @@ typedef Sint64 SDL_Time;
 #define SDL_PRIs64 "I64d"
 #elif defined(PRIs64)
 #define SDL_PRIs64 PRIs64
-#elif defined(__LP64__) && !defined(SDL_PLATFORM_APPLE)
+#elif defined(__LP64__) && !defined(SDL_PLATFORM_APPLE) && !defined(__EMSCRIPTEN__)
 #define SDL_PRIs64 "ld"
 #else
 #define SDL_PRIs64 "lld"
@@ -439,7 +439,7 @@ typedef Sint64 SDL_Time;
 #define SDL_PRIu64 "I64u"
 #elif defined(PRIu64)
 #define SDL_PRIu64 PRIu64
-#elif defined(__LP64__) && !defined(SDL_PLATFORM_APPLE)
+#elif defined(__LP64__) && !defined(SDL_PLATFORM_APPLE) && !defined(__EMSCRIPTEN__)
 #define SDL_PRIu64 "lu"
 #else
 #define SDL_PRIu64 "llu"
@@ -554,7 +554,7 @@ SDL_COMPILE_TIME_ASSERT(longlong_size64, sizeof(long long) == 8); /* using I64 f
 #define SDL_PRINTF_FORMAT_STRING
 #define SDL_SCANF_FORMAT_STRING
 #endif
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
 #define SDL_PRINTF_VARARG_FUNC( fmtargnumber ) __attribute__ (( format( __printf__, fmtargnumber, fmtargnumber+1 )))
 #define SDL_PRINTF_VARARG_FUNCV( fmtargnumber ) __attribute__(( format( __printf__, fmtargnumber, 0 )))
 #define SDL_SCANF_VARARG_FUNC( fmtargnumber ) __attribute__ (( format( __scanf__, fmtargnumber, fmtargnumber+1 )))
@@ -2472,13 +2472,14 @@ extern SDL_DECLSPEC char * SDLCALL SDL_strpbrk(const char *str, const char *brea
 /**
  * The Unicode REPLACEMENT CHARACTER codepoint.
  *
- * SDL_StepUTF8() reports this codepoint when it encounters a UTF-8 string
- * with encoding errors.
+ * SDL_StepUTF8() and SDL_StepBackUTF8() report this codepoint when they
+ * encounter a UTF-8 string with encoding errors.
  *
  * This tends to render as something like a question mark in most places.
  *
  * \since This macro is available since SDL 3.0.0.
  *
+ * \sa SDL_StepBackUTF8
  * \sa SDL_StepUTF8
  */
 #define SDL_INVALID_UNICODE_CODEPOINT 0xFFFD
@@ -2527,6 +2528,37 @@ extern SDL_DECLSPEC char * SDLCALL SDL_strpbrk(const char *str, const char *brea
  * \since This function is available since SDL 3.0.0.
  */
 extern SDL_DECLSPEC Uint32 SDLCALL SDL_StepUTF8(const char **pstr, size_t *pslen);
+
+/**
+ * Decode a UTF-8 string in reverse, one Unicode codepoint at a time.
+ *
+ * This will go to the start of the previous Unicode codepoint in the string,
+ * move `*pstr` to that location and return that codepoint.
+ *
+ * If `*pstr` is already at the start of the string), it will not advance
+ * `*pstr` at all.
+ *
+ * Generally this function is called in a loop until it returns zero,
+ * adjusting its parameter each iteration.
+ *
+ * If an invalid UTF-8 sequence is encountered, this function returns
+ * SDL_INVALID_UNICODE_CODEPOINT.
+ *
+ * Several things can generate invalid UTF-8 sequences, including overlong
+ * encodings, the use of UTF-16 surrogate values, and truncated data. Please
+ * refer to
+ * [RFC3629](https://www.ietf.org/rfc/rfc3629.txt)
+ * for details.
+ *
+ * \param start a pointer to the beginning of the UTF-8 string.
+ * \param pstr a pointer to a UTF-8 string pointer to be read and adjusted.
+ * \returns the previous Unicode codepoint in the string.
+ *
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.4.
+ */
+extern SDL_DECLSPEC Uint32 SDLCALL SDL_StepBackUTF8(const char *start, const char **pstr);
 
 /**
  * Convert a single Unicode codepoint to UTF-8.
@@ -4211,6 +4243,9 @@ size_t wcslcpy(wchar_t *dst, const wchar_t *src, size_t size);
 #if !defined(HAVE_WCSLCAT) && !defined(wcslcat)
 size_t wcslcat(wchar_t *dst, const wchar_t *src, size_t size);
 #endif
+
+/* strdup is not ANSI but POSIX, and its prototype might be hidden... */
+char *strdup(const char *str);
 
 /* Starting LLVM 16, the analyser errors out if these functions do not have
    their prototype defined (clang-diagnostic-implicit-function-declaration) */

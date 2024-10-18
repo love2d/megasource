@@ -166,6 +166,48 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
     MTLPixelFormatInvalid, // D24_UNORM_S8_UINT
 #endif
     MTLPixelFormatDepth32Float_Stencil8, // D32_FLOAT_S8_UINT
+    MTLPixelFormatASTC_4x4_LDR,    // ASTC_4x4_UNORM
+    MTLPixelFormatASTC_5x4_LDR,    // ASTC_5x4_UNORM
+    MTLPixelFormatASTC_5x5_LDR,    // ASTC_5x5_UNORM
+    MTLPixelFormatASTC_6x5_LDR,    // ASTC_6x5_UNORM
+    MTLPixelFormatASTC_6x6_LDR,    // ASTC_6x6_UNORM
+    MTLPixelFormatASTC_8x5_LDR,    // ASTC_8x5_UNORM
+    MTLPixelFormatASTC_8x6_LDR,    // ASTC_8x6_UNORM
+    MTLPixelFormatASTC_8x8_LDR,    // ASTC_8x8_UNORM
+    MTLPixelFormatASTC_10x5_LDR,   // ASTC_10x5_UNORM
+    MTLPixelFormatASTC_10x6_LDR,   // ASTC_10x6_UNORM
+    MTLPixelFormatASTC_10x8_LDR,   // ASTC_10x8_UNORM
+    MTLPixelFormatASTC_10x10_LDR,  // ASTC_10x10_UNORM
+    MTLPixelFormatASTC_12x10_LDR,  // ASTC_12x10_UNORM
+    MTLPixelFormatASTC_12x12_LDR,  // ASTC_12x12_UNORM
+    MTLPixelFormatASTC_4x4_sRGB,   // ASTC_4x4_UNORM_SRGB
+    MTLPixelFormatASTC_5x4_sRGB,   // ASTC_5x4_UNORM_SRGB
+    MTLPixelFormatASTC_5x5_sRGB,   // ASTC_5x5_UNORM_SRGB
+    MTLPixelFormatASTC_6x5_sRGB,   // ASTC_6x5_UNORM_SRGB
+    MTLPixelFormatASTC_6x6_sRGB,   // ASTC_6x6_UNORM_SRGB
+    MTLPixelFormatASTC_8x5_sRGB,   // ASTC_8x5_UNORM_SRGB
+    MTLPixelFormatASTC_8x6_sRGB,   // ASTC_8x6_UNORM_SRGB
+    MTLPixelFormatASTC_8x8_sRGB,   // ASTC_8x8_UNORM_SRGB
+    MTLPixelFormatASTC_10x5_sRGB,  // ASTC_10x5_UNORM_SRGB
+    MTLPixelFormatASTC_10x6_sRGB,  // ASTC_10x6_UNORM_SRGB
+    MTLPixelFormatASTC_10x8_sRGB,  // ASTC_10x8_UNORM_SRGB
+    MTLPixelFormatASTC_10x10_sRGB, // ASTC_10x10_UNORM_SRGB
+    MTLPixelFormatASTC_12x10_sRGB, // ASTC_12x10_UNORM_SRGB
+    MTLPixelFormatASTC_12x12_sRGB, // ASTC_12x12_UNORM_SRGB
+    MTLPixelFormatASTC_4x4_HDR,    // ASTC_4x4_FLOAT
+    MTLPixelFormatASTC_5x4_HDR,    // ASTC_5x4_FLOAT
+    MTLPixelFormatASTC_5x5_HDR,    // ASTC_5x5_FLOAT
+    MTLPixelFormatASTC_6x5_HDR,    // ASTC_6x5_FLOAT
+    MTLPixelFormatASTC_6x6_HDR,    // ASTC_6x6_FLOAT
+    MTLPixelFormatASTC_8x5_HDR,    // ASTC_8x5_FLOAT
+    MTLPixelFormatASTC_8x6_HDR,    // ASTC_8x6_FLOAT
+    MTLPixelFormatASTC_8x8_HDR,    // ASTC_8x8_FLOAT
+    MTLPixelFormatASTC_10x5_HDR,   // ASTC_10x5_FLOAT
+    MTLPixelFormatASTC_10x6_HDR,   // ASTC_10x6_FLOAT
+    MTLPixelFormatASTC_10x8_HDR,   // ASTC_10x8_FLOAT
+    MTLPixelFormatASTC_10x10_HDR,  // ASTC_10x10_FLOAT
+    MTLPixelFormatASTC_12x10_HDR,  // ASTC_12x10_FLOAT
+    MTLPixelFormatASTC_12x12_HDR   // ASTC_12x12_FLOAT
 };
 SDL_COMPILE_TIME_ASSERT(SDLToMetal_SurfaceFormat, SDL_arraysize(SDLToMetal_SurfaceFormat) == SDL_GPU_TEXTUREFORMAT_MAX_ENUM_VALUE);
 
@@ -1289,9 +1331,9 @@ static SDL_GPUSampler *METAL_CreateSampler(
         id<MTLSamplerState> sampler;
         MetalSampler *metalSampler;
 
-        samplerDesc.rAddressMode = SDLToMetal_SamplerAddressMode[createinfo->address_mode_u];
-        samplerDesc.sAddressMode = SDLToMetal_SamplerAddressMode[createinfo->address_mode_v];
-        samplerDesc.tAddressMode = SDLToMetal_SamplerAddressMode[createinfo->address_mode_w];
+        samplerDesc.sAddressMode = SDLToMetal_SamplerAddressMode[createinfo->address_mode_u];
+        samplerDesc.tAddressMode = SDLToMetal_SamplerAddressMode[createinfo->address_mode_v];
+        samplerDesc.rAddressMode = SDLToMetal_SamplerAddressMode[createinfo->address_mode_w];
         samplerDesc.minFilter = SDLToMetal_MinMagFilter[createinfo->min_filter];
         samplerDesc.magFilter = SDLToMetal_MinMagFilter[createinfo->mag_filter];
         samplerDesc.mipFilter = SDLToMetal_MipFilter[createinfo->mipmap_mode]; // FIXME: Is this right with non-mipmapped samplers?
@@ -1710,7 +1752,7 @@ static void METAL_UploadToTexture(
                  copyFromBuffer:bufferContainer->activeBuffer->handle
                    sourceOffset:source->offset
               sourceBytesPerRow:BytesPerRow(destination->w, textureContainer->header.info.format)
-            sourceBytesPerImage:BytesPerImage(destination->w, destination->h, textureContainer->header.info.format)
+            sourceBytesPerImage:SDL_CalculateGPUTextureFormatSize(textureContainer->header.info.format, destination->w, destination->h, destination->d)
                      sourceSize:MTLSizeMake(destination->w, destination->h, destination->d)
                       toTexture:metalTexture->handle
                destinationSlice:destination->layer
@@ -3877,7 +3919,58 @@ static bool METAL_SupportsTextureFormat(
 #else
             return false;
 #endif
-
+        case SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_5x4_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_5x5_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_6x5_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_6x6_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x5_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x6_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x8_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x5_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x6_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x8_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x10_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_12x10_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_12x12_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_5x4_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_5x5_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_6x5_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_6x6_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x5_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x6_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x8_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x5_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x6_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x8_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x10_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_12x10_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_12x12_UNORM_SRGB:
+#ifdef SDL_PLATFORM_MACOS
+            return [renderer->device supportsFamily:MTLGPUFamilyApple7];
+#else
+            return true;
+#endif
+        case SDL_GPU_TEXTUREFORMAT_ASTC_4x4_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_5x4_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_5x5_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_6x5_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_6x6_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x5_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x6_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_8x8_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x5_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x6_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x8_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_10x10_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_12x10_FLOAT:
+        case SDL_GPU_TEXTUREFORMAT_ASTC_12x12_FLOAT:
+#ifdef SDL_PLATFORM_MACOS
+            return [renderer->device supportsFamily:MTLGPUFamilyApple7];
+#else
+            return [renderer->device supportsFamily:MTLGPUFamilyApple6];
+#endif
         default:
             return true;
         }
