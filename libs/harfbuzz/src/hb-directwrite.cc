@@ -173,7 +173,7 @@ _hb_directwrite_shaper_face_data_create (hb_face_t *face)
 
   t_DWriteCreateFactory p_DWriteCreateFactory;
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-function-type"
 #endif
@@ -181,7 +181,7 @@ _hb_directwrite_shaper_face_data_create (hb_face_t *face)
   p_DWriteCreateFactory = (t_DWriteCreateFactory)
 			  GetProcAddress (data->dwrite_dll, "DWriteCreateFactory");
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
 
@@ -251,16 +251,12 @@ _hb_directwrite_shaper_face_data_destroy (hb_directwrite_face_data_t *data)
       data->dwriteFactory->UnregisterFontFileLoader (data->fontFileLoader);
     data->dwriteFactory->Release ();
   }
-  if (data->fontFileLoader)
-    delete data->fontFileLoader;
-  if (data->fontFileStream)
-    delete data->fontFileStream;
-  if (data->faceBlob)
-    hb_blob_destroy (data->faceBlob);
+  delete data->fontFileLoader;
+  delete data->fontFileStream;
+  hb_blob_destroy (data->faceBlob);
   if (data->dwrite_dll)
     FreeLibrary (data->dwrite_dll);
-  if (data)
-    delete data;
+  delete data;
 }
 
 

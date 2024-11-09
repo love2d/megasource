@@ -29,32 +29,6 @@
 #include "hb.hh"
 #include "hb-machinery.hh"
 
-#if !defined(HB_NO_SETLOCALE) && (!defined(HAVE_NEWLOCALE) || !defined(HAVE_USELOCALE))
-#define HB_NO_SETLOCALE 1
-#endif
-
-#ifndef HB_NO_SETLOCALE
-
-#include <locale.h>
-#ifdef HAVE_XLOCALE_H
-#include <xlocale.h> // Needed on BSD/OS X for uselocale
-#endif
-
-#ifdef WIN32
-#define hb_locale_t _locale_t
-#else
-#define hb_locale_t locale_t
-#endif
-#define hb_setlocale setlocale
-#define hb_uselocale uselocale
-
-#else
-
-#define hb_locale_t void *
-#define hb_setlocale(Category, Locale) "C"
-#define hb_uselocale(Locale) ((hb_locale_t) 0)
-
-#endif
 
 /**
  * SECTION:hb-common
@@ -285,7 +259,7 @@ struct hb_language_item_t {
     lang = (hb_language_t) hb_malloc(len);
     if (likely (lang))
     {
-      memcpy((unsigned char *) lang, s, len);
+      hb_memcpy((unsigned char *) lang, s, len);
       for (unsigned char *p = (unsigned char *) lang; *p; p++)
 	*p = canon_map[*p];
     }
@@ -379,7 +353,7 @@ hb_language_from_string (const char *str, int len)
     /* NUL-terminate it. */
     char strbuf[64];
     len = hb_min (len, (int) sizeof (strbuf) - 1);
-    memcpy (strbuf, str, len);
+    hb_memcpy (strbuf, str, len);
     strbuf[len] = '\0';
     item = lang_find_or_insert (strbuf);
   }
@@ -658,6 +632,7 @@ hb_script_get_horizontal_direction (hb_script_t script)
     case HB_SCRIPT_OLD_HUNGARIAN:
     case HB_SCRIPT_OLD_ITALIC:
     case HB_SCRIPT_RUNIC:
+    case HB_SCRIPT_TIFINAGH:
 
       return HB_DIRECTION_INVALID;
   }
@@ -840,7 +815,7 @@ parse_tag (const char **pp, const char *end, hb_tag_t *tag)
   }
 
   const char *p = *pp;
-  while (*pp < end && (ISALNUM(**pp) || **pp == '_'))
+  while (*pp < end && (**pp != ' ' && **pp != '=' && **pp != '[' && **pp != quote))
     (*pp)++;
 
   if (p == *pp || *pp - p > 4)
@@ -976,7 +951,7 @@ hb_feature_from_string (const char *str, int len,
   }
 
   if (feature)
-    memset (feature, 0, sizeof (*feature));
+    hb_memset (feature, 0, sizeof (*feature));
   return false;
 }
 
@@ -1021,11 +996,11 @@ hb_feature_to_string (hb_feature_t *feature,
   if (feature->value > 1)
   {
     s[len++] = '=';
-    len += hb_max (0, snprintf (s + len, ARRAY_LENGTH (s) - len, "%u", feature->value));
+    len += hb_max (0, snprintf (s + len, ARRAY_LENGTH (s) - len, "%" PRIu32, feature->value));
   }
   assert (len < ARRAY_LENGTH (s));
   len = hb_min (len, size - 1);
-  memcpy (buf, s, len);
+  hb_memcpy (buf, s, len);
   buf[len] = '\0';
 }
 
@@ -1088,7 +1063,7 @@ hb_variation_from_string (const char *str, int len,
   }
 
   if (variation)
-    memset (variation, 0, sizeof (*variation));
+    hb_memset (variation, 0, sizeof (*variation));
   return false;
 }
 
@@ -1136,7 +1111,7 @@ get_C_locale ()
 /**
  * hb_variation_to_string:
  * @variation: an #hb_variation_t to convert
- * @buf: (array length=size) (out): output string
+ * @buf: (array length=size) (out caller-allocates): output string
  * @size: the allocated size of @buf
  *
  * Converts an #hb_variation_t into a `NULL`-terminated string in the format
@@ -1166,7 +1141,7 @@ hb_variation_to_string (hb_variation_t *variation,
 
   assert (len < ARRAY_LENGTH (s));
   len = hb_min (len, size - 1);
-  memcpy (buf, s, len);
+  hb_memcpy (buf, s, len);
   buf[len] = '\0';
 }
 

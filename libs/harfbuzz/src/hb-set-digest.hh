@@ -28,6 +28,7 @@
 #define HB_SET_DIGEST_HH
 
 #include "hb.hh"
+#include "hb-machinery.hh"
 
 /*
  * The set-digests here implement various "filters" that support
@@ -44,10 +45,16 @@
  * a lookup's or subtable's Coverage table(s), and then when we
  * want to apply the lookup or subtable to a glyph, before trying
  * to apply, we ask the filter if the glyph may be covered. If it's
- * not, we return early.
+ * not, we return early.  We can also match a digest against another
+ * digest.
  *
- * We use these filters both at the lookup-level, and then again,
- * at the subtable-level. Both have performance win.
+ * We use these filters at three levels:
+ *   - If the digest for all the glyphs in the buffer as a whole
+ *     does not match the digest for the lookup, skip the lookup.
+ *   - For each glyph, if it doesn't match the lookup digest,
+ *     skip it.
+ *   - For each glyph, if it doesn't match the subtable digest,
+ *     skip it.
  *
  * The main filter we use is a combination of three bits-pattern
  * filters. A bits-pattern filter checks a number of bits (5 or 6)
@@ -75,18 +82,27 @@ struct hb_set_digest_bits_pattern_t
 
   void init () { mask = 0; }
 
+  static hb_set_digest_bits_pattern_t full () { hb_set_digest_bits_pattern_t d; d.mask = (mask_t) -1; return d; }
+
+  void union_ (const hb_set_digest_bits_pattern_t &o) { mask |= o.mask; }
+
   void add (hb_codepoint_t g) { mask |= mask_for (g); }
 
   bool add_range (hb_codepoint_t a, hb_codepoint_t b)
   {
+    if (mask == (mask_t) -1) return false;
     if ((b >> shift) - (a >> shift) >= mask_bits - 1)
+    {
       mask = (mask_t) -1;
-    else {
+      return false;
+    }
+    else
+    {
       mask_t ma = mask_for (a);
       mask_t mb = mask_for (b);
       mask |= mb + (mb - ma) - (mb < ma);
+      return true;
     }
-    return true;
   }
 
   template <typename T>
@@ -95,7 +111,7 @@ struct hb_set_digest_bits_pattern_t
     for (unsigned int i = 0; i < count; i++)
     {
       add (*array);
-      array = (const T *) (stride + (const char *) array);
+      array = &StructAtOffsetUnaligned<T> ((const void *) array, stride);
     }
   }
   template <typename T>
@@ -103,24 +119,26 @@ struct hb_set_digest_bits_pattern_t
   template <typename T>
   bool add_sorted_array (const T *array, unsigned int count, unsigned int stride=sizeof(T))
   {
-    for (unsigned int i = 0; i < count; i++)
-    {
-      add (*array);
-      array = (const T *) (stride + (const char *) array);
-    }
+    add_array (array, count, stride);
     return true;
   }
   template <typename T>
   bool add_sorted_array (const hb_sorted_array_t<const T>& arr) { return add_sorted_array (&arr, arr.len ()); }
 
+  bool may_have (const hb_set_digest_bits_pattern_t &o) const
+  { return mask & o.mask; }
+
   bool may_have (hb_codepoint_t g) const
   { return mask & mask_for (g); }
+
+  bool operator [] (hb_codepoint_t g) const
+  { return may_have (g); }
 
   private:
 
   static mask_t mask_for (hb_codepoint_t g)
   { return ((mask_t) 1) << ((g >> shift) & (mask_bits - 1)); }
-  mask_t mask;
+  mask_t mask = 0;
 };
 
 template <typename head_t, typename tail_t>
@@ -132,6 +150,14 @@ struct hb_set_digest_combiner_t
     tail.init ();
   }
 
+  static hb_set_digest_combiner_t full () { hb_set_digest_combiner_t d; d.head = head_t::full(); d.tail = tail_t::full (); return d; }
+
+  void union_ (const hb_set_digest_combiner_t &o)
+  {
+    head.union_ (o.head);
+    tail.union_(o.tail);
+  }
+
   void add (hb_codepoint_t g)
   {
     head.add (g);
@@ -140,9 +166,7 @@ struct hb_set_digest_combiner_t
 
   bool add_range (hb_codepoint_t a, hb_codepoint_t b)
   {
-    head.add_range (a, b);
-    tail.add_range (a, b);
-    return true;
+    return (int) head.add_range (a, b) | (int) tail.add_range (a, b);
   }
   template <typename T>
   void add_array (const T *array, unsigned int count, unsigned int stride=sizeof(T))
@@ -155,17 +179,24 @@ struct hb_set_digest_combiner_t
   template <typename T>
   bool add_sorted_array (const T *array, unsigned int count, unsigned int stride=sizeof(T))
   {
-    head.add_sorted_array (array, count, stride);
-    tail.add_sorted_array (array, count, stride);
-    return true;
+    return head.add_sorted_array (array, count, stride) &&
+	   tail.add_sorted_array (array, count, stride);
   }
   template <typename T>
   bool add_sorted_array (const hb_sorted_array_t<const T>& arr) { return add_sorted_array (&arr, arr.len ()); }
+
+  bool may_have (const hb_set_digest_combiner_t &o) const
+  {
+    return head.may_have (o.head) && tail.may_have (o.tail);
+  }
 
   bool may_have (hb_codepoint_t g) const
   {
     return head.may_have (g) && tail.may_have (g);
   }
+
+  bool operator [] (hb_codepoint_t g) const
+  { return may_have (g); }
 
   private:
   head_t head;

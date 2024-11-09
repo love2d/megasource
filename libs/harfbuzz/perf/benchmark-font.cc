@@ -1,17 +1,4 @@
-#include "benchmark/benchmark.h"
-#include <cassert>
-#include <cstring>
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#include "hb.h"
-#include "hb-ot.h"
-#ifdef HAVE_FREETYPE
-#include "hb-ft.h"
-#endif
-
+#include "hb-benchmark.hh"
 
 #define SUBSET_FONT_BASE_PATH "test/subset/data/fonts/"
 
@@ -21,7 +8,8 @@ struct test_input_t
   const char *font_path;
 } default_tests[] =
 {
-  {true , SUBSET_FONT_BASE_PATH "Roboto-Regular.ttf"},
+  {false, SUBSET_FONT_BASE_PATH "Roboto-Regular.ttf"},
+  {true , SUBSET_FONT_BASE_PATH "RobotoFlex-Variable.ttf"},
   {false, SUBSET_FONT_BASE_PATH "SourceSansPro-Regular.otf"},
   {true , SUBSET_FONT_BASE_PATH "AdobeVFPrototype.otf"},
   {true , SUBSET_FONT_BASE_PATH "SourceSerifVariable-Roman.ttf"},
@@ -33,30 +21,52 @@ struct test_input_t
 static test_input_t *tests = default_tests;
 static unsigned num_tests = sizeof (default_tests) / sizeof (default_tests[0]);
 
-enum backend_t { HARFBUZZ, FREETYPE };
+enum backend_t { HARFBUZZ, FREETYPE, CORETEXT };
 
 enum operation_t
 {
   nominal_glyphs,
   glyph_h_advances,
   glyph_extents,
-  glyph_shape,
+  draw_glyph,
+  paint_glyph,
+  load_face_and_shape,
 };
 
 static void
-_hb_move_to (hb_draw_funcs_t *, void *, hb_draw_state_t *, float, float, void *) {}
+_hb_move_to (hb_draw_funcs_t *, void *draw_data, hb_draw_state_t *, float x, float y, void *)
+{
+  float &i = * (float *) draw_data;
+  i += x + y;
+}
 
 static void
-_hb_line_to (hb_draw_funcs_t *, void *, hb_draw_state_t *, float, float, void *) {}
-
-//static void
-//_hb_quadratic_to (hb_draw_funcs_t *, void *, hb_draw_state_t *, float, float, float, float, void *) {}
-
-static void
-_hb_cubic_to (hb_draw_funcs_t *, void *, hb_draw_state_t *, float, float, float, float, float, float, void *) {}
+_hb_line_to (hb_draw_funcs_t *, void *draw_data, hb_draw_state_t *, float x, float y, void *)
+{
+  float &i = * (float *) draw_data;
+  i += x + y;
+}
 
 static void
-_hb_close_path (hb_draw_funcs_t *, void *, hb_draw_state_t *, void *) {}
+_hb_quadratic_to (hb_draw_funcs_t *, void *draw_data, hb_draw_state_t *, float cx, float cy, float x, float y, void *)
+{
+  float &i = * (float *) draw_data;
+  i += cx + cy + x + y;
+}
+
+static void
+_hb_cubic_to (hb_draw_funcs_t *, void *draw_data, hb_draw_state_t *, float cx1, float cy1, float cx2, float cy2, float x, float y, void *)
+{
+  float &i = * (float *) draw_data;
+  i += cx1 + cy1 + cx2 + cy2 + x + y;
+}
+
+static void
+_hb_close_path (hb_draw_funcs_t *, void *draw_data, hb_draw_state_t *, void *)
+{
+  float &i = * (float *) draw_data;
+  i += 1.0;
+}
 
 static hb_draw_funcs_t *
 _draw_funcs_create (void)
@@ -64,7 +74,7 @@ _draw_funcs_create (void)
   hb_draw_funcs_t *draw_funcs = hb_draw_funcs_create ();
   hb_draw_funcs_set_move_to_func (draw_funcs, _hb_move_to, nullptr, nullptr);
   hb_draw_funcs_set_line_to_func (draw_funcs, _hb_line_to, nullptr, nullptr);
-  //hb_draw_funcs_set_quadratic_to_func (draw_funcs, _hb_quadratic_to, nullptr, nullptr);
+  hb_draw_funcs_set_quadratic_to_func (draw_funcs, _hb_quadratic_to, nullptr, nullptr);
   hb_draw_funcs_set_cubic_to_func (draw_funcs, _hb_cubic_to, nullptr, nullptr);
   hb_draw_funcs_set_close_path_func (draw_funcs, _hb_close_path, nullptr, nullptr);
   return draw_funcs;
@@ -77,10 +87,8 @@ static void BM_Font (benchmark::State &state,
   hb_font_t *font;
   unsigned num_glyphs;
   {
-    hb_blob_t *blob = hb_blob_create_from_file_or_fail (test_input.font_path);
-    assert (blob);
-    hb_face_t *face = hb_face_create (blob, 0);
-    hb_blob_destroy (blob);
+    hb_face_t *face = hb_benchmark_face_create_from_file_or_fail (test_input.font_path, 0);
+    assert (face);
     num_glyphs = hb_face_get_glyph_count (face);
     font = hb_font_create (face);
     hb_face_destroy (face);
@@ -101,6 +109,12 @@ static void BM_Font (benchmark::State &state,
     case FREETYPE:
 #ifdef HAVE_FREETYPE
       hb_ft_font_set_funcs (font);
+#endif
+      break;
+
+    case CORETEXT:
+#ifdef HAVE_CORETEXT
+      hb_coretext_font_set_funcs (font);
 #endif
       break;
   }
@@ -158,14 +172,67 @@ static void BM_Font (benchmark::State &state,
 	  hb_font_get_glyph_extents (font, gid, &extents);
       break;
     }
-    case glyph_shape:
+    case draw_glyph:
     {
       hb_draw_funcs_t *draw_funcs = _draw_funcs_create ();
       for (auto _ : state)
+      {
+	float i = 0;
 	for (unsigned gid = 0; gid < num_glyphs; ++gid)
-	  hb_font_get_glyph_shape (font, gid, draw_funcs, nullptr);
-      break;
+	  hb_font_draw_glyph (font, gid, draw_funcs, &i);
+      }
       hb_draw_funcs_destroy (draw_funcs);
+      break;
+    }
+    case paint_glyph:
+    {
+      hb_paint_funcs_t *paint_funcs = hb_paint_funcs_create ();
+      for (auto _ : state)
+      {
+	for (unsigned gid = 0; gid < num_glyphs; ++gid)
+	  hb_font_paint_glyph (font, gid, paint_funcs, nullptr, 0, 0);
+      }
+      hb_paint_funcs_destroy (paint_funcs);
+      break;
+    }
+    case load_face_and_shape:
+    {
+      for (auto _ : state)
+      {
+	hb_face_t *face = hb_benchmark_face_create_from_file_or_fail (test_input.font_path, 0);
+	assert (face);
+	hb_font_t *font = hb_font_create (face);
+	hb_face_destroy (face);
+
+	switch (backend)
+	{
+	  case HARFBUZZ:
+	    hb_ot_font_set_funcs (font);
+	    break;
+
+	  case FREETYPE:
+#ifdef HAVE_FREETYPE
+	    hb_ft_font_set_funcs (font);
+#endif
+	    break;
+
+	  case CORETEXT:
+#ifdef HAVE_CORETEXT
+	    hb_coretext_font_set_funcs (font);
+#endif
+	    break;
+	}
+
+	hb_buffer_t *buffer = hb_buffer_create ();
+	hb_buffer_add_utf8 (buffer, " ", -1, 0, -1);
+	hb_buffer_guess_segment_properties (buffer);
+
+	hb_shape (font, buffer, nullptr, 0);
+
+	hb_buffer_destroy (buffer);
+	hb_font_destroy (font);
+      }
+      break;
     }
   }
 
@@ -209,6 +276,9 @@ static void test_operation (operation_t op,
 #ifdef HAVE_FREETYPE
       test_backend (FREETYPE, "ft", is_var, op, op_name, time_unit, test_input);
 #endif
+#ifdef HAVE_CORETEXT
+      test_backend (CORETEXT, "coretext", is_var, op, op_name, time_unit, test_input);
+#endif
     }
   }
 }
@@ -233,7 +303,9 @@ int main(int argc, char** argv)
   TEST_OPERATION (nominal_glyphs, benchmark::kMicrosecond);
   TEST_OPERATION (glyph_h_advances, benchmark::kMicrosecond);
   TEST_OPERATION (glyph_extents, benchmark::kMicrosecond);
-  TEST_OPERATION (glyph_shape, benchmark::kMicrosecond);
+  TEST_OPERATION (draw_glyph, benchmark::kMicrosecond);
+  TEST_OPERATION (paint_glyph, benchmark::kMillisecond);
+  TEST_OPERATION (load_face_and_shape, benchmark::kMicrosecond);
 
 #undef TEST_OPERATION
 

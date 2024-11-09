@@ -1,18 +1,9 @@
-#include "benchmark/benchmark.h"
-#include <cassert>
-#include <cstring>
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#include "hb-subset.h"
-
+#include "hb-benchmark.hh"
 
 enum operation_t
 {
-  subset_codepoints,
   subset_glyphs,
+  subset_unicodes,
   instance,
 };
 
@@ -46,6 +37,13 @@ _mplus_instance_opts[] =
   {HB_TAG ('w', 'g', 'h', 't'), 800.f},
 };
 
+static const axis_location_t
+_fraunces_partial_instance_opts[] =
+{
+  {HB_TAG ('S', 'O', 'F', 'T'), 75.0f},
+  {HB_TAG ('W', 'O', 'N', 'K'), 0.75f},
+};
+
 template <typename Type, unsigned int n>
 static inline unsigned int ARRAY_LEN (const Type (&)[n]) { return n; }
 
@@ -54,24 +52,30 @@ static inline unsigned int ARRAY_LEN (const Type (&)[n]) { return n; }
 struct test_input_t
 {
   const char *font_path;
-  const unsigned max_subset_size;
+  unsigned max_subset_size;
   const axis_location_t *instance_opts;
-  const unsigned num_instance_opts;
-} tests[] =
+  unsigned num_instance_opts;
+} default_tests[] =
 {
-  {SUBSET_FONT_BASE_PATH "Roboto-Regular.ttf", 4000, nullptr, 0},
-  {SUBSET_FONT_BASE_PATH "Amiri-Regular.ttf", 4000, nullptr, 0},
-  {SUBSET_FONT_BASE_PATH "NotoNastaliqUrdu-Regular.ttf", 1000, nullptr, 0},
+  {SUBSET_FONT_BASE_PATH "Roboto-Regular.ttf", 1000, nullptr, 0},
+  {SUBSET_FONT_BASE_PATH "Amiri-Regular.ttf", 4096, nullptr, 0},
+  {SUBSET_FONT_BASE_PATH "NotoNastaliqUrdu-Regular.ttf", 1400, nullptr, 0},
   {SUBSET_FONT_BASE_PATH "NotoSansDevanagari-Regular.ttf", 1000, nullptr, 0},
   {SUBSET_FONT_BASE_PATH "Mplus1p-Regular.ttf", 10000, nullptr, 0},
   {SUBSET_FONT_BASE_PATH "SourceHanSans-Regular_subset.otf", 10000, nullptr, 0},
   {SUBSET_FONT_BASE_PATH "SourceSansPro-Regular.otf", 2000, nullptr, 0},
+  {SUBSET_FONT_BASE_PATH "AdobeVFPrototype.otf", 300, nullptr, 0},
   {SUBSET_FONT_BASE_PATH "MPLUS1-Variable.ttf", 6000, _mplus_instance_opts, ARRAY_LEN (_mplus_instance_opts)},
   {SUBSET_FONT_BASE_PATH "RobotoFlex-Variable.ttf", 900, _roboto_flex_instance_opts, ARRAY_LEN (_roboto_flex_instance_opts)},
+  {SUBSET_FONT_BASE_PATH "Fraunces.ttf", 900, _fraunces_partial_instance_opts, ARRAY_LEN (_fraunces_partial_instance_opts)},
 #if 0
   {"perf/fonts/NotoSansCJKsc-VF.ttf", 100000},
 #endif
 };
+
+static test_input_t *tests = default_tests;
+static unsigned num_tests = sizeof (default_tests) / sizeof (default_tests[0]);
+
 
 void AddCodepoints(const hb_set_t* codepoints_in_font,
                    unsigned subset_size,
@@ -92,7 +96,12 @@ void AddGlyphs(unsigned num_glyphs_in_font,
 {
   auto *glyphs = hb_subset_input_glyph_set (input);
   for (unsigned i = 0; i < subset_size && i < num_glyphs_in_font; i++) {
-    // TODO(garretrieger): pick randomly.
+    if (i + 1 == subset_size &&
+        hb_subset_input_get_flags (input) & HB_SUBSET_FLAGS_RETAIN_GIDS)
+    {
+      hb_set_add (glyphs, num_glyphs_in_font - 1);
+      continue;
+    }
     hb_set_add (glyphs, i);
   }
 }
@@ -101,38 +110,58 @@ void AddGlyphs(unsigned num_glyphs_in_font,
 // the subsetting operations.
 static hb_face_t* preprocess_face(hb_face_t* face)
 {
-  #ifdef HB_EXPERIMENTAL_API
   hb_face_t* new_face = hb_subset_preprocess(face);
   hb_face_destroy(face);
   return new_face;
-  #else
-  return face;
-  #endif
 }
+
+static hb_face_t *cached_face;
+
+static void
+free_cached_face (void)
+{
+  hb_face_destroy (cached_face);
+  cached_face = nullptr;
+}
+
 
 /* benchmark for subsetting a font */
 static void BM_subset (benchmark::State &state,
                        operation_t operation,
-                       const test_input_t &test_input)
+                       const test_input_t &test_input,
+                       bool retain_gids)
 {
   unsigned subset_size = state.range(0);
 
-  hb_face_t *face;
+  hb_face_t *face = nullptr;
+
+  static const char *cached_font_path;
+
+  if (!cached_font_path || strcmp (cached_font_path, test_input.font_path))
   {
-    hb_blob_t *blob = hb_blob_create_from_file_or_fail (test_input.font_path);
-    assert (blob);
-    face = hb_face_create (blob, 0);
-    hb_blob_destroy (blob);
+    face = hb_benchmark_face_create_from_file_or_fail (test_input.font_path, 0);
+    assert (face);
 
     face = preprocess_face (face);
+
+    if (cached_face)
+      hb_face_destroy (cached_face);
+
+    cached_face = hb_face_reference (face);
+    cached_font_path = test_input.font_path;
   }
+  else
+    face = hb_face_reference (cached_face);
 
   hb_subset_input_t* input = hb_subset_input_create_or_fail ();
   assert (input);
 
+  if (retain_gids)
+    hb_subset_input_set_flags (input, HB_SUBSET_FLAGS_RETAIN_GIDS);
+
   switch (operation)
   {
-    case subset_codepoints:
+    case subset_unicodes:
     {
       hb_set_t* all_codepoints = hb_set_create ();
       hb_face_collect_unicodes (face, all_codepoints);
@@ -149,19 +178,19 @@ static void BM_subset (benchmark::State &state,
     break;
 
     case instance:
-#ifdef HB_EXPERIMENTAL_API
     {
       hb_set_t* all_codepoints = hb_set_create ();
       hb_face_collect_unicodes (face, all_codepoints);
       AddCodepoints(all_codepoints, subset_size, input);
       hb_set_destroy (all_codepoints);
 
+      hb_subset_input_set_flags(input, hb_subset_input_get_flags(input) | HB_SUBSET_FLAGS_OPTIMIZE_IUP_DELTAS);
+
       for (unsigned i = 0; i < test_input.num_instance_opts; i++)
         hb_subset_input_pin_axis_location (input, face,
                                            test_input.instance_opts[i].axis_tag,
                                            test_input.instance_opts[i].axis_value);
     }
-#endif
     break;
   }
 
@@ -178,6 +207,7 @@ static void BM_subset (benchmark::State &state,
 
 static void test_subset (operation_t op,
                          const char *op_name,
+                         bool retain_gids,
                          benchmark::TimeUnit time_unit,
                          const test_input_t &test_input)
 {
@@ -186,36 +216,61 @@ static void test_subset (operation_t op,
 
   char name[1024] = "BM_subset/";
   strcat (name, op_name);
-  strcat (name, strrchr (test_input.font_path, '/'));
+  strcat (name, "/");
+  const char *p = strrchr (test_input.font_path, '/');
+  strcat (name, p ? p + 1 : test_input.font_path);
+  if (retain_gids)
+    strcat (name, "/retaingids");
 
-  benchmark::RegisterBenchmark (name, BM_subset, op, test_input)
+  benchmark::RegisterBenchmark (name, BM_subset, op, test_input, retain_gids)
       ->Range(10, test_input.max_subset_size)
       ->Unit(time_unit);
 }
 
 static void test_operation (operation_t op,
                             const char *op_name,
+                            const test_input_t *tests,
+                            unsigned num_tests,
                             benchmark::TimeUnit time_unit)
 {
-  for (auto& test_input : tests)
+  for (unsigned i = 0; i < num_tests; i++)
   {
-      test_subset (op, op_name, time_unit, test_input);
+    auto& test_input = tests[i];
+    test_subset (op, op_name, true, time_unit, test_input);
+    test_subset (op, op_name, false, time_unit, test_input);
   }
 }
 
 int main(int argc, char** argv)
 {
-#define TEST_OPERATION(op, time_unit) test_operation (op, #op, time_unit)
+  benchmark::Initialize(&argc, argv);
 
-  TEST_OPERATION (subset_glyphs, benchmark::kMillisecond);
-  TEST_OPERATION (subset_codepoints, benchmark::kMillisecond);
-#ifdef HB_EXPERIMENTAL_API
-  TEST_OPERATION (instance, benchmark::kMillisecond);
+#ifndef HB_NO_ATEXIT
+  atexit (free_cached_face);
 #endif
+
+  if (argc > 1)
+  {
+    num_tests = (argc - 1) / 2;
+    tests = (test_input_t *) calloc (num_tests, sizeof (test_input_t));
+    for (unsigned i = 0; i < num_tests; i++)
+    {
+      tests[i].font_path = argv[1 + i * 2];
+      tests[i].max_subset_size = atoi (argv[2 + i * 2]);
+    }
+  }
+
+#define TEST_OPERATION(op, time_unit) test_operation (op, #op, tests, num_tests, time_unit)
+
+  TEST_OPERATION (subset_glyphs, benchmark::kMicrosecond);
+  TEST_OPERATION (subset_unicodes, benchmark::kMicrosecond);
+  TEST_OPERATION (instance, benchmark::kMicrosecond);
 
 #undef TEST_OPERATION
 
-  benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
   benchmark::Shutdown();
+
+  if (tests != default_tests)
+    free (tests);
 }

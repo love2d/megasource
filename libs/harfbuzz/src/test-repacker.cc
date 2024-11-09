@@ -35,7 +35,7 @@ static void extend (const char* value,
                     hb_serialize_context_t* c)
 {
   char* obj = c->allocate_size<char> (len);
-  memcpy (obj, value, len);
+  hb_memcpy (obj, value, len);
 }
 
 static void start_object(const char* tag,
@@ -433,24 +433,26 @@ struct MarkBasePosBuffers
   }
 };
 
-
-
-
-
 static void run_resolve_overflow_test (const char* name,
                                        hb_serialize_context_t& overflowing,
                                        hb_serialize_context_t& expected,
                                        unsigned num_iterations = 0,
                                        bool recalculate_extensions = false,
-                                       hb_tag_t tag = HB_TAG ('G', 'S', 'U', 'B'))
+                                       hb_tag_t tag = HB_TAG ('G', 'S', 'U', 'B'),
+                                       bool check_binary_equivalence = false)
 {
   printf (">>> Testing overflowing resolution for %s\n",
           name);
 
   graph_t graph (overflowing.object_graph ());
+
   graph_t expected_graph (expected.object_graph ());
   if (graph::will_overflow (expected_graph))
   {
+    if (check_binary_equivalence) {
+      printf("when binary equivalence checking is enabled, the expected graph cannot overflow.");
+      assert(!check_binary_equivalence);
+    }
     expected_graph.assign_spaces ();
     expected_graph.sort_shortest_distance ();
   }
@@ -463,16 +465,37 @@ static void run_resolve_overflow_test (const char* name,
                                       graph));
 
   // Check the graphs can be serialized.
-  hb_blob_t* out = graph::serialize (graph);
-  assert (out);
-  hb_blob_destroy (out);
-  out = graph::serialize (expected_graph);
-  assert (out);
-  hb_blob_destroy (out);
+  hb_blob_t* out1 = graph::serialize (graph);
+  assert (out1);
+  hb_blob_t* out2 = graph::serialize (expected_graph);
+  assert (out2);
+  if (check_binary_equivalence) {
+    unsigned l1, l2;
+    const char* d1 = hb_blob_get_data(out1, &l1);
+    const char* d2 = hb_blob_get_data(out2, &l2);
+
+    bool match = (l1 == l2) && (memcmp(d1, d2, l1) == 0);
+    if (!match) {
+      printf("## Result:\n");
+      graph.print();
+      printf("## Expected:\n");
+      expected_graph.print();
+      assert(match);
+    }
+  }
+
+  hb_blob_destroy (out1);
+  hb_blob_destroy (out2);
 
   // Check the graphs are equivalent
   graph.normalize ();
   expected_graph.normalize ();
+  if (!(graph == expected_graph)) {
+    printf("## Expected:\n");
+    expected_graph.print();
+    printf("## Result:\n");
+    graph.print();
+  }
   assert (graph == expected_graph);
 }
 
@@ -585,6 +608,31 @@ populate_serializer_with_dedup_overflow (hb_serialize_context_t* c)
   add_offset (obj_2, c);
   add_offset (obj_1, c);
   c->pop_pack (false);
+
+  c->end_serialize();
+}
+
+static void
+populate_serializer_with_multiple_dedup_overflow (hb_serialize_context_t* c)
+{
+  std::string large_string(70000, 'a');
+  c->start_serialize<char> ();
+
+  unsigned leaf = add_object("def", 3, c);
+
+  constexpr unsigned num_mid_nodes = 20;
+  unsigned mid_nodes[num_mid_nodes];
+  for (unsigned i = 0; i < num_mid_nodes; i++) {
+    start_object(large_string.c_str(), 10000 + i, c);
+    add_offset(leaf, c);
+    mid_nodes[i] = c->pop_pack(false);
+  }
+
+  start_object("abc", 3, c);
+  for (unsigned i = 0; i < num_mid_nodes; i++) {
+    add_wide_offset(mid_nodes[i], c);
+  }
+  c->pop_pack(false);
 
   c->end_serialize();
 }
@@ -743,6 +791,54 @@ populate_serializer_with_isolation_overflow_spaces (hb_serialize_context_t* c)
   add_wide_offset (obj_b, c);
   add_wide_offset (obj_c, c);
   c->pop_pack ();
+
+  c->end_serialize();
+}
+
+static void
+populate_serializer_with_repack_last (hb_serialize_context_t* c, bool with_overflow)
+{
+  std::string large_string(70000, 'c');
+  c->start_serialize<char> ();
+  c->push();
+
+  // Obj E
+  unsigned obj_e_1, obj_e_2;
+  if (with_overflow) {
+    obj_e_1 = add_object("a", 1, c);
+    obj_e_2 = obj_e_1;
+  } else {
+    obj_e_2 = add_object("a", 1, c);
+  }
+
+  // Obj D
+  c->push();
+  add_offset(obj_e_2, c);
+  extend(large_string.c_str(), 30000, c);
+  unsigned obj_d = c->pop_pack(false);
+
+  add_offset(obj_d, c);
+  assert(c->last_added_child_index() == obj_d);
+
+  if (!with_overflow) {
+    obj_e_1 = add_object("a", 1, c);
+  }
+
+  // Obj C
+  c->push();
+  add_offset(obj_e_1, c);
+  extend(large_string.c_str(), 40000, c);
+  unsigned obj_c = c->pop_pack(false);
+
+  add_offset(obj_c, c);
+
+  // Obj B
+  unsigned obj_b = add_object("b", 1, c);
+  add_offset(obj_b, c);
+
+  // Obj A
+  c->repack_last(obj_d);
+  c->pop_pack(false);
 
   c->end_serialize();
 }
@@ -1239,7 +1335,8 @@ populate_serializer_with_24_and_32_bit_offsets (hb_serialize_context_t* c)
 
 static void
 populate_serializer_with_extension_promotion (hb_serialize_context_t* c,
-                                              int num_extensions = 0)
+                                              int num_extensions = 0,
+                                              bool shared_subtables = false)
 {
   constexpr int num_lookups = 5;
   constexpr int num_subtables = num_lookups * 2;
@@ -1252,15 +1349,13 @@ populate_serializer_with_extension_promotion (hb_serialize_context_t* c,
 
 
   for (int i = num_subtables - 1; i >= 0; i--)
-    subtables[i] = add_object(large_string.c_str (), 15000, c);
+    subtables[i] = add_object(large_string.c_str (), 15000 + i, c);
 
   for (int i = num_subtables - 1;
        i >= (num_lookups - num_extensions) * 2;
        i--)
   {
-    unsigned ext_index = i - (num_lookups - num_extensions) * 2;
-    unsigned subtable_index = num_subtables - ext_index - 1;
-    extensions[i] = add_extension (subtables[subtable_index], 5, c);
+    extensions[i] = add_extension (subtables[i], 5, c);
   }
 
   for (int i = num_lookups - 1; i >= 0; i--)
@@ -1268,13 +1363,19 @@ populate_serializer_with_extension_promotion (hb_serialize_context_t* c,
     bool is_ext = (i >= (num_lookups - num_extensions));
 
     start_lookup (is_ext ? (char) 7 : (char) 5,
-                  2,
+                  shared_subtables && i > 2 ? 3 : 2,
                   c);
 
     if (is_ext) {
+      if (shared_subtables && i > 2) {
+        add_offset (extensions[i * 2 - 1], c);
+      }
       add_offset (extensions[i * 2], c);
       add_offset (extensions[i * 2 + 1], c);
     } else {
+      if (shared_subtables && i > 2) {
+        add_offset (subtables[i * 2 - 1], c);
+      }
       add_offset (subtables[i * 2], c);
       add_offset (subtables[i * 2 + 1], c);
     }
@@ -1476,6 +1577,7 @@ static void test_sort_shortest ()
 
   graph_t graph (c.object_graph ());
   graph.sort_shortest_distance ();
+  assert (!graph.in_error ());
 
   assert(strncmp (graph.object (4).head, "abc", 3) == 0);
   assert(graph.object (4).real_links.length == 3);
@@ -1669,6 +1771,21 @@ static void test_resolve_overflows_via_duplication ()
   hb_blob_destroy (out);
 }
 
+static void test_resolve_overflows_via_multiple_duplications ()
+{
+  size_t buffer_size = 300000;
+  void* buffer = malloc (buffer_size);
+  hb_serialize_context_t c (buffer, buffer_size);
+  populate_serializer_with_multiple_dedup_overflow (&c);
+  graph_t graph (c.object_graph ());
+
+  hb_blob_t* out = hb_resolve_overflows (c.object_graph (), HB_TAG_NONE, 5);
+  assert (out);
+
+  free (buffer);
+  hb_blob_destroy (out);
+}
+
 static void test_resolve_overflows_via_space_assignment ()
 {
   size_t buffer_size = 160000;
@@ -1836,6 +1953,28 @@ static void test_resolve_with_extension_promotion ()
   free (expected_buffer);
 }
 
+static void test_resolve_with_shared_extension_promotion ()
+{
+  size_t buffer_size = 200000;
+  void* buffer = malloc (buffer_size);
+  assert (buffer);
+  hb_serialize_context_t c (buffer, buffer_size);
+  populate_serializer_with_extension_promotion (&c, 0, true);
+
+  void* expected_buffer = malloc (buffer_size);
+  assert (expected_buffer);
+  hb_serialize_context_t e (expected_buffer, buffer_size);
+  populate_serializer_with_extension_promotion (&e, 3, true);
+
+  run_resolve_overflow_test ("test_resolve_with_extension_promotion",
+                             c,
+                             e,
+                             20,
+                             true);
+  free (buffer);
+  free (expected_buffer);
+}
+
 static void test_resolve_with_basic_pair_pos_1_split ()
 {
   size_t buffer_size = 200000;
@@ -1911,12 +2050,12 @@ static void test_resolve_with_close_to_limit_pair_pos_2_split ()
   void* buffer = malloc (buffer_size);
   assert (buffer);
   hb_serialize_context_t c (buffer, buffer_size);
-  populate_serializer_with_large_pair_pos_2 <1, 1596, 10>(&c, true, false, false);
+  populate_serializer_with_large_pair_pos_2 <1, 1636, 10>(&c, true, false, false);
 
   void* expected_buffer = malloc (buffer_size);
   assert (expected_buffer);
   hb_serialize_context_t e (expected_buffer, buffer_size);
-  populate_serializer_with_large_pair_pos_2 <2, 798, 10>(&e, true, false, false);
+  populate_serializer_with_large_pair_pos_2 <2, 818, 10>(&e, true, false, false);
 
   run_resolve_overflow_test ("test_resolve_with_close_to_limit_pair_pos_2_split",
                              c,
@@ -2092,6 +2231,31 @@ test_shared_node_with_virtual_links ()
   free(buffer);
 }
 
+static void
+test_repack_last ()
+{
+  size_t buffer_size = 200000;
+  void* buffer = malloc (buffer_size);
+  assert (buffer);
+  hb_serialize_context_t c (buffer, buffer_size);
+  populate_serializer_with_repack_last (&c, true);
+
+  void* expected_buffer = malloc (buffer_size);
+  assert (expected_buffer);
+  hb_serialize_context_t e (expected_buffer, buffer_size);
+  populate_serializer_with_repack_last (&e, false);
+
+  run_resolve_overflow_test ("test_repack_last",
+                             c,
+                             e,
+                             20,
+                             false,
+                             HB_TAG('a', 'b', 'c', 'd'),
+                             true);
+
+  free (buffer);
+  free (expected_buffer);
+}
 
 // TODO(garretrieger): update will_overflow tests to check the overflows array.
 // TODO(garretrieger): add tests for priority raising.
@@ -2106,6 +2270,7 @@ main (int argc, char **argv)
   test_will_overflow_3 ();
   test_resolve_overflows_via_sort ();
   test_resolve_overflows_via_duplication ();
+  test_resolve_overflows_via_multiple_duplications ();
   test_resolve_overflows_via_priority ();
   test_resolve_overflows_via_space_assignment ();
   test_resolve_overflows_via_isolation ();
@@ -2119,8 +2284,10 @@ main (int argc, char **argv)
   test_duplicate_leaf ();
   test_duplicate_interior ();
   test_virtual_link ();
+  test_repack_last();
   test_shared_node_with_virtual_links ();
   test_resolve_with_extension_promotion ();
+  test_resolve_with_shared_extension_promotion ();
   test_resolve_with_basic_pair_pos_1_split ();
   test_resolve_with_extension_pair_pos_1_split ();
   test_resolve_with_basic_pair_pos_2_split ();

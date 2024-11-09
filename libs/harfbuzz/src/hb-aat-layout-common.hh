@@ -28,6 +28,7 @@
 #define HB_AAT_LAYOUT_COMMON_HH
 
 #include "hb-aat-layout.hh"
+#include "hb-aat-map.hh"
 #include "hb-open-type.hh"
 
 namespace OT {
@@ -38,10 +39,55 @@ namespace AAT {
 
 using namespace OT;
 
+#define HB_AAT_BUFFER_DIGEST_THRESHOLD 32
+
+struct ankr;
+
+struct hb_aat_apply_context_t :
+       hb_dispatch_context_t<hb_aat_apply_context_t, bool, HB_DEBUG_APPLY>
+{
+  const char *get_name () { return "APPLY"; }
+  template <typename T, typename ...Ts>
+  return_t dispatch (const T &obj, Ts&&... ds)
+  { return obj.apply (this, std::forward<Ts> (ds)...); }
+  static return_t default_return_value () { return false; }
+  bool stop_sublookup_iteration (return_t r) const { return r; }
+
+  const hb_ot_shape_plan_t *plan;
+  hb_font_t *font;
+  hb_face_t *face;
+  hb_buffer_t *buffer;
+  hb_sanitize_context_t sanitizer;
+  const ankr *ankr_table;
+  const OT::GDEF *gdef_table;
+  const hb_sorted_vector_t<hb_aat_map_t::range_flags_t> *range_flags = nullptr;
+  hb_set_digest_t buffer_digest = hb_set_digest_t::full ();
+  hb_set_digest_t machine_glyph_set = hb_set_digest_t::full ();
+  hb_set_digest_t left_set = hb_set_digest_t::full ();
+  hb_set_digest_t right_set = hb_set_digest_t::full ();
+  hb_mask_t subtable_flags = 0;
+
+  /* Unused. For debug tracing only. */
+  unsigned int lookup_index;
+
+  HB_INTERNAL hb_aat_apply_context_t (const hb_ot_shape_plan_t *plan_,
+				      hb_font_t *font_,
+				      hb_buffer_t *buffer_,
+				      hb_blob_t *blob = const_cast<hb_blob_t *> (&Null (hb_blob_t)));
+
+  HB_INTERNAL ~hb_aat_apply_context_t ();
+
+  HB_INTERNAL void set_ankr_table (const AAT::ankr *ankr_table_);
+
+  void set_lookup_index (unsigned int i) { lookup_index = i; }
+};
+
 
 /*
  * Lookup Table
  */
+
+enum { DELETED_GLYPH = 0xFFFF };
 
 template <typename T> struct Lookup;
 
@@ -55,6 +101,12 @@ struct LookupFormat0
   {
     if (unlikely (glyph_id >= num_glyphs)) return nullptr;
     return &arrayZ[glyph_id];
+  }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs, unsigned num_glyphs) const
+  {
+    glyphs.add_range (0, num_glyphs - 1);
   }
 
   bool sanitize (hb_sanitize_context_t *c) const
@@ -85,6 +137,14 @@ struct LookupSegmentSingle
   int cmp (hb_codepoint_t g) const
   { return g < first ? -1 : g <= last ? 0 : +1 ; }
 
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    if (first == DELETED_GLYPH)
+      return;
+    glyphs.add_range (first, last);
+  }
+
   bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
@@ -113,6 +173,14 @@ struct LookupFormat2
   {
     const LookupSegmentSingle<T> *v = segments.bsearch (glyph_id);
     return v ? &v->value : nullptr;
+  }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    unsigned count = segments.get_length ();
+    for (unsigned int i = 0; i < count; i++)
+      segments[i].collect_glyphs (glyphs);
   }
 
   bool sanitize (hb_sanitize_context_t *c) const
@@ -146,6 +214,14 @@ struct LookupSegmentArray
     return first <= glyph_id && glyph_id <= last ? &(base+valuesZ)[glyph_id - first] : nullptr;
   }
 
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    if (first == DELETED_GLYPH)
+      return;
+    glyphs.add_range (first, last);
+  }
+
   int cmp (hb_codepoint_t g) const
   { return g < first ? -1 : g <= last ? 0 : +1; }
 
@@ -153,6 +229,7 @@ struct LookupSegmentArray
   {
     TRACE_SANITIZE (this);
     return_trace (c->check_struct (this) &&
+		  hb_barrier () &&
 		  first <= last &&
 		  valuesZ.sanitize (c, base, last - first + 1));
   }
@@ -161,6 +238,7 @@ struct LookupSegmentArray
   {
     TRACE_SANITIZE (this);
     return_trace (c->check_struct (this) &&
+		  hb_barrier () &&
 		  first <= last &&
 		  valuesZ.sanitize (c, base, last - first + 1, std::forward<Ts> (ds)...));
   }
@@ -184,6 +262,14 @@ struct LookupFormat4
   {
     const LookupSegmentArray<T> *v = segments.bsearch (glyph_id);
     return v ? v->get_value (glyph_id, this) : nullptr;
+  }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    unsigned count = segments.get_length ();
+    for (unsigned i = 0; i < count; i++)
+      segments[i].collect_glyphs (glyphs);
   }
 
   bool sanitize (hb_sanitize_context_t *c) const
@@ -214,6 +300,14 @@ struct LookupSingle
 
   int cmp (hb_codepoint_t g) const { return glyph.cmp (g); }
 
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    if (glyph == DELETED_GLYPH)
+      return;
+    glyphs.add (glyph);
+  }
+
   bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
@@ -241,6 +335,14 @@ struct LookupFormat6
   {
     const LookupSingle<T> *v = entries.bsearch (glyph_id);
     return v ? &v->value : nullptr;
+  }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    unsigned count = entries.get_length ();
+    for (unsigned i = 0; i < count; i++)
+      entries[i].collect_glyphs (glyphs);
   }
 
   bool sanitize (hb_sanitize_context_t *c) const
@@ -272,6 +374,16 @@ struct LookupFormat8
   {
     return firstGlyph <= glyph_id && glyph_id - firstGlyph < glyphCount ?
 	   &valueArrayZ[glyph_id - firstGlyph] : nullptr;
+  }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    if (unlikely (!glyphCount))
+      return;
+    if (firstGlyph == DELETED_GLYPH)
+      return;
+    glyphs.add_range (firstGlyph, firstGlyph + glyphCount - 1);
   }
 
   bool sanitize (hb_sanitize_context_t *c) const
@@ -318,10 +430,21 @@ struct LookupFormat10
     return v;
   }
 
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs) const
+  {
+    if (unlikely (!glyphCount))
+      return;
+    if (firstGlyph == DELETED_GLYPH)
+      return;
+    glyphs.add_range (firstGlyph, firstGlyph + glyphCount - 1);
+  }
+
   bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
     return_trace (c->check_struct (this) &&
+		  hb_barrier () &&
 		  valueSize <= 4 &&
 		  valueArrayZ.sanitize (c, glyphCount * valueSize));
   }
@@ -345,11 +468,11 @@ struct Lookup
   const T* get_value (hb_codepoint_t glyph_id, unsigned int num_glyphs) const
   {
     switch (u.format) {
-    case 0: return u.format0.get_value (glyph_id, num_glyphs);
-    case 2: return u.format2.get_value (glyph_id);
-    case 4: return u.format4.get_value (glyph_id);
-    case 6: return u.format6.get_value (glyph_id);
-    case 8: return u.format8.get_value (glyph_id);
+    case 0: hb_barrier (); return u.format0.get_value (glyph_id, num_glyphs);
+    case 2: hb_barrier (); return u.format2.get_value (glyph_id);
+    case 4: hb_barrier (); return u.format4.get_value (glyph_id);
+    case 6: hb_barrier (); return u.format6.get_value (glyph_id);
+    case 8: hb_barrier (); return u.format8.get_value (glyph_id);
     default:return nullptr;
     }
   }
@@ -358,10 +481,24 @@ struct Lookup
   {
     switch (u.format) {
       /* Format 10 cannot return a pointer. */
-      case 10: return u.format10.get_value_or_null (glyph_id);
+      case 10: hb_barrier (); return u.format10.get_value_or_null (glyph_id);
       default:
       const T *v = get_value (glyph_id, num_glyphs);
       return v ? *v : Null (T);
+    }
+  }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs, unsigned int num_glyphs) const
+  {
+    switch (u.format) {
+    case 0: hb_barrier (); u.format0.collect_glyphs (glyphs, num_glyphs); return;
+    case 2: hb_barrier (); u.format2.collect_glyphs (glyphs); return;
+    case 4: hb_barrier (); u.format4.collect_glyphs (glyphs); return;
+    case 6: hb_barrier (); u.format6.collect_glyphs (glyphs); return;
+    case 8: hb_barrier (); u.format8.collect_glyphs (glyphs); return;
+    case 10: hb_barrier (); u.format10.collect_glyphs (glyphs); return;
+    default:return;
     }
   }
 
@@ -377,13 +514,14 @@ struct Lookup
   {
     TRACE_SANITIZE (this);
     if (!u.format.sanitize (c)) return_trace (false);
+    hb_barrier ();
     switch (u.format) {
-    case 0: return_trace (u.format0.sanitize (c));
-    case 2: return_trace (u.format2.sanitize (c));
-    case 4: return_trace (u.format4.sanitize (c));
-    case 6: return_trace (u.format6.sanitize (c));
-    case 8: return_trace (u.format8.sanitize (c));
-    case 10: return_trace (u.format10.sanitize (c));
+    case 0: hb_barrier (); return_trace (u.format0.sanitize (c));
+    case 2: hb_barrier (); return_trace (u.format2.sanitize (c));
+    case 4: hb_barrier (); return_trace (u.format4.sanitize (c));
+    case 6: hb_barrier (); return_trace (u.format6.sanitize (c));
+    case 8: hb_barrier (); return_trace (u.format8.sanitize (c));
+    case 10: hb_barrier (); return_trace (u.format10.sanitize (c));
     default:return_trace (true);
     }
   }
@@ -391,12 +529,13 @@ struct Lookup
   {
     TRACE_SANITIZE (this);
     if (!u.format.sanitize (c)) return_trace (false);
+    hb_barrier ();
     switch (u.format) {
-    case 0: return_trace (u.format0.sanitize (c, base));
-    case 2: return_trace (u.format2.sanitize (c, base));
-    case 4: return_trace (u.format4.sanitize (c, base));
-    case 6: return_trace (u.format6.sanitize (c, base));
-    case 8: return_trace (u.format8.sanitize (c, base));
+    case 0: hb_barrier (); return_trace (u.format0.sanitize (c, base));
+    case 2: hb_barrier (); return_trace (u.format2.sanitize (c, base));
+    case 4: hb_barrier (); return_trace (u.format4.sanitize (c, base));
+    case 6: hb_barrier (); return_trace (u.format6.sanitize (c, base));
+    case 8: hb_barrier (); return_trace (u.format8.sanitize (c, base));
     case 10: return_trace (false); /* We don't support format10 here currently. */
     default:return_trace (true);
     }
@@ -417,8 +556,6 @@ struct Lookup
 };
 DECLARE_NULL_NAMESPACE_BYTES_TEMPLATE1 (AAT, Lookup, 2);
 
-enum { DELETED_GLYPH = 0xFFFF };
-
 /*
  * (Extended) State Table
  */
@@ -426,7 +563,8 @@ enum { DELETED_GLYPH = 0xFFFF };
 template <typename T>
 struct Entry
 {
-  bool sanitize (hb_sanitize_context_t *c, unsigned int count) const
+  // This does seem like it's ever called.
+  bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
     /* Note, we don't recurse-sanitize data because we don't access it.
@@ -454,7 +592,8 @@ struct Entry
 template <>
 struct Entry<void>
 {
-  bool sanitize (hb_sanitize_context_t *c, unsigned int count /*XXX Unused?*/) const
+  // This does seem like it's ever called.
+  bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
     return_trace (c->check_struct (this));
@@ -465,6 +604,14 @@ struct Entry<void>
   HBUINT16	flags;		/* Table specific. */
   public:
   DEFINE_SIZE_STATIC (4);
+};
+
+enum Class
+{
+  CLASS_END_OF_TEXT = 0,
+  CLASS_OUT_OF_BOUNDS = 1,
+  CLASS_DELETED_GLYPH = 2,
+  CLASS_END_OF_LINE = 3,
 };
 
 template <typename Types, typename Extra>
@@ -479,21 +626,24 @@ struct StateTable
     STATE_START_OF_TEXT = 0,
     STATE_START_OF_LINE = 1,
   };
-  enum Class
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs, unsigned num_glyphs) const
   {
-    CLASS_END_OF_TEXT = 0,
-    CLASS_OUT_OF_BOUNDS = 1,
-    CLASS_DELETED_GLYPH = 2,
-    CLASS_END_OF_LINE = 3,
-  };
+    (this+classTable).collect_glyphs (glyphs, num_glyphs);
+  }
 
   int new_state (unsigned int newState) const
   { return Types::extended ? newState : ((int) newState - (int) stateArrayTable) / (int) nClasses; }
 
-  unsigned int get_class (hb_codepoint_t glyph_id, unsigned int num_glyphs) const
+  template <typename set_t>
+  unsigned int get_class (hb_codepoint_t glyph_id,
+			  unsigned int num_glyphs,
+			  const set_t &glyphs) const
   {
     if (unlikely (glyph_id == DELETED_GLYPH)) return CLASS_DELETED_GLYPH;
-    return (this+classTable).get_class (glyph_id, num_glyphs, 1);
+    if (!glyphs[glyph_id]) return CLASS_OUT_OF_BOUNDS;
+    return (this+classTable).get_class (glyph_id, num_glyphs, CLASS_OUT_OF_BOUNDS);
   }
 
   const Entry<Extra> *get_entries () const
@@ -502,7 +652,7 @@ struct StateTable
   const Entry<Extra> &get_entry (int state, unsigned int klass) const
   {
     if (unlikely (klass >= nClasses))
-      klass = StateTable::CLASS_OUT_OF_BOUNDS;
+      klass = CLASS_OUT_OF_BOUNDS;
 
     const HBUSHORT *states = (this+stateArrayTable).arrayZ;
     const Entry<Extra> *entries = (this+entryTable).arrayZ;
@@ -518,6 +668,7 @@ struct StateTable
   {
     TRACE_SANITIZE (this);
     if (unlikely (!(c->check_struct (this) &&
+		    hb_barrier () &&
 		    nClasses >= 4 /* Ensure pre-defined classes fit.  */ &&
 		    classTable.sanitize (c, this)))) return_trace (false);
 
@@ -644,6 +795,15 @@ struct ClassTable
   {
     return get_class (glyph_id, outOfRange);
   }
+
+  template <typename set_t>
+  void collect_glyphs (set_t &glyphs, unsigned num_glyphs) const
+  {
+    for (unsigned i = 0; i < classArray.len; i++)
+      if (classArray.arrayZ[i] != CLASS_OUT_OF_BOUNDS)
+	glyphs.add (firstGlyph + i);
+  }
+
   bool sanitize (hb_sanitize_context_t *c) const
   {
     TRACE_SANITIZE (this);
@@ -655,6 +815,38 @@ struct ClassTable
 					 * firstGlyph). */
   public:
   DEFINE_SIZE_ARRAY (4, classArray);
+};
+
+struct SubtableGlyphCoverage
+{
+  bool sanitize (hb_sanitize_context_t *c, unsigned subtable_count) const
+  {
+    TRACE_SANITIZE (this);
+
+    if (unlikely (!c->check_array (&subtableOffsets, subtable_count)))
+      return_trace (false);
+
+    unsigned bytes = (c->get_num_glyphs () + CHAR_BIT - 1) / CHAR_BIT;
+    for (unsigned i = 0; i < subtable_count; i++)
+    {
+      uint32_t offset = (uint32_t) subtableOffsets[i];
+      if (offset == 0 || offset == 0xFFFFFFFF)
+        continue;
+      if (unlikely (!subtableOffsets[i].sanitize (c, this, bytes)))
+        return_trace (false);
+    }
+
+    return_trace (true);
+  }
+  protected:
+  UnsizedArrayOf<NNOffset32To<UnsizedArrayOf<HBUINT8>>> subtableOffsets;
+					    /* Array of offsets from the beginning of the
+					     * subtable glyph coverage table to the glyph
+					     * coverage bitfield for a given subtable; there
+					     * is one offset for each subtable in the chain */
+  /* UnsizedArrayOf<HBUINT8> coverageBitfields; *//* The individual coverage bitfields. */
+  public:
+  DEFINE_SIZE_ARRAY (0, subtableOffsets);
 };
 
 struct ObsoleteTypes
@@ -733,24 +925,60 @@ struct StateTableDriver
   using EntryT = Entry<EntryData>;
 
   StateTableDriver (const StateTableT &machine_,
-		    hb_buffer_t *buffer_,
 		    hb_face_t *face_) :
 	      machine (machine_),
-	      buffer (buffer_),
 	      num_glyphs (face_->get_num_glyphs ()) {}
 
   template <typename context_t>
-  void drive (context_t *c)
+  bool is_idempotent_on_all_out_of_bounds (context_t *c, hb_aat_apply_context_t *ac)
   {
+    const auto entry = machine.get_entry (StateTableT::STATE_START_OF_TEXT, CLASS_OUT_OF_BOUNDS);
+    return !c->is_actionable (ac->buffer, this, entry) &&
+	    machine.new_state (entry.newState) == StateTableT::STATE_START_OF_TEXT;
+  }
+
+  template <typename context_t>
+  void drive (context_t *c, hb_aat_apply_context_t *ac)
+  {
+    hb_buffer_t *buffer = ac->buffer;
+
     if (!c->in_place)
       buffer->clear_output ();
 
     int state = StateTableT::STATE_START_OF_TEXT;
+    // If there's only one range, we already checked the flag.
+    auto *last_range = ac->range_flags && (ac->range_flags->length > 1) ? &(*ac->range_flags)[0] : nullptr;
     for (buffer->idx = 0; buffer->successful;)
     {
-      unsigned int klass = buffer->idx < buffer->len ?
-			   machine.get_class (buffer->info[buffer->idx].codepoint, num_glyphs) :
-			   (unsigned) StateTableT::CLASS_END_OF_TEXT;
+      /* This block is copied in NoncontextualSubtable::apply. Keep in sync. */
+      if (last_range)
+      {
+	auto *range = last_range;
+	if (buffer->idx < buffer->len)
+	{
+	  unsigned cluster = buffer->cur().cluster;
+	  while (cluster < range->cluster_first)
+	    range--;
+	  while (cluster > range->cluster_last)
+	    range++;
+
+
+	  last_range = range;
+	}
+	if (!(range->flags & ac->subtable_flags))
+	{
+	  if (buffer->idx == buffer->len || unlikely (!buffer->successful))
+	    break;
+
+	  state = StateTableT::STATE_START_OF_TEXT;
+	  (void) buffer->next_glyph ();
+	  continue;
+	}
+      }
+
+      unsigned int klass = likely (buffer->idx < buffer->len) ?
+			   machine.get_class (buffer->cur().codepoint, num_glyphs, ac->machine_glyph_set) :
+			   (unsigned) CLASS_END_OF_TEXT;
       DEBUG_MSG (APPLY, nullptr, "c%u at %u", klass, buffer->idx);
       const EntryT &entry = machine.get_entry (state, klass);
       const int next_state = machine.new_state (entry.newState);
@@ -783,46 +1011,44 @@ struct StateTableDriver
        *
        *   https://github.com/harfbuzz/harfbuzz/issues/2860
        */
-      const EntryT *wouldbe_entry;
-      bool safe_to_break =
-	/* 1. */
-	!c->is_actionable (this, entry)
-      &&
-	/* 2. */
-	(
-	  /* 2a. */
-	  state == StateTableT::STATE_START_OF_TEXT
-	||
-	  /* 2b. */
-	  (
-	    (entry.flags & context_t::DontAdvance) &&
-	    next_state == StateTableT::STATE_START_OF_TEXT
-	  )
-	||
-	  /* 2c. */
-	  (
-	    wouldbe_entry = &machine.get_entry (StateTableT::STATE_START_OF_TEXT, klass)
-	  ,
-	    /* 2c'. */
-	    !c->is_actionable (this, *wouldbe_entry)
-	  &&
-	    /* 2c". */
-	    (
-	      next_state == machine.new_state (wouldbe_entry->newState)
-	    &&
-	      (entry.flags & context_t::DontAdvance) == (wouldbe_entry->flags & context_t::DontAdvance)
-	    )
-	  )
-	)
-      &&
-	/* 3. */
-	!c->is_actionable (this, machine.get_entry (state, StateTableT::CLASS_END_OF_TEXT))
-      ;
 
-      if (!safe_to_break && buffer->backtrack_len () && buffer->idx < buffer->len)
+      const auto is_safe_to_break_extra = [&]()
+      {
+          /* 2c. */
+          const auto &wouldbe_entry = machine.get_entry(StateTableT::STATE_START_OF_TEXT, klass);
+
+          /* 2c'. */
+          if (c->is_actionable (buffer, this, wouldbe_entry))
+	    return false;
+
+          /* 2c". */
+          return next_state == machine.new_state(wouldbe_entry.newState)
+              && (entry.flags & context_t::DontAdvance) == (wouldbe_entry.flags & context_t::DontAdvance);
+      };
+
+      const auto is_safe_to_break = [&]()
+      {
+          /* 1. */
+          if (c->is_actionable (buffer, this, entry))
+              return false;
+
+          /* 2. */
+          // This one is meh, I know...
+          const auto ok =
+                 state == StateTableT::STATE_START_OF_TEXT
+              || ((entry.flags & context_t::DontAdvance) && next_state == StateTableT::STATE_START_OF_TEXT)
+              || is_safe_to_break_extra();
+          if (!ok)
+              return false;
+
+          /* 3. */
+          return !c->is_actionable (buffer, this, machine.get_entry (state, CLASS_END_OF_TEXT));
+      };
+
+      if (!is_safe_to_break () && buffer->backtrack_len () && buffer->idx < buffer->len)
 	buffer->unsafe_to_break_from_outbuffer (buffer->backtrack_len () - 1, buffer->idx + 1);
 
-      c->transition (this, entry);
+      c->transition (buffer, this, entry);
 
       state = next_state;
       DEBUG_MSG (APPLY, nullptr, "s%d", state);
@@ -840,43 +1066,7 @@ struct StateTableDriver
 
   public:
   const StateTableT &machine;
-  hb_buffer_t *buffer;
   unsigned int num_glyphs;
-};
-
-
-struct ankr;
-
-struct hb_aat_apply_context_t :
-       hb_dispatch_context_t<hb_aat_apply_context_t, bool, HB_DEBUG_APPLY>
-{
-  const char *get_name () { return "APPLY"; }
-  template <typename T>
-  return_t dispatch (const T &obj) { return obj.apply (this); }
-  static return_t default_return_value () { return false; }
-  bool stop_sublookup_iteration (return_t r) const { return r; }
-
-  const hb_ot_shape_plan_t *plan;
-  hb_font_t *font;
-  hb_face_t *face;
-  hb_buffer_t *buffer;
-  hb_sanitize_context_t sanitizer;
-  const ankr *ankr_table;
-  const OT::GDEF *gdef_table;
-
-  /* Unused. For debug tracing only. */
-  unsigned int lookup_index;
-
-  HB_INTERNAL hb_aat_apply_context_t (const hb_ot_shape_plan_t *plan_,
-				      hb_font_t *font_,
-				      hb_buffer_t *buffer_,
-				      hb_blob_t *blob = const_cast<hb_blob_t *> (&Null (hb_blob_t)));
-
-  HB_INTERNAL ~hb_aat_apply_context_t ();
-
-  HB_INTERNAL void set_ankr_table (const AAT::ankr *ankr_table_);
-
-  void set_lookup_index (unsigned int i) { lookup_index = i; }
 };
 
 

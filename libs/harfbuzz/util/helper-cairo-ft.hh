@@ -61,15 +61,11 @@ helper_cairo_create_ft_font_face (const font_options_t *font_opts)
 #endif
     }
 
-    unsigned int blob_length;
-    const char *blob_data = hb_blob_get_data (font_opts->blob, &blob_length);
-
-    if (FT_New_Memory_Face (ft_library,
-			    (const FT_Byte *) blob_data,
-			    blob_length,
-			    font_opts->face_index,
-			    &ft_face))
-      fail (false, "FT_New_Memory_Face fail");
+    if (FT_New_Face (ft_library,
+		     font_opts->font_file,
+		     font_opts->face_index,
+		     &ft_face))
+      fail (false, "FT_New_Face fail");
   }
   if (!ft_face)
   {

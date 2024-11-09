@@ -21,6 +21,8 @@ option('directwrite', type: 'feature', value: 'disabled',
   description: 'Enable DirectWrite shaper backend on Windows (experimental)')
 option('coretext', type: 'feature', value: 'disabled',
   description: 'Enable CoreText shaper backend on macOS')
+option('wasm', type: 'feature', value: 'disabled',
+  description: 'Enable WebAssembly shaper backend (experimental)')
 
 # Common feature options
 option('tests', type: 'feature', value: 'enabled', yield: true,
@@ -29,14 +31,24 @@ option('introspection', type: 'feature', value: 'auto', yield: true,
   description: 'Generate gobject-introspection bindings (.gir/.typelib files)')
 option('docs', type: 'feature', value: 'auto', yield: true,
   description: 'Generate documentation with gtk-doc')
+option('doc_tests', type: 'boolean', value: false,
+  description: 'Run gtkdoc-check tests')
+option('utilities', type: 'feature', value: 'enabled', yield: true,
+  description: 'Build harfbuzz utils')
 
 option('benchmark', type: 'feature', value: 'disabled',
   description: 'Enable benchmark tests')
 option('icu_builtin', type: 'boolean', value: false,
   description: 'Don\'t separate ICU support as harfbuzz-icu module')
+option('with_libstdcxx', type: 'boolean', value: false,
+  description: 'Allow linking with libstdc++')
 option('experimental_api', type: 'boolean', value: false,
   description: 'Enable experimental APIs')
 option('ragel_subproject', type: 'boolean', value: false,
   description: 'Build Ragel subproject if no suitable version is found')
 option('fuzzer_ldflags', type: 'string',
   description: 'Extra LDFLAGS used during linking of fuzzing binaries')
+
+# Install directory options
+option('cmakepackagedir', type: 'string',
+  description: 'CMake package configuration install directory')
