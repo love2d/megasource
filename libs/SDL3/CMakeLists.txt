@@ -1,11 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
-if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR)
-  message(FATAL_ERROR "Prevented in-tree build. Please create a build directory outside of the SDL source code and run \"cmake -S ${CMAKE_SOURCE_DIR} -B .\" from there")
-endif()
-
 # See docs/release_checklist.md
-project(SDL3 LANGUAGES C VERSION "3.1.5")
+project(SDL3 LANGUAGES C VERSION "3.1.6")
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   set(SDL3_SUBPROJECT OFF)
@@ -337,6 +333,7 @@ dep_option(SDL_VIVANTE             "Use Vivante EGL video driver" ON "${UNIX_SYS
 dep_option(SDL_VULKAN              "Enable Vulkan support" ON "SDL_VIDEO;ANDROID OR APPLE OR LINUX OR FREEBSD OR WINDOWS" OFF)
 dep_option(SDL_RENDER_VULKAN       "Enable the Vulkan render driver" ON "SDL_RENDER;SDL_VULKAN" OFF)
 dep_option(SDL_METAL               "Enable Metal support" ON "APPLE" OFF)
+set_option(SDL_OPENVR              "Use OpenVR video driver" OFF)
 dep_option(SDL_KMSDRM              "Use KMS DRM video driver" ${UNIX_SYS} "SDL_VIDEO" OFF)
 dep_option(SDL_KMSDRM_SHARED       "Dynamically load KMS DRM support" ON "SDL_KMSDRM" OFF)
 set_option(SDL_OFFSCREEN           "Use offscreen video driver" ON)
@@ -455,7 +452,7 @@ sdl_compile_definitions(PRIVATE "USING_GENERATED_CONFIG_H")
 sdl_include_directories(
   PRIVATE
     "${SDL3_BINARY_DIR}/include-config-$<LOWER_CASE:$<CONFIG>>/build_config"
-    "${SDL3_BINARY_DIR}/include"
+    "${SDL3_BINARY_DIR}/include-revision"
     "${SDL3_SOURCE_DIR}/include"
 )
 # Note: The clang toolset for Visual Studio does not support the '-idirafter' option.
@@ -1544,6 +1541,7 @@ elseif(UNIX AND NOT APPLE AND NOT RISCOS AND NOT HAIKU)
     CheckOpenGL()
     CheckOpenGLES()
     CheckWayland()
+    CheckOpenVR()
     CheckVivante()
     CheckVulkan()
     CheckQNXScreen()
@@ -1940,6 +1938,8 @@ elseif(WINDOWS)
   if(SDL_VIDEO)
     set(SDL_VIDEO_DRIVER_WINDOWS 1)
     sdl_glob_sources("${SDL3_SOURCE_DIR}/src/video/windows/*.c")
+
+    CheckOpenVR()
 
     if(SDL_RENDER_D3D AND HAVE_D3D9_H)
       set(SDL_VIDEO_RENDER_D3D 1)
@@ -3046,11 +3046,11 @@ endif()
 # config variables may contain generator expression, so we need to generate SDL_build_config.h in 2 steps:
 # 1. replace all `#cmakedefine`'s and `@abc@`
 configure_file("${SDL3_SOURCE_DIR}/include/build_config/SDL_build_config.h.cmake"
-  "${SDL3_BINARY_DIR}/SDL_build_config.h.intermediate")
+  "${SDL3_BINARY_DIR}/CMakeFiles/SDL_build_config.h.intermediate")
 # 2. generate SDL_build_config.h in an build_type-dependent folder (which should be first in the include search path)
 file(GENERATE
   OUTPUT "${SDL3_BINARY_DIR}/include-config-$<LOWER_CASE:$<CONFIG>>/build_config/SDL_build_config.h"
-  INPUT "${SDL3_BINARY_DIR}/SDL_build_config.h.intermediate"
+  INPUT "${SDL3_BINARY_DIR}/CMakeFiles/SDL_build_config.h.intermediate"
 )
 
 file(GLOB SDL3_INCLUDE_FILES "${SDL3_SOURCE_DIR}/include/SDL3/*.h")
@@ -3074,9 +3074,9 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/REVISION.txt")
   set(SDL_REVISION "SDL3-${SDL_REVISION_CENTER}")
 endif()
 
-execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${SDL3_BINARY_DIR}/include/SDL3")
-configure_file(include/build_config/SDL_revision.h.cmake include/SDL3/SDL_revision.h @ONLY)
-list(APPEND SDL3_INCLUDE_FILES "${SDL3_BINARY_DIR}/include/SDL3/SDL_revision.h")
+execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${SDL3_BINARY_DIR}/include-revision/SDL3")
+configure_file(include/build_config/SDL_revision.h.cmake include-revision/SDL3/SDL_revision.h @ONLY)
+list(APPEND SDL3_INCLUDE_FILES "${SDL3_BINARY_DIR}/include-revision/SDL3/SDL_revision.h")
 
 if(SDL_FRAMEWORK)
   # With Apple frameworks, headers in the PUBLIC_HEADER property also need to be added as sources
@@ -3273,7 +3273,7 @@ add_library(SDL3::Headers ALIAS SDL3_Headers)
 set_property(TARGET SDL3_Headers PROPERTY EXPORT_NAME "Headers")
 target_include_directories(SDL3_Headers
   INTERFACE
-    "$<BUILD_INTERFACE:${SDL3_BINARY_DIR}/include>"
+    "$<BUILD_INTERFACE:${SDL3_BINARY_DIR}/include-revision>"
     "$<BUILD_INTERFACE:${SDL3_SOURCE_DIR}/include>"
 )
 if(SDL_FRAMEWORK)

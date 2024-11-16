@@ -55,7 +55,7 @@ extern "C" {
 /**
  * The types of events that can be delivered.
  *
- * \since This enum is available since SDL 3.0.0.
+ * \since This enum is available since SDL 3.1.3.
  */
 typedef enum SDL_EventType
 {
@@ -228,6 +228,7 @@ typedef enum SDL_EventType
     /* Render events */
     SDL_EVENT_RENDER_TARGETS_RESET = 0x2000, /**< The render targets have been reset and their contents need to be updated */
     SDL_EVENT_RENDER_DEVICE_RESET, /**< The device has been reset and all textures need to be recreated */
+    SDL_EVENT_RENDER_DEVICE_LOST, /**< The device has been lost and can't be recovered. */
 
     /* Reserved events for private platforms */
     SDL_EVENT_PRIVATE0 = 0x4000,
@@ -256,7 +257,7 @@ typedef enum SDL_EventType
 /**
  * Fields shared by every event
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_CommonEvent
 {
@@ -268,7 +269,7 @@ typedef struct SDL_CommonEvent
 /**
  * Display state change event data (event.display.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_DisplayEvent
 {
@@ -283,7 +284,7 @@ typedef struct SDL_DisplayEvent
 /**
  * Window state change event data (event.window.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_WindowEvent
 {
@@ -298,7 +299,7 @@ typedef struct SDL_WindowEvent
 /**
  * Keyboard device event structure (event.kdevice.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_KeyboardDeviceEvent
 {
@@ -317,7 +318,7 @@ typedef struct SDL_KeyboardDeviceEvent
  * event scancode and modifiers directly from the keyboard layout, bypassing
  * SDL_HINT_KEYCODE_OPTIONS, by calling SDL_GetKeyFromScancode().
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  *
  * \sa SDL_GetKeyFromScancode
  * \sa SDL_HINT_KEYCODE_OPTIONS
@@ -344,7 +345,7 @@ typedef struct SDL_KeyboardEvent
  * will be inserted into the editing text. The length is the number of UTF-8
  * characters that will be replaced by new typing.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_TextEditingEvent
 {
@@ -360,7 +361,7 @@ typedef struct SDL_TextEditingEvent
 /**
  * Keyboard IME candidates event structure (event.edit_candidates.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_TextEditingCandidatesEvent
 {
@@ -383,7 +384,7 @@ typedef struct SDL_TextEditingCandidatesEvent
  * This event will never be delivered unless text input is enabled by calling
  * SDL_StartTextInput(). Text input is disabled by default!
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  *
  * \sa SDL_StartTextInput
  * \sa SDL_StopTextInput
@@ -400,7 +401,7 @@ typedef struct SDL_TextInputEvent
 /**
  * Mouse device event structure (event.mdevice.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_MouseDeviceEvent
 {
@@ -413,7 +414,7 @@ typedef struct SDL_MouseDeviceEvent
 /**
  * Mouse motion event structure (event.motion.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_MouseMotionEvent
 {
@@ -432,7 +433,7 @@ typedef struct SDL_MouseMotionEvent
 /**
  * Mouse button event structure (event.button.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_MouseButtonEvent
 {
@@ -452,7 +453,7 @@ typedef struct SDL_MouseButtonEvent
 /**
  * Mouse wheel event structure (event.wheel.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_MouseWheelEvent
 {
@@ -471,7 +472,7 @@ typedef struct SDL_MouseWheelEvent
 /**
  * Joystick axis motion event structure (event.jaxis.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_JoyAxisEvent
 {
@@ -490,7 +491,7 @@ typedef struct SDL_JoyAxisEvent
 /**
  * Joystick trackball motion event structure (event.jball.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_JoyBallEvent
 {
@@ -509,7 +510,7 @@ typedef struct SDL_JoyBallEvent
 /**
  * Joystick hat position change event structure (event.jhat.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_JoyHatEvent
 {
@@ -532,7 +533,7 @@ typedef struct SDL_JoyHatEvent
 /**
  * Joystick button event structure (event.jbutton.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_JoyButtonEvent
 {
@@ -549,7 +550,12 @@ typedef struct SDL_JoyButtonEvent
 /**
  * Joystick device event structure (event.jdevice.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * SDL will send JOYSTICK_ADDED events for devices that are already plugged in
+ * during SDL_Init.
+ *
+ * \since This struct is available since SDL 3.1.3.
+ *
+ * \sa SDL_GamepadDeviceEvent
  */
 typedef struct SDL_JoyDeviceEvent
 {
@@ -562,7 +568,7 @@ typedef struct SDL_JoyDeviceEvent
 /**
  * Joystick battery level change event structure (event.jbattery.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_JoyBatteryEvent
 {
@@ -577,7 +583,7 @@ typedef struct SDL_JoyBatteryEvent
 /**
  * Gamepad axis motion event structure (event.gaxis.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_GamepadAxisEvent
 {
@@ -597,7 +603,7 @@ typedef struct SDL_GamepadAxisEvent
 /**
  * Gamepad button event structure (event.gbutton.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_GamepadButtonEvent
 {
@@ -615,7 +621,16 @@ typedef struct SDL_GamepadButtonEvent
 /**
  * Gamepad device event structure (event.gdevice.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * Joysticks that are supported gamepads receive both an SDL_JoyDeviceEvent
+ * and an SDL_GamepadDeviceEvent.
+ *
+ * SDL will send GAMEPAD_ADDED events for joysticks that are already plugged
+ * in during SDL_Init() and are recognized as gamepads. It will also send
+ * events for joysticks that get gamepad mappings at runtime.
+ *
+ * \since This struct is available since SDL 3.1.3.
+ *
+ * \sa SDL_JoyDeviceEvent
  */
 typedef struct SDL_GamepadDeviceEvent
 {
@@ -628,7 +643,7 @@ typedef struct SDL_GamepadDeviceEvent
 /**
  * Gamepad touchpad event structure (event.gtouchpad.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_GamepadTouchpadEvent
 {
@@ -646,7 +661,7 @@ typedef struct SDL_GamepadTouchpadEvent
 /**
  * Gamepad sensor event structure (event.gsensor.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_GamepadSensorEvent
 {
@@ -662,7 +677,7 @@ typedef struct SDL_GamepadSensorEvent
 /**
  * Audio device event structure (event.adevice.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_AudioDeviceEvent
 {
@@ -679,7 +694,7 @@ typedef struct SDL_AudioDeviceEvent
 /**
  * Camera device event structure (event.cdevice.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_CameraDeviceEvent
 {
@@ -692,7 +707,21 @@ typedef struct SDL_CameraDeviceEvent
 /**
  * Touch finger event structure (event.tfinger.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * Coordinates in this event are normalized. `x` and `y` are normalized to a
+ * range between 0.0f and 1.0f, relative to the window, so (0,0) is the top
+ * left and (1,1) is the bottom right. Delta coordinates `dx` and `dy` are
+ * normalized in the ranges of -1.0f (traversed all the way from the bottom or
+ * right to all the way up or left) to 1.0f (traversed all the way from the
+ * top or left to all the way down or right).
+ *
+ * Note that while the coordinates are _normalized_, they are not _clamped_,
+ * which means in some circumstances you can get a value outside of this
+ * range. For example, a renderer using logical presentation might give a
+ * negative value when the touch is in the letterboxing. Some platforms might
+ * report a touch outside of the window, which will also be outside of the
+ * range.
+ *
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_TouchFingerEvent
 {
@@ -722,7 +751,7 @@ typedef struct SDL_TouchFingerEvent
  * is there." The pen touching and lifting off from the tablet while not
  * leaving the area are handled by SDL_EVENT_PEN_DOWN and SDL_EVENT_PEN_UP.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_PenProximityEvent
 {
@@ -742,7 +771,7 @@ typedef struct SDL_PenProximityEvent
  * `pen_state & SDL_PEN_INPUT_DOWN` to decide if a pen is "drawing" when
  * dealing with pen motion.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_PenMotionEvent
 {
@@ -762,7 +791,7 @@ typedef struct SDL_PenMotionEvent
  * These events come when a pen touches a surface (a tablet, etc), or lifts
  * off from one.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_PenTouchEvent
 {
@@ -784,7 +813,7 @@ typedef struct SDL_PenTouchEvent
  * This is for buttons on the pen itself that the user might click. The pen
  * itself pressing down to draw triggers a SDL_EVENT_PEN_DOWN event instead.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_PenButtonEvent
 {
@@ -806,7 +835,7 @@ typedef struct SDL_PenButtonEvent
  * You might get some of these events even if the pen isn't touching the
  * tablet.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_PenAxisEvent
 {
@@ -826,7 +855,7 @@ typedef struct SDL_PenAxisEvent
  * An event used to drop text or request a file open by the system
  * (event.drop.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_DropEvent
 {
@@ -844,7 +873,7 @@ typedef struct SDL_DropEvent
  * An event triggered when the clipboard contents have changed
  * (event.clipboard.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_ClipboardEvent
 {
@@ -859,7 +888,7 @@ typedef struct SDL_ClipboardEvent
 /**
  * Sensor event structure (event.sensor.*)
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_SensorEvent
 {
@@ -874,7 +903,7 @@ typedef struct SDL_SensorEvent
 /**
  * The "quit requested" event
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_QuitEvent
 {
@@ -892,7 +921,7 @@ typedef struct SDL_QuitEvent
  * the programmer; the only requirement is that '''type''' is a value obtained
  * from SDL_RegisterEvents().
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef struct SDL_UserEvent
 {
@@ -909,7 +938,10 @@ typedef struct SDL_UserEvent
 /**
  * The structure for all events in SDL.
  *
- * \since This struct is available since SDL 3.0.0.
+ * The SDL_Event structure is the core of all event handling in SDL. SDL_Event
+ * is a union of all event structures used in SDL.
+ *
+ * \since This struct is available since SDL 3.1.3.
  */
 typedef union SDL_Event
 {
@@ -978,10 +1010,6 @@ SDL_COMPILE_TIME_ASSERT(SDL_Event, sizeof(SDL_Event) == sizeof(((SDL_Event *)NUL
  *
  * This function updates the event queue and internal input device state.
  *
- * **WARNING**: This should only be run in the thread that initialized the
- * video subsystem, and for extra safety, you should consider only doing those
- * things on the main thread in any case.
- *
  * SDL_PumpEvents() gathers all the pending input information from devices and
  * places it in the event queue. Without calls to SDL_PumpEvents() no events
  * would ever be placed on the queue. Often the need for calls to
@@ -990,7 +1018,11 @@ SDL_COMPILE_TIME_ASSERT(SDL_Event, sizeof(SDL_Event) == sizeof(((SDL_Event *)NUL
  * polling or waiting for events (e.g. you are filtering them), then you must
  * call SDL_PumpEvents() to force an event queue update.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety This should only be run in the thread that initialized the
+ *               video subsystem, and for extra safety, you should consider
+ *               only doing those things on the main thread in any case.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PollEvent
  * \sa SDL_WaitEvent
@@ -1002,7 +1034,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_PumpEvents(void);
 /**
  * The type of action to request from SDL_PeepEvents().
  *
- * \since This enum is available since SDL 3.0.0.
+ * \since This enum is available since SDL 3.1.3.
  */
 typedef enum SDL_EventAction
 {
@@ -1031,8 +1063,6 @@ typedef enum SDL_EventAction
  * Otherwise, the events may not be ready to be filtered when you call
  * SDL_PeepEvents().
  *
- * This function is thread-safe.
- *
  * \param events destination buffer for the retrieved events, may be NULL to
  *               leave the events in the queue and return the number of events
  *               that would have been stored.
@@ -1047,7 +1077,9 @@ typedef enum SDL_EventAction
  * \returns the number of events actually stored or -1 on failure; call
  *          SDL_GetError() for more information.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PollEvent
  * \sa SDL_PumpEvents
@@ -1066,7 +1098,9 @@ extern SDL_DECLSPEC int SDLCALL SDL_PeepEvents(SDL_Event *events, int numevents,
  * \returns true if events matching `type` are present, or false if events
  *          matching `type` are not present.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_HasEvents
  */
@@ -1085,7 +1119,9 @@ extern SDL_DECLSPEC bool SDLCALL SDL_HasEvent(Uint32 type);
  * \returns true if events with type >= `minType` and <= `maxType` are
  *          present, or false if not.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_HasEvents
  */
@@ -1111,7 +1147,9 @@ extern SDL_DECLSPEC bool SDLCALL SDL_HasEvents(Uint32 minType, Uint32 maxType);
  *
  * \param type the type of event to be cleared; see SDL_EventType for details.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_FlushEvents
  */
@@ -1136,7 +1174,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_FlushEvent(Uint32 type);
  * \param maxType the high end of event type to be cleared, inclusive; see
  *                SDL_EventType for details.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_FlushEvent
  */
@@ -1178,7 +1218,11 @@ extern SDL_DECLSPEC void SDLCALL SDL_FlushEvents(Uint32 minType, Uint32 maxType)
  *              the queue, or NULL.
  * \returns true if this got an event or false if there are none available.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety This should only be run in the thread that initialized the
+ *               video subsystem, and for extra safety, you should consider
+ *               only doing those things on the main thread in any case.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PushEvent
  * \sa SDL_WaitEvent
@@ -1200,7 +1244,11 @@ extern SDL_DECLSPEC bool SDLCALL SDL_PollEvent(SDL_Event *event);
  * \returns true on success or false if there was an error while waiting for
  *          events; call SDL_GetError() for more information.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety This should only be run in the thread that initialized the
+ *               video subsystem, and for extra safety, you should consider
+ *               only doing those things on the main thread in any case.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PollEvent
  * \sa SDL_PushEvent
@@ -1228,7 +1276,11 @@ extern SDL_DECLSPEC bool SDLCALL SDL_WaitEvent(SDL_Event *event);
  * \returns true if this got an event or false if the timeout elapsed without
  *          any events available.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety This should only be run in the thread that initialized the
+ *               video subsystem, and for extra safety, you should consider
+ *               only doing those things on the main thread in any case.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PollEvent
  * \sa SDL_PushEvent
@@ -1248,8 +1300,6 @@ extern SDL_DECLSPEC bool SDLCALL SDL_WaitEventTimeout(SDL_Event *event, Sint32 t
  * Note: Pushing device input events onto the queue doesn't modify the state
  * of the device within SDL.
  *
- * This function is thread-safe, and can be called from other threads safely.
- *
  * Note: Events pushed onto the queue with SDL_PushEvent() get passed through
  * the event filter but events added with SDL_PeepEvents() do not.
  *
@@ -1262,7 +1312,9 @@ extern SDL_DECLSPEC bool SDLCALL SDL_WaitEventTimeout(SDL_Event *event, Sint32 t
  *          call SDL_GetError() for more information. A common reason for
  *          error is the event queue being full.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PeepEvents
  * \sa SDL_PollEvent
@@ -1284,7 +1336,7 @@ extern SDL_DECLSPEC bool SDLCALL SDL_PushEvent(SDL_Event *event);
  *               application is responsible for locking resources the callback
  *               touches that need to be protected.
  *
- * \since This datatype is available since SDL 3.0.0.
+ * \since This datatype is available since SDL 3.1.3.
  *
  * \sa SDL_SetEventFilter
  * \sa SDL_AddEventWatch
@@ -1325,11 +1377,9 @@ typedef bool (SDLCALL *SDL_EventFilter)(void *userdata, SDL_Event *event);
  * \param filter an SDL_EventFilter function to call when an event happens.
  * \param userdata a pointer that is passed to `filter`.
  *
- * \threadsafety SDL may call the filter callback at any time from any thread;
- *               the application is responsible for locking resources the
- *               callback touches that need to be protected.
+ * \threadsafety It is safe to call this function from any thread.
  *
- * \since This function is available since SDL 3.0.0.
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_AddEventWatch
  * \sa SDL_SetEventEnabled
@@ -1350,7 +1400,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_SetEventFilter(SDL_EventFilter filter, void
  *                 be stored here.
  * \returns true on success or false if there is no event filter set.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_SetEventFilter
  */
@@ -1381,7 +1433,7 @@ extern SDL_DECLSPEC bool SDLCALL SDL_GetEventFilter(SDL_EventFilter *filter, voi
  *
  * \threadsafety It is safe to call this function from any thread.
  *
- * \since This function is available since SDL 3.0.0.
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_RemoveEventWatch
  * \sa SDL_SetEventFilter
@@ -1397,7 +1449,9 @@ extern SDL_DECLSPEC bool SDLCALL SDL_AddEventWatch(SDL_EventFilter filter, void 
  * \param filter the function originally passed to SDL_AddEventWatch().
  * \param userdata the pointer originally passed to SDL_AddEventWatch().
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_AddEventWatch
  */
@@ -1414,7 +1468,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_RemoveEventWatch(SDL_EventFilter filter, vo
  * \param filter the SDL_EventFilter function to call when an event happens.
  * \param userdata a pointer that is passed to `filter`.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_GetEventFilter
  * \sa SDL_SetEventFilter
@@ -1427,7 +1483,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_FilterEvents(SDL_EventFilter filter, void *
  * \param type the type of event; see SDL_EventType for details.
  * \param enabled whether to process the event or not.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_EventEnabled
  */
@@ -1439,7 +1497,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_SetEventEnabled(Uint32 type, bool enabled);
  * \param type the type of event; see SDL_EventType for details.
  * \returns true if the event is being processed, false otherwise.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_SetEventEnabled
  */
@@ -1453,7 +1513,9 @@ extern SDL_DECLSPEC bool SDLCALL SDL_EventEnabled(Uint32 type);
  * \returns the beginning event number, or 0 if numevents is invalid or if
  *          there are not enough user-defined events left.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PushEvent
  */
@@ -1465,7 +1527,9 @@ extern SDL_DECLSPEC Uint32 SDLCALL SDL_RegisterEvents(int numevents);
  * \param event an event containing a `windowID`.
  * \returns the associated window on success or NULL if there is none.
  *
- * \since This function is available since SDL 3.0.0.
+ * \threadsafety It is safe to call this function from any thread.
+ *
+ * \since This function is available since SDL 3.1.3.
  *
  * \sa SDL_PollEvent
  * \sa SDL_WaitEvent

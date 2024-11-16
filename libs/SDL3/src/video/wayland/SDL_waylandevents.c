@@ -638,7 +638,7 @@ static bool ProcessHitTest(SDL_WindowData *window_data,
         switch (window_data->hit_test_result) {
         case SDL_HITTEST_DRAGGABLE:
 #ifdef HAVE_LIBDECOR_H
-            if (window_data->shell_surface_type == WAYLAND_SURFACE_LIBDECOR) {
+            if (window_data->shell_surface_type == WAYLAND_SHELL_SURFACE_TYPE_LIBDECOR) {
                 if (window_data->shell_surface.libdecor.frame) {
                     libdecor_frame_move(window_data->shell_surface.libdecor.frame,
                                         seat,
@@ -646,9 +646,9 @@ static bool ProcessHitTest(SDL_WindowData *window_data,
                 }
             } else
 #endif
-                if (window_data->shell_surface_type == WAYLAND_SURFACE_XDG_TOPLEVEL) {
-                if (window_data->shell_surface.xdg.roleobj.toplevel) {
-                    xdg_toplevel_move(window_data->shell_surface.xdg.roleobj.toplevel,
+                if (window_data->shell_surface_type == WAYLAND_SHELL_SURFACE_TYPE_XDG_TOPLEVEL) {
+                if (window_data->shell_surface.xdg.toplevel.xdg_toplevel) {
+                    xdg_toplevel_move(window_data->shell_surface.xdg.toplevel.xdg_toplevel,
                                       seat,
                                       serial);
                 }
@@ -664,7 +664,7 @@ static bool ProcessHitTest(SDL_WindowData *window_data,
         case SDL_HITTEST_RESIZE_BOTTOMLEFT:
         case SDL_HITTEST_RESIZE_LEFT:
 #ifdef HAVE_LIBDECOR_H
-            if (window_data->shell_surface_type == WAYLAND_SURFACE_LIBDECOR) {
+            if (window_data->shell_surface_type == WAYLAND_SHELL_SURFACE_TYPE_LIBDECOR) {
                 if (window_data->shell_surface.libdecor.frame) {
                     libdecor_frame_resize(window_data->shell_surface.libdecor.frame,
                                           seat,
@@ -673,9 +673,9 @@ static bool ProcessHitTest(SDL_WindowData *window_data,
                 }
             } else
 #endif
-                if (window_data->shell_surface_type == WAYLAND_SURFACE_XDG_TOPLEVEL) {
-                if (window_data->shell_surface.xdg.roleobj.toplevel) {
-                    xdg_toplevel_resize(window_data->shell_surface.xdg.roleobj.toplevel,
+                if (window_data->shell_surface_type == WAYLAND_SHELL_SURFACE_TYPE_XDG_TOPLEVEL) {
+                if (window_data->shell_surface.xdg.toplevel.xdg_toplevel) {
+                    xdg_toplevel_resize(window_data->shell_surface.xdg.toplevel.xdg_toplevel,
                                         seat,
                                         serial,
                                         directions[window_data->hit_test_result - SDL_HITTEST_RESIZE_TOPLEFT]);
@@ -2134,6 +2134,7 @@ static void data_device_handle_leave(void *data, struct wl_data_device *wl_data_
 
     if (data_device->drag_offer) {
         if (data_device->dnd_window) {
+            SDL_SendDropComplete(data_device->dnd_window);
             SDL_LogTrace(SDL_LOG_CATEGORY_INPUT,
                          ". In wl_data_device_listener . data_device_handle_leave on data_offer 0x%08x from window %d for serial %d\n",
                          WAYLAND_wl_proxy_get_id((struct wl_proxy *)data_device->drag_offer->offer),
