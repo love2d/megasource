@@ -31,7 +31,7 @@ goto :error
 :ljdetermined
 
 rem ARMv8
-call :compile arm64-v8a aarch64-linux-android 21
+call :compile arm64-v8a aarch64-linux-android 21 "" "-Wl,-z,max-page-size=16384"
 if "%ERRORLEVEL%" == "1" goto :error
 
 rem ARMv7
@@ -43,7 +43,7 @@ call :compile x86 i686-linux-android 21 -m32
 if not "%ERRORLEVEL%" == "0" goto :error
 
 rem x86_64
-call :compile x86_64 x86_64-linux-android 21
+call :compile x86_64 x86_64-linux-android 21 "" "-Wl,-z,max-page-size=16384"
 if not "%ERRORLEVEL%" == "0" goto :error
 
 goto :done
@@ -63,7 +63,8 @@ wsl make ^
 	"TARGET_AR=llvm-ar.exe rcus" ^
 	TARGET_SYS=Linux ^
 	TARGET_LD=%2%3-clang ^
-	TARGET_LDFLAGS=-fuse-ld=lld ^
+	TARGET_LDFLAGS="-fuse-ld=lld %5"^
+	TARGET_SHLDFLAGS="%5" ^
 	TARGET_STRIP=llvm-strip.exe ^
 	TARGET_SONAME=libluajit.so ^
 	CCDEBUG=-g ^
