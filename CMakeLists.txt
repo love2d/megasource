@@ -242,6 +242,7 @@ set(OGG_LIBRARY ogg-static)
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: zlib ${MEGA_ZLIB_VER}")
 message(STATUS "-----------------------------------------------------")
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Enable Zlib Examples" FORCE)
 add_subdirectory("libs/zlib-${MEGA_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
 set(MEGA_ZLIB zlibstatic)
 
