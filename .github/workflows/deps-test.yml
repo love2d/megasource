@@ -29,6 +29,6 @@ jobs:
     - name: Configure
       env:
         PLATFORM: ${{ matrix.platform }}
-      run: cmake -Bbuild -Hmegasource -T v142 -A %PLATFORM% -DCMAKE_INSTALL_PREFIX=%CD%\install
+      run: cmake -Bbuild -Smegasource -T v142 -A %PLATFORM%,version=10.0.26100.0 --install-prefix %CD%\install
     - name: Install
       run: cmake --build build --config Release --target install -j2
