@@ -353,7 +353,7 @@ if(MSVC)
 		)
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
 		cl
-		msvcbuild.bat debug amalg
+		msvcbuild.bat amalg
 	")
 
 	file(WRITE ${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat ${MEGA_LUAJIT_BUILD_BAT})
