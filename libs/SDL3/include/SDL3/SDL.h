@@ -20,9 +20,12 @@
 */
 
 /**
- *  \file SDL.h
+ * Main include header for the SDL library, version 3.1.7
  *
- *  Main include header for the SDL library, version 3.1.6
+ * It is almost always best to include just this one header instead of
+ * picking out individual headers included here. There are exceptions to
+ * this rule--SDL_main.h is special and not included here--but usually
+ * letting SDL.h include the kitchen sink for you is the correct approach.
  */
 
 #ifndef SDL_h_
@@ -30,6 +33,7 @@
 
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_assert.h>
+#include <SDL3/SDL_asyncio.h>
 #include <SDL3/SDL_atomic.h>
 #include <SDL3/SDL_audio.h>
 #include <SDL3/SDL_bits.h>
@@ -77,6 +81,7 @@
 #include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_time.h>
 #include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_tray.h>
 #include <SDL3/SDL_touch.h>
 #include <SDL3/SDL_version.h>
 #include <SDL3/SDL_video.h>

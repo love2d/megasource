@@ -449,7 +449,6 @@ static void Wayland_DeleteDevice(SDL_VideoDevice *device)
 typedef struct
 {
     bool has_fifo_v1;
-    bool has_commit_timing_v1;
 } SDL_WaylandPreferredData;
 
 static void wayland_preferred_check_handle_global(void *data, struct wl_registry *registry, uint32_t id,
@@ -459,8 +458,6 @@ static void wayland_preferred_check_handle_global(void *data, struct wl_registry
 
     if (SDL_strcmp(interface, "wp_fifo_manager_v1") == 0) {
         d->has_fifo_v1 = true;
-    } else if (SDL_strcmp(interface, "wp_commit_timing_manager_v1") == 0) {
-        d->has_commit_timing_v1 = true;
     }
 }
 
@@ -490,7 +487,7 @@ static bool Wayland_IsPreferred(struct wl_display *display)
 
     wl_registry_destroy(registry);
 
-    return preferred_data.has_fifo_v1 && preferred_data.has_commit_timing_v1;
+    return preferred_data.has_fifo_v1;
 }
 
 static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
@@ -524,19 +521,22 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
 
     /*
      * If we are checking for preferred Wayland, then let's query for
-     * fifo-v1 and commit-timing-v1's existence, so we don't regress
-     * GPU-bound performance and frame-pacing by default due to
-     * swapchain starvation.
+     * fifo-v1's existence, so we don't regress GPU-bound performance
+     * and frame-pacing by default due to swapchain starvation.
      */
     if (require_preferred_protocols && !Wayland_IsPreferred(display)) {
-        WAYLAND_wl_display_disconnect(display);
+        if (!display_is_external) {
+            WAYLAND_wl_display_disconnect(display);
+        }
         SDL_WAYLAND_UnloadSymbols();
         return NULL;
     }
 
     data = SDL_calloc(1, sizeof(*data));
     if (!data) {
-        WAYLAND_wl_display_disconnect(display);
+        if (!display_is_external) {
+            WAYLAND_wl_display_disconnect(display);
+        }
         SDL_WAYLAND_UnloadSymbols();
         return NULL;
     }
@@ -544,7 +544,9 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
     input = SDL_calloc(1, sizeof(*input));
     if (!input) {
         SDL_free(data);
-        WAYLAND_wl_display_disconnect(display);
+        if (!display_is_external) {
+            WAYLAND_wl_display_disconnect(display);
+        }
         SDL_WAYLAND_UnloadSymbols();
         return NULL;
     }
@@ -566,7 +568,9 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
     if (!device) {
         SDL_free(input);
         SDL_free(data);
-        WAYLAND_wl_display_disconnect(display);
+        if (!display_is_external) {
+            WAYLAND_wl_display_disconnect(display);
+        }
         SDL_WAYLAND_UnloadSymbols();
         return NULL;
     }
@@ -705,8 +709,8 @@ static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xd
 {
     SDL_DisplayData *internal = (SDL_DisplayData *)data;
 
-    internal->screen_width = width;
-    internal->screen_height = height;
+    internal->logical_width = width;
+    internal->logical_height = height;
     internal->has_logical_size = true;
 }
 
@@ -854,8 +858,8 @@ static void display_handle_geometry(void *data,
         internal->x = x;
         internal->y = y;
     }
-    internal->physical_width = physical_width;
-    internal->physical_height = physical_height;
+    internal->physical_width_mm = physical_width;
+    internal->physical_height_mm = physical_height;
 
     // The model is only used for the output name if wl_output or xdg-output haven't provided a description.
     if (internal->display == 0 && !internal->placeholder.name) {
@@ -867,7 +871,7 @@ static void display_handle_geometry(void *data,
     case WL_OUTPUT_TRANSFORM_##in:                       \
         internal->orientation = SDL_ORIENTATION_##out; \
         break;
-    if (internal->physical_width >= internal->physical_height) {
+    if (internal->physical_width_mm >= internal->physical_height_mm) {
         switch (transform) {
             TF_CASE(NORMAL, LANDSCAPE)
             TF_CASE(90, PORTRAIT)
@@ -911,8 +915,8 @@ static void display_handle_mode(void *data,
          * handle_done and xdg-output coordinates are pre-transformed.
          */
         if (!internal->has_logical_size) {
-            internal->screen_width = width;
-            internal->screen_height = height;
+            internal->logical_width = width;
+            internal->logical_height = height;
         }
 
         internal->refresh = refresh;
@@ -926,7 +930,6 @@ static void display_handle_done(void *data,
     SDL_DisplayData *internal = (SDL_DisplayData *)data;
     SDL_VideoData *video = internal->videodata;
     SDL_DisplayMode native_mode, desktop_mode;
-    SDL_VideoDisplay *dpy;
 
     /*
      * When using xdg-output, two wl-output.done events will be emitted:
@@ -943,7 +946,7 @@ static void display_handle_done(void *data,
     }
 
     // If the display was already created, reset and rebuild the mode list.
-    dpy = SDL_GetVideoDisplay(internal->display);
+    SDL_VideoDisplay *dpy = SDL_GetVideoDisplay(internal->display);
     if (dpy) {
         SDL_ResetFullscreenDisplayModes(dpy);
     }
@@ -964,29 +967,29 @@ static void display_handle_done(void *data,
     native_mode.refresh_rate_denominator = 1000;
 
     if (internal->has_logical_size) { // If xdg-output is present...
-        if (native_mode.w != internal->screen_width || native_mode.h != internal->screen_height) {
+        if (native_mode.w != internal->logical_width || native_mode.h != internal->logical_height) {
             // ...and the compositor scales the logical viewport...
             if (video->viewporter) {
                 // ...and viewports are supported, calculate the true scale of the output.
-                internal->scale_factor = (double)native_mode.w / (double)internal->screen_width;
+                internal->scale_factor = (double)native_mode.w / (double)internal->logical_width;
             } else {
                 // ...otherwise, the 'native' pixel values are a multiple of the logical screen size.
-                internal->pixel_width = internal->screen_width * (int)internal->scale_factor;
-                internal->pixel_height = internal->screen_height * (int)internal->scale_factor;
+                internal->pixel_width = internal->logical_width * (int)internal->scale_factor;
+                internal->pixel_height = internal->logical_height * (int)internal->scale_factor;
             }
         } else {
             /* ...and the output viewport is not scaled in the global compositing
              * space, the output dimensions need to be divided by the scale factor.
              */
-            internal->screen_width /= (int)internal->scale_factor;
-            internal->screen_height /= (int)internal->scale_factor;
+            internal->logical_width /= (int)internal->scale_factor;
+            internal->logical_height /= (int)internal->scale_factor;
         }
     } else {
         /* Calculate the points from the pixel values, if xdg-output isn't present.
          * Use the native mode pixel values since they are pre-transformed.
          */
-        internal->screen_width = native_mode.w / (int)internal->scale_factor;
-        internal->screen_height = native_mode.h / (int)internal->scale_factor;
+        internal->logical_width = native_mode.w / (int)internal->scale_factor;
+        internal->logical_height = native_mode.h / (int)internal->scale_factor;
     }
 
     // The scaled desktop mode
@@ -994,8 +997,8 @@ static void display_handle_done(void *data,
     desktop_mode.format = SDL_PIXELFORMAT_XRGB8888;
 
     if (!video->scale_to_display_enabled) {
-        desktop_mode.w = internal->screen_width;
-        desktop_mode.h = internal->screen_height;
+        desktop_mode.w = internal->logical_width;
+        desktop_mode.h = internal->logical_height;
         desktop_mode.pixel_density = (float)internal->scale_factor;
     } else {
         desktop_mode.w = native_mode.w;
@@ -1029,8 +1032,8 @@ static void display_handle_done(void *data,
         desktop_mode.pixel_density = 1.0f;
 
         for (i = (int)internal->scale_factor; i > 0; --i) {
-            desktop_mode.w = internal->screen_width * i;
-            desktop_mode.h = internal->screen_height * i;
+            desktop_mode.w = internal->logical_width * i;
+            desktop_mode.h = internal->logical_height * i;
             SDL_AddFullscreenDisplayMode(dpy, &desktop_mode);
         }
     }
@@ -1043,7 +1046,7 @@ static void display_handle_done(void *data,
 
     if (internal->display == 0) {
         // First time getting display info, initialize the VideoDisplay
-        if (internal->physical_width >= internal->physical_height) {
+        if (internal->physical_width_mm >= internal->physical_height_mm) {
             internal->placeholder.natural_orientation = SDL_ORIENTATION_LANDSCAPE;
         } else {
             internal->placeholder.natural_orientation = SDL_ORIENTATION_PORTRAIT;
@@ -1130,7 +1133,7 @@ static bool Wayland_add_display(SDL_VideoData *d, uint32_t id, uint32_t version)
     return true;
 }
 
-static void Wayland_free_display(SDL_VideoDisplay *display)
+static void Wayland_free_display(SDL_VideoDisplay *display, bool send_event)
 {
     if (display) {
         SDL_DisplayData *display_data = display->internal;
@@ -1154,7 +1157,7 @@ static void Wayland_free_display(SDL_VideoDisplay *display)
             wl_output_destroy(display_data->output);
         }
 
-        SDL_DelVideoDisplay(display->id, false);
+        SDL_DelVideoDisplay(display->id, send_event);
     }
 }
 
@@ -1221,6 +1224,7 @@ static void display_handle_global(void *data, struct wl_registry *registry, uint
         d->shm = wl_registry_bind(registry, id, &wl_shm_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_relative_pointer_manager_v1") == 0) {
         d->relative_pointer_manager = wl_registry_bind(d->registry, id, &zwp_relative_pointer_manager_v1_interface, 1);
+        Wayland_input_init_relative_pointer(d);
     } else if (SDL_strcmp(interface, "zwp_pointer_constraints_v1") == 0) {
         d->pointer_constraints = wl_registry_bind(d->registry, id, &zwp_pointer_constraints_v1_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_keyboard_shortcuts_inhibit_manager_v1") == 0) {
@@ -1282,7 +1286,7 @@ static void display_remove_global(void *data, struct wl_registry *registry, uint
     for (int i = 0; i < d->output_count; ++i) {
         SDL_DisplayData *disp = d->output_list[i];
         if (disp->registry_id == id) {
-            Wayland_free_display(SDL_GetVideoDisplay(disp->display));
+            Wayland_free_display(SDL_GetVideoDisplay(disp->display), true);
 
             if (i < d->output_count) {
                 SDL_memmove(&d->output_list[i], &d->output_list[i + 1], sizeof(SDL_DisplayData *) * (d->output_count - i - 1));
@@ -1429,7 +1433,7 @@ static void Wayland_VideoCleanup(SDL_VideoDevice *_this)
 
     for (i = _this->num_displays - 1; i >= 0; --i) {
         SDL_VideoDisplay *display = _this->displays[i];
-        Wayland_free_display(display);
+        Wayland_free_display(display, false);
     }
     SDL_free(data->output_list);
 

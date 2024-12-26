@@ -101,6 +101,23 @@ extern "C" {
 #define SDL_HINT_ANDROID_BLOCK_ON_PAUSE "SDL_ANDROID_BLOCK_ON_PAUSE"
 
 /**
+ * A variable to control whether low latency audio should be enabled.
+ *
+ * Some devices have poor quality output when this is enabled, but this is
+ * usually an improvement in audio latency.
+ *
+ * The variable can be set to the following values:
+ *
+ * - "0": Low latency audio is not enabled.
+ * - "1": Low latency audio is enabled. (default)
+ *
+ * This hint should be set before SDL audio is initialized.
+ *
+ * \since This hint is available since SDL 3.1.8.
+ */
+#define SDL_HINT_ANDROID_LOW_LATENCY_AUDIO "SDL_ANDROID_LOW_LATENCY_AUDIO"
+
+/**
  * A variable to control whether we trap the Android back button to handle it
  * manually.
  *
@@ -199,15 +216,57 @@ extern "C" {
  * Specify the default ALSA audio device name.
  *
  * This variable is a specific audio device to open when the "default" audio
- * device is used. By default if 4 channel audio is requested, the
- * "plug:surround40" device will be opened and if 6 channel audio is requested
- * the "plug:surround51" device will be opened.
+ * device is used.
+ *
+ * This hint will be ignored when opening the default playback device if
+ * SDL_HINT_AUDIO_ALSA_DEFAULT_PLAYBACK_DEVICE is set, or when opening the
+ * default recording device if SDL_HINT_AUDIO_ALSA_DEFAULT_RECORDING_DEVICE is
+ * set.
  *
  * This hint should be set before an audio device is opened.
  *
  * \since This hint is available since SDL 3.1.3.
+ *
+ * \sa SDL_HINT_AUDIO_ALSA_DEFAULT_PLAYBACK_DEVICE
+ * \sa SDL_HINT_AUDIO_ALSA_DEFAULT_RECORDING_DEVICE
  */
 #define SDL_HINT_AUDIO_ALSA_DEFAULT_DEVICE "SDL_AUDIO_ALSA_DEFAULT_DEVICE"
+
+/**
+ * Specify the default ALSA audio playback device name.
+ *
+ * This variable is a specific audio device to open for playback, when the
+ * "default" audio device is used.
+ *
+ * If this hint isn't set, SDL will check SDL_HINT_AUDIO_ALSA_DEFAULT_DEVICE
+ * before choosing a reasonable default.
+ *
+ * This hint should be set before an audio device is opened.
+ *
+ * \since This hint is available since SDL 3.1.7.
+ *
+ * \sa SDL_HINT_AUDIO_ALSA_DEFAULT_RECORDING_DEVICE
+ * \sa SDL_HINT_AUDIO_ALSA_DEFAULT_DEVICE
+ */
+#define SDL_HINT_AUDIO_ALSA_DEFAULT_PLAYBACK_DEVICE "SDL_AUDIO_ALSA_DEFAULT_PLAYBACK_DEVICE"
+
+/**
+ * Specify the default ALSA audio recording device name.
+ *
+ * This variable is a specific audio device to open for recording, when the
+ * "default" audio device is used.
+ *
+ * If this hint isn't set, SDL will check SDL_HINT_AUDIO_ALSA_DEFAULT_DEVICE
+ * before choosing a reasonable default.
+ *
+ * This hint should be set before an audio device is opened.
+ *
+ * \since This hint is available since SDL 3.1.7.
+ *
+ * \sa SDL_HINT_AUDIO_ALSA_DEFAULT_PLAYBACK_DEVICE
+ * \sa SDL_HINT_AUDIO_ALSA_DEFAULT_DEVICE
+ */
+#define SDL_HINT_AUDIO_ALSA_DEFAULT_RECORDING_DEVICE "SDL_AUDIO_ALSA_DEFAULT_RECORDING_DEVICE"
 
 /**
  * A variable controlling the audio category on iOS and macOS.
@@ -1017,7 +1076,7 @@ extern "C" {
  * force a specific target, such as "direct3d11" if, say, your hardware
  * supports D3D12 but want to try using D3D11 instead.
  *
- * This hint should be set before SDL_GPUSelectBackend() is called.
+ * This hint should be set before any GPU functions are called.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1310,7 +1369,7 @@ extern "C" {
  * This variable is the default for all drivers, but can be overridden by the
  * hints for specific drivers below.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1327,7 +1386,7 @@ extern "C" {
  * - "1": Left and right Joy-Con controllers will be combined into a single
  *   controller. (default)
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1344,7 +1403,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1382,7 +1441,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1418,7 +1477,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1435,7 +1494,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1457,7 +1516,7 @@ extern "C" {
  * SDL_HINT_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER. See
  * https://github.com/ViGEm/DsHidMini for an alternative driver on Windows.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1474,7 +1533,7 @@ extern "C" {
  *
  * The default value is 0.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1491,7 +1550,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1549,7 +1608,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1604,7 +1663,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1636,11 +1695,30 @@ extern "C" {
  *   Bluetooth access and may prompt the user for permission on iOS and
  *   Android.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
 #define SDL_HINT_JOYSTICK_HIDAPI_STEAM "SDL_JOYSTICK_HIDAPI_STEAM"
+
+/**
+ * A variable controlling whether the Steam button LED should be turned on
+ * when a Steam controller is opened.
+ *
+ * The variable can be set to the following values:
+ *
+ * - "0": Steam button LED is turned off.
+ * - "1": Steam button LED is turned on.
+ *
+ * By default the Steam button LED state is not changed. This hint can also be
+ * set to a floating point value between 0.0 and 1.0 which controls the
+ * brightness of the Steam button LED.
+ *
+ * This hint can be set anytime.
+ *
+ * \since This hint is available since SDL 3.1.8.
+ */
+#define SDL_HINT_JOYSTICK_HIDAPI_STEAM_HOME_LED "SDL_JOYSTICK_HIDAPI_STEAM_HOME_LED"
 
 /**
  * A variable controlling whether the HIDAPI driver for the Steam Deck builtin
@@ -1653,7 +1731,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1681,7 +1759,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1749,7 +1827,7 @@ extern "C" {
  * This driver doesn't work with the dolphinbar, so the default is false for
  * now.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1782,7 +1860,7 @@ extern "C" {
  * The default is "0" on Windows, otherwise the value of
  * SDL_HINT_JOYSTICK_HIDAPI
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1799,7 +1877,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI_XBOX
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1831,7 +1909,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI_XBOX_360
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -1848,7 +1926,7 @@ extern "C" {
  *
  * The default is the value of SDL_HINT_JOYSTICK_HIDAPI_XBOX.
  *
- * This hint should be set before enumerating controllers.
+ * This hint should be set before initializing joysticks and gamepads.
  *
  * \since This hint is available since SDL 3.1.3.
  */
@@ -2366,6 +2444,18 @@ extern "C" {
 #define SDL_HINT_MOUSE_DOUBLE_CLICK_TIME "SDL_MOUSE_DOUBLE_CLICK_TIME"
 
 /**
+ * A variable setting which system cursor to use as the default cursor.
+ *
+ * This should be an integer corresponding to the SDL_SystemCursor enum. The
+ * default value is zero (SDL_SYSTEM_CURSOR_DEFAULT).
+ *
+ * This hint needs to be set before SDL_Init().
+ *
+ * \since This hint is available since SDL 3.1.3.
+ */
+#define SDL_HINT_MOUSE_DEFAULT_SYSTEM_CURSOR "SDL_MOUSE_DEFAULT_SYSTEM_CURSOR"
+
+/**
  * A variable controlling whether warping a hidden mouse cursor will activate
  * relative mouse mode.
  *
@@ -2443,21 +2533,6 @@ extern "C" {
 #define SDL_HINT_MOUSE_RELATIVE_MODE_CENTER "SDL_MOUSE_RELATIVE_MODE_CENTER"
 
 /**
- * A variable controlling whether relative mouse mode is implemented using
- * mouse warping.
- *
- * The variable can be set to the following values:
- *
- * - "0": Relative mouse mode uses raw input. (default)
- * - "1": Relative mouse mode uses mouse warping.
- *
- * This hint can be set anytime relative mode is not currently enabled.
- *
- * \since This hint is available since SDL 3.1.3.
- */
-#define SDL_HINT_MOUSE_RELATIVE_MODE_WARP "SDL_MOUSE_RELATIVE_MODE_WARP"
-
-/**
  * A variable setting the scale for mouse motion, in floating point, when the
  * mouse is in relative mode.
  *
@@ -2523,23 +2598,6 @@ extern "C" {
  * \since This hint is available since SDL 3.1.3.
  */
 #define SDL_HINT_MOUSE_RELATIVE_CURSOR_VISIBLE "SDL_MOUSE_RELATIVE_CURSOR_VISIBLE"
-
-/**
- * Controls how often SDL issues cursor confinement commands to the operating
- * system while relative mode is active, in case the desired confinement state
- * became out-of-sync due to interference from other running programs.
- *
- * The variable can be integers representing milliseconds between each
- * refresh. A value of zero means SDL will not automatically refresh the
- * confinement. The default value varies depending on the operating system,
- * this variable might not have any effects on inapplicable platforms such as
- * those without a cursor.
- *
- * This hint can be set anytime.
- *
- * \since This hint is available since SDL 3.1.3.
- */
-#define SDL_HINT_MOUSE_RELATIVE_CLIP_INTERVAL "SDL_MOUSE_RELATIVE_CLIP_INTERVAL"
 
 /**
  * A variable controlling whether mouse events should generate synthetic touch
@@ -2814,6 +2872,7 @@ extern "C" {
  * - "opengles"
  * - "metal"
  * - "vulkan"
+ * - "gpu"
  * - "software"
  *
  * The default varies by platform, but it's the first one in the list that is
@@ -3962,6 +4021,15 @@ extern "C" {
  * \since This hint is available since SDL 3.1.3.
  */
 #define SDL_HINT_WINDOWS_INTRESOURCE_ICON       "SDL_WINDOWS_INTRESOURCE_ICON"
+
+/**
+ * A variable to specify custom icon resource id from RC file on Windows
+ * platform.
+ *
+ * This hint should be set before SDL is initialized.
+ *
+ * \since This hint is available since SDL 3.1.3.
+ */
 #define SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL "SDL_WINDOWS_INTRESOURCE_ICON_SMALL"
 
 /**

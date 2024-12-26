@@ -22,7 +22,6 @@
 
 /* Regenerate the shaders with testgpu/build-shaders.sh */
 #include "testgpu/testgpu_spirv.h"
-#include "testgpu/testgpu_dxbc.h"
 #include "testgpu/testgpu_dxil.h"
 #include "testgpu/testgpu_metallib.h"
 
@@ -342,20 +341,20 @@ Render(SDL_Window *window, const int windownum)
         SDL_Log("Failed to acquire command buffer :%s", SDL_GetError());
         quit(2);
     }
-    if (!SDL_AcquireGPUSwapchainTexture(cmd, state->windows[windownum], &swapchainTexture, &drawablew, &drawableh)) {
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, state->windows[windownum], &swapchainTexture, &drawablew, &drawableh)) {
         SDL_Log("Failed to acquire swapchain texture: %s", SDL_GetError());
         quit(2);
     }
 
     if (swapchainTexture == NULL) {
-        /* No swapchain was acquired, probably too many frames in flight */
-        SDL_SubmitGPUCommandBuffer(cmd);
+        /* Swapchain is unavailable, cancel work */
+        SDL_CancelGPUCommandBuffer(cmd);
         return;
     }
 
     /*
     * Do some rotation with Euler angles. It is not a fixed axis as
-    * quaterions would be, but the effect is cool.
+    * quaternions would be, but the effect is cool.
     */
     rotate_matrix((float)winstate->angle_x, 1.0f, 0.0f, 0.0f, matrix_modelview);
     rotate_matrix((float)winstate->angle_y, 0.0f, 1.0f, 0.0f, matrix_rotate);
@@ -471,12 +470,7 @@ load_shader(bool is_vertex)
     createinfo.props = 0;
 
     SDL_GPUShaderFormat format = SDL_GetGPUShaderFormats(gpu_device);
-    if (format & SDL_GPU_SHADERFORMAT_DXBC) {
-        createinfo.format = SDL_GPU_SHADERFORMAT_DXBC;
-        createinfo.code = is_vertex ? D3D11_CubeVert : D3D11_CubeFrag;
-        createinfo.code_size = is_vertex ? SDL_arraysize(D3D11_CubeVert) : SDL_arraysize(D3D11_CubeFrag);
-        createinfo.entrypoint = is_vertex ? "VSMain" : "PSMain";
-    } else if (format & SDL_GPU_SHADERFORMAT_DXIL) {
+    if (format & SDL_GPU_SHADERFORMAT_DXIL) {
         createinfo.format = SDL_GPU_SHADERFORMAT_DXIL;
         createinfo.code = is_vertex ? D3D12_CubeVert : D3D12_CubeFrag;
         createinfo.code_size = is_vertex ? SDL_arraysize(D3D12_CubeVert) : SDL_arraysize(D3D12_CubeFrag);

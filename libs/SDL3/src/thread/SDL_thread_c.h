@@ -38,21 +38,11 @@
 #include "vita/SDL_systhread_c.h"
 #elif defined(SDL_THREAD_N3DS)
 #include "n3ds/SDL_systhread_c.h"
-#elif defined(SDL_THREAD_NGAGE)
-#include "ngage/SDL_systhread_c.h"
 #else
 #error Need thread implementation for this platform
 #include "generic/SDL_systhread_c.h"
 #endif
 #include "../SDL_error_c.h"
-
-typedef enum SDL_ThreadState
-{
-    SDL_THREAD_STATE_ALIVE,
-    SDL_THREAD_STATE_DETACHED,
-    SDL_THREAD_STATE_ZOMBIE,
-    SDL_THREAD_STATE_CLEANED,
-} SDL_ThreadState;
 
 // This is the system-independent thread info structure
 struct SDL_Thread

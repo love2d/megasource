@@ -331,6 +331,7 @@ files2headers(gamepad_image_headers
 files2headers(icon_bmp_header icon.bmp)
 files2headers(glass_bmp_header glass.bmp)
 
+add_sdl_test_executable(testasyncio MAIN_CALLBACKS NEEDS_RESOURCES TESTUTILS SOURCES testasyncio.c)
 add_sdl_test_executable(testaudio MAIN_CALLBACKS NEEDS_RESOURCES TESTUTILS SOURCES testaudio.c)
 add_sdl_test_executable(testcolorspace SOURCES testcolorspace.c)
 add_sdl_test_executable(testfile NONINTERACTIVE SOURCES testfile.c)
@@ -406,6 +407,7 @@ add_sdl_test_executable(testdialog SOURCES testdialog.c)
 add_sdl_test_executable(testtime SOURCES testtime.c)
 add_sdl_test_executable(testmanymouse SOURCES testmanymouse.c)
 add_sdl_test_executable(testmodal SOURCES testmodal.c)
+add_sdl_test_executable(testtray SOURCES testtray.c)
 
 
 add_sdl_test_executable(testprocess
