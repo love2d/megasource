@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -999,7 +999,6 @@
 #define SDL_WaitEventTimeout SDL_WaitEventTimeout_REAL
 #define SDL_WaitForGPUFences SDL_WaitForGPUFences_REAL
 #define SDL_WaitForGPUIdle SDL_WaitForGPUIdle_REAL
-#define SDL_WaitForGPUSwapchain SDL_WaitForGPUSwapchain_REAL
 #define SDL_WaitProcess SDL_WaitProcess_REAL
 #define SDL_WaitSemaphore SDL_WaitSemaphore_REAL
 #define SDL_WaitSemaphoreTimeout SDL_WaitSemaphoreTimeout_REAL
@@ -1231,6 +1230,7 @@
 #define SDL_RunOnMainThread SDL_RunOnMainThread_REAL
 #define SDL_SetGPUAllowedFramesInFlight SDL_SetGPUAllowedFramesInFlight_REAL
 #define SDL_RenderTextureAffine SDL_RenderTextureAffine_REAL
+#define SDL_WaitForGPUSwapchain SDL_WaitForGPUSwapchain_REAL
 #define SDL_WaitAndAcquireGPUSwapchainTexture SDL_WaitAndAcquireGPUSwapchainTexture_REAL
 #define SDL_RenderDebugTextFormat SDL_RenderDebugTextFormat_REAL
 #define SDL_CreateTray SDL_CreateTray_REAL
@@ -1255,3 +1255,6 @@
 #define SDL_GetTrayMenuParentEntry SDL_GetTrayMenuParentEntry_REAL
 #define SDL_GetTrayMenuParentTray SDL_GetTrayMenuParentTray_REAL
 #define SDL_GetThreadState SDL_GetThreadState_REAL
+#define SDL_AudioStreamDevicePaused SDL_AudioStreamDevicePaused_REAL
+#define SDL_ClickTrayEntry SDL_ClickTrayEntry_REAL
+#define SDL_UpdateTrays SDL_UpdateTrays_REAL

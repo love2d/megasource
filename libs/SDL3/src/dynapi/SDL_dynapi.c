@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -520,6 +520,9 @@ static void SDL_InitDynamicAPILocked(void)
         if (initialize_jumptable(SDL_DYNAPI_VERSION, &jump_table, sizeof(jump_table)) < 0) {
             // Now we're screwed. Should definitely abort now.
             dynapi_warn("Failed to initialize internal SDL dynapi. As this would otherwise crash, we have to abort now.");
+#ifndef NDEBUG
+            SDL_TriggerBreakpoint();
+#endif
             SDL_ExitProcess(86);
         }
     }

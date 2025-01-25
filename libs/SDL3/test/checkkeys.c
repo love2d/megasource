@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -166,6 +166,9 @@ static void print_modifiers(char **text, size_t *maxlen, SDL_Keymod mod)
     }
     if (mod & SDL_KMOD_MODE) {
         print_string(text, maxlen, " MODE");
+    }
+    if (mod & SDL_KMOD_LEVEL5) {
+        print_string(text, maxlen, " LEVEL5");
     }
     if (mod & SDL_KMOD_SCROLL) {
         print_string(text, maxlen, " SCROLL");

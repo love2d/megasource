@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -212,9 +212,7 @@ static void SDL_UntrackAllocation(void *mem)
         }
         prev = entry;
     }
-    if (s_tracked_allocations < 0) {
-        s_unknown_frees += 1;
-    }
+    s_unknown_frees += 1;
     UNLOCK_ALLOCATOR();
 }
 

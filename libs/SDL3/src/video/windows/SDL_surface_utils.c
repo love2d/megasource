@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -24,9 +24,10 @@
 
 #include "../SDL_surface_c.h"
 
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
 HICON CreateIconFromSurface(SDL_Surface *surface)
 {
-    SDL_Surface *s = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface *s = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_ARGB8888);
     if (!s) {
         return NULL;
     }
@@ -36,7 +37,7 @@ HICON CreateIconFromSurface(SDL_Surface *surface)
     const int height = s->h;
 
     BITMAPINFO bmpInfo;
-    ZeroMemory(&bmpInfo, sizeof(BITMAPINFO));
+    SDL_zero(bmpInfo);
     bmpInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmpInfo.bmiHeader.biWidth = width;
     bmpInfo.bmiHeader.biHeight = -height; /* Top-down bitmap */
@@ -93,3 +94,4 @@ HICON CreateIconFromSurface(SDL_Surface *surface)
 
     return hIcon;
 }
+#endif

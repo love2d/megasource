@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -143,10 +143,6 @@ static int SDLCALL SDLTest_CommonStateParseCommonArguments(void *data, char **ar
         }
         if (SDL_strcasecmp(argv[index], "all") == 0) {
             SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
-            return 2;
-        }
-        if (SDL_strcasecmp(argv[index], "error") == 0) {
-            SDL_SetLogPriority(SDL_LOG_CATEGORY_ERROR, SDL_LOG_PRIORITY_VERBOSE);
             return 2;
         }
         if (SDL_strcasecmp(argv[index], "system") == 0) {
@@ -962,6 +958,9 @@ static void SDLTest_PrintModStateFlag(char *text, size_t maxlen, SDL_Keymod flag
     case SDL_KMOD_RSHIFT:
         SDL_snprintfcat(text, maxlen, "RSHIFT");
         break;
+    case SDL_KMOD_LEVEL5:
+        SDL_snprintfcat(text, maxlen, "LEVEL5");
+        break;
     case SDL_KMOD_LCTRL:
         SDL_snprintfcat(text, maxlen, "LCTRL");
         break;
@@ -1003,6 +1002,7 @@ static void SDLTest_PrintModState(char *text, size_t maxlen, SDL_Keymod keymod)
     const SDL_Keymod kmod_flags[] = {
         SDL_KMOD_LSHIFT,
         SDL_KMOD_RSHIFT,
+        SDL_KMOD_LEVEL5,
         SDL_KMOD_LCTRL,
         SDL_KMOD_RCTRL,
         SDL_KMOD_LALT,
@@ -1226,6 +1226,7 @@ bool SDLTest_CommonInit(SDLTest_CommonState *state)
         SDL_GL_SetAttribute(SDL_GL_ACCUM_BLUE_SIZE, state->gl_accum_blue_size);
         SDL_GL_SetAttribute(SDL_GL_ACCUM_ALPHA_SIZE, state->gl_accum_alpha_size);
         SDL_GL_SetAttribute(SDL_GL_STEREO, state->gl_stereo);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, state->gl_release_behavior);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, state->gl_multisamplebuffers);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, state->gl_multisamplesamples);
         if (state->gl_accelerated >= 0) {
@@ -1910,8 +1911,10 @@ void SDLTest_PrintEvent(const SDL_Event *event)
         break;
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
+    case SDL_EVENT_FINGER_CANCELED:
         SDL_Log("SDL EVENT: Finger: %s touch=%" SDL_PRIu64 ", finger=%" SDL_PRIu64 ", x=%f, y=%f, dx=%f, dy=%f, pressure=%f",
-                (event->type == SDL_EVENT_FINGER_DOWN) ? "down" : "up",
+                (event->type == SDL_EVENT_FINGER_DOWN) ? "down" :
+                (event->type == SDL_EVENT_FINGER_UP) ? "up" : "cancel",
                 event->tfinger.touchID,
                 event->tfinger.fingerID,
                 event->tfinger.x, event->tfinger.y,
@@ -2813,6 +2816,10 @@ void SDLTest_CommonDrawWindowInfo(SDL_Renderer *renderer, SDL_Window *window, fl
 
     (void)SDL_snprintf(text, sizeof(text), "SDL_GetCurrentDisplayOrientation: ");
     SDLTest_PrintDisplayOrientation(text, sizeof(text), SDL_GetCurrentDisplayOrientation(windowDisplayID));
+    SDLTest_DrawString(renderer, 0.0f, textY, text);
+    textY += lineHeight;
+
+    (void)SDL_snprintf(text, sizeof(text), "SDL_GetDisplayContentScale: %g", SDL_GetDisplayContentScale(windowDisplayID));
     SDLTest_DrawString(renderer, 0.0f, textY, text);
     textY += lineHeight;
 

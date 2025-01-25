@@ -335,7 +335,7 @@ typedef enum
 			continue;
 
 		NSLog( @"connected peripheral: %@", peripheral );
-		if ( [peripheral.name isEqualToString:@"SteamController"] )
+		if ( [peripheral.name hasPrefix:@"Steam"] )
 		{
 			self.nPendingPairs += 1;
 			HIDBLEDevice *steamController = [[HIDBLEDevice alloc] initWithPeripheral:peripheral];
@@ -398,7 +398,7 @@ typedef enum
 {
 	switch ( central.state )
 	{
-		case CBCentralManagerStatePoweredOn:
+		case CBManagerStatePoweredOn:
 		{
 			NSLog( @"CoreBluetooth BLE hardware is powered on and ready" );
 
@@ -418,23 +418,23 @@ typedef enum
 			break;
 		}
 
-		case CBCentralManagerStatePoweredOff:
+		case CBManagerStatePoweredOff:
 			NSLog( @"CoreBluetooth BLE hardware is powered off" );
 			break;
 
-		case CBCentralManagerStateUnauthorized:
+		case CBManagerStateUnauthorized:
 			NSLog( @"CoreBluetooth BLE state is unauthorized" );
 			break;
 
-		case CBCentralManagerStateUnknown:
+		case CBManagerStateUnknown:
 			NSLog( @"CoreBluetooth BLE state is unknown" );
 			break;
 
-		case CBCentralManagerStateUnsupported:
+		case CBManagerStateUnsupported:
 			NSLog( @"CoreBluetooth BLE hardware is unsupported on this platform" );
 			break;
 
-		case CBCentralManagerStateResetting:
+		case CBManagerStateResetting:
 			NSLog( @"CoreBluetooth BLE manager is resetting" );
 			break;
 	}
@@ -459,7 +459,7 @@ typedef enum
 	NSString *localName = [advertisementData objectForKey:CBAdvertisementDataLocalNameKey];
 	NSString *log = [NSString stringWithFormat:@"Found '%@'", localName];
 
-	if ( [localName isEqualToString:@"SteamController"] )
+	if ( [localName hasPrefix:@"Steam"] )
 	{
 		NSLog( @"%@ : %@ - %@", log, peripheral, advertisementData );
 		self.nPendingPairs += 1;

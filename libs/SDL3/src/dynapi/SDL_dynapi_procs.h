@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -67,7 +67,7 @@ SDL_DYNAPI_PROC(SDL_GPUComputePass*,SDL_BeginGPUComputePass,(SDL_GPUCommandBuffe
 SDL_DYNAPI_PROC(SDL_GPUCopyPass*,SDL_BeginGPUCopyPass,(SDL_GPUCommandBuffer *a),(a),return)
 SDL_DYNAPI_PROC(SDL_GPURenderPass*,SDL_BeginGPURenderPass,(SDL_GPUCommandBuffer *a, const SDL_GPUColorTargetInfo *b, Uint32 c, const SDL_GPUDepthStencilTargetInfo *d),(a,b,c,d),return)
 SDL_DYNAPI_PROC(bool,SDL_BindAudioStream,(SDL_AudioDeviceID a, SDL_AudioStream *b),(a,b),return)
-SDL_DYNAPI_PROC(bool,SDL_BindAudioStreams,(SDL_AudioDeviceID a, SDL_AudioStream **b, int c),(a,b,c),return)
+SDL_DYNAPI_PROC(bool,SDL_BindAudioStreams,(SDL_AudioDeviceID a, SDL_AudioStream * const *b, int c),(a,b,c),return)
 SDL_DYNAPI_PROC(void,SDL_BindGPUComputePipeline,(SDL_GPUComputePass *a, SDL_GPUComputePipeline *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_BindGPUComputeSamplers,(SDL_GPUComputePass *a, Uint32 b, const SDL_GPUTextureSamplerBinding *c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_BindGPUComputeStorageBuffers,(SDL_GPUComputePass *a, Uint32 b, SDL_GPUBuffer *const *c, Uint32 d),(a,b,c,d),)
@@ -972,7 +972,7 @@ SDL_DYNAPI_PROC(bool,SDL_TryLockSpinlock,(SDL_SpinLock *a),(a),return)
 SDL_DYNAPI_PROC(bool,SDL_TryWaitSemaphore,(SDL_Semaphore *a),(a),return)
 SDL_DYNAPI_PROC(char*,SDL_UCS4ToUTF8,(Uint32 a, char *b),(a,b),return)
 SDL_DYNAPI_PROC(void,SDL_UnbindAudioStream,(SDL_AudioStream *a),(a),)
-SDL_DYNAPI_PROC(void,SDL_UnbindAudioStreams,(SDL_AudioStream **a, int b),(a,b),)
+SDL_DYNAPI_PROC(void,SDL_UnbindAudioStreams,(SDL_AudioStream * const *a, int b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_UnloadObject,(SDL_SharedObject *a),(a),)
 SDL_DYNAPI_PROC(bool,SDL_UnlockAudioStream,(SDL_AudioStream *a),(a),return)
 SDL_DYNAPI_PROC(void,SDL_UnlockJoysticks,(void),(),)
@@ -1009,7 +1009,6 @@ SDL_DYNAPI_PROC(bool,SDL_WaitEvent,(SDL_Event *a),(a),return)
 SDL_DYNAPI_PROC(bool,SDL_WaitEventTimeout,(SDL_Event *a, Sint32 b),(a,b),return)
 SDL_DYNAPI_PROC(bool,SDL_WaitForGPUFences,(SDL_GPUDevice *a, bool b, SDL_GPUFence *const *c, Uint32 d),(a,b,c,d),return)
 SDL_DYNAPI_PROC(bool,SDL_WaitForGPUIdle,(SDL_GPUDevice *a),(a),return)
-SDL_DYNAPI_PROC(bool,SDL_WaitForGPUSwapchain,(SDL_GPUDevice *a, SDL_Window *b),(a,b),return)
 SDL_DYNAPI_PROC(bool,SDL_WaitProcess,(SDL_Process *a, bool b, int *c),(a,b,c),return)
 SDL_DYNAPI_PROC(void,SDL_WaitSemaphore,(SDL_Semaphore *a),(a),)
 SDL_DYNAPI_PROC(bool,SDL_WaitSemaphoreTimeout,(SDL_Semaphore *a, Sint32 b),(a,b),return)
@@ -1237,6 +1236,7 @@ SDL_DYNAPI_PROC(bool,SDL_IsMainThread,(void),(),return)
 SDL_DYNAPI_PROC(bool,SDL_RunOnMainThread,(SDL_MainThreadCallback a,void *b,bool c),(a,b,c),return)
 SDL_DYNAPI_PROC(bool,SDL_SetGPUAllowedFramesInFlight,(SDL_GPUDevice *a,Uint32 b),(a,b),return)
 SDL_DYNAPI_PROC(bool,SDL_RenderTextureAffine,(SDL_Renderer *a,SDL_Texture *b,const SDL_FRect *c,const SDL_FPoint *d,const SDL_FPoint *e,const SDL_FPoint *f),(a,b,c,d,e,f),return)
+SDL_DYNAPI_PROC(bool,SDL_WaitForGPUSwapchain,(SDL_GPUDevice *a, SDL_Window *b),(a,b),return)
 SDL_DYNAPI_PROC(bool,SDL_WaitAndAcquireGPUSwapchainTexture,(SDL_GPUCommandBuffer *a,SDL_Window *b,SDL_GPUTexture **c,Uint32 *d,Uint32 *e),(a,b,c,d,e),return)
 #ifndef SDL_DYNAPI_PROC_NO_VARARGS
 SDL_DYNAPI_PROC(bool,SDL_RenderDebugTextFormat,(SDL_Renderer *a,float b,float c,SDL_PRINTF_FORMAT_STRING const char *d,...),(a,b,c,d),return)
@@ -1263,3 +1263,6 @@ SDL_DYNAPI_PROC(SDL_TrayMenu*,SDL_GetTrayEntryParent,(SDL_TrayEntry *a),(a),retu
 SDL_DYNAPI_PROC(SDL_TrayEntry*,SDL_GetTrayMenuParentEntry,(SDL_TrayMenu *a),(a),return)
 SDL_DYNAPI_PROC(SDL_Tray*,SDL_GetTrayMenuParentTray,(SDL_TrayMenu *a),(a),return)
 SDL_DYNAPI_PROC(SDL_ThreadState,SDL_GetThreadState,(SDL_Thread *a),(a),return)
+SDL_DYNAPI_PROC(bool,SDL_AudioStreamDevicePaused,(SDL_AudioStream *a),(a),return)
+SDL_DYNAPI_PROC(void,SDL_ClickTrayEntry,(SDL_TrayEntry *a),(a),)
+SDL_DYNAPI_PROC(void,SDL_UpdateTrays,(void),(),)

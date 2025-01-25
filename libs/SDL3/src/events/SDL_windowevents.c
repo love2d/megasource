@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -24,7 +24,7 @@
 
 #include "SDL_events_c.h"
 #include "SDL_mouse_c.h"
-
+#include "../tray/SDL_tray_utils.h"
 
 static bool SDLCALL RemoveSupercededWindowEvents(void *userdata, SDL_Event *event)
 {
@@ -247,7 +247,7 @@ bool SDL_SendWindowEvent(SDL_Window *window, SDL_EventType windowevent, int data
         break;
     }
 
-    if (windowevent == SDL_EVENT_WINDOW_CLOSE_REQUESTED && !window->parent) {
+    if (windowevent == SDL_EVENT_WINDOW_CLOSE_REQUESTED && !window->parent && !SDL_HasActiveTrays()) {
         int toplevel_count = 0;
         SDL_Window *n;
         for (n = SDL_GetVideoDevice()->windows; n; n = n->next) {

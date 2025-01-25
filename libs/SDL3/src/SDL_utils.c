@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -178,6 +178,22 @@ bool SDL_ObjectValid(void *object, SDL_ObjectType type)
     return (((SDL_ObjectType)(uintptr_t)object_type) == type);
 }
 
+int SDL_GetObjects(SDL_ObjectType type, void **objects, int count)
+{
+    const void *object, *object_type;
+    void *iter = NULL;
+    int num_objects = 0;
+    while (SDL_IterateHashTable(SDL_objects, &object, &object_type, &iter)) {
+        if ((SDL_ObjectType)(uintptr_t)object_type == type) {
+            if (num_objects < count) {
+                objects[num_objects] = (void *)object;
+            }
+            ++num_objects;
+        }
+    }
+    return num_objects;
+}
+
 void SDL_SetObjectsInvalid(void)
 {
     if (SDL_ShouldQuit(&SDL_objects_init)) {
@@ -213,6 +229,12 @@ void SDL_SetObjectsInvalid(void)
                 break;
             case SDL_OBJECT_TYPE_HIDAPI_JOYSTICK:
                 type = "hidapi joystick";
+                break;
+            case SDL_OBJECT_TYPE_THREAD:
+                type = "thread";
+                break;
+            case SDL_OBJECT_TYPE_TRAY:
+                type = "SDL_Tray";
                 break;
             default:
                 type = "unknown object";

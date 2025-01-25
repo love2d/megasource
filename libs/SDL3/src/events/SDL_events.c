@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -705,6 +705,9 @@ static void SDL_LogEvent(const SDL_Event *event)
         SDL_EVENT_CASE(SDL_EVENT_FINGER_UP)
         PRINT_FINGER_EVENT(event);
         break;
+        SDL_EVENT_CASE(SDL_EVENT_FINGER_CANCELED)
+        PRINT_FINGER_EVENT(event);
+        break;
         SDL_EVENT_CASE(SDL_EVENT_FINGER_MOTION)
         PRINT_FINGER_EVENT(event);
         break;
@@ -1351,6 +1354,35 @@ bool SDL_RunOnMainThread(SDL_MainThreadCallback callback, void *userdata, bool w
     }
 }
 
+void SDL_PumpEventMaintenance(void)
+{
+#ifndef SDL_AUDIO_DISABLED
+    SDL_UpdateAudio();
+#endif
+
+#ifndef SDL_CAMERA_DISABLED
+    SDL_UpdateCamera();
+#endif
+
+#ifndef SDL_SENSOR_DISABLED
+    // Check for sensor state change
+    if (SDL_update_sensors) {
+        SDL_UpdateSensors();
+    }
+#endif
+
+#ifndef SDL_JOYSTICK_DISABLED
+    // Check for joystick state change
+    if (SDL_update_joysticks) {
+        SDL_UpdateJoysticks();
+    }
+#endif
+
+    SDL_UpdateTrays();
+
+    SDL_SendPendingSignalEvents(); // in case we had a signal handler fire, etc.
+}
+
 // Run the system dependent event loops
 static void SDL_PumpEventsInternal(bool push_sentinel)
 {
@@ -1374,29 +1406,7 @@ static void SDL_PumpEventsInternal(bool push_sentinel)
     }
 #endif
 
-#ifndef SDL_AUDIO_DISABLED
-    SDL_UpdateAudio();
-#endif
-
-#ifndef SDL_CAMERA_DISABLED
-    SDL_UpdateCamera();
-#endif
-
-#ifndef SDL_SENSOR_DISABLED
-    // Check for sensor state change
-    if (SDL_update_sensors) {
-        SDL_UpdateSensors();
-    }
-#endif
-
-#ifndef SDL_JOYSTICK_DISABLED
-    // Check for joystick state change
-    if (SDL_update_joysticks) {
-        SDL_UpdateJoysticks();
-    }
-#endif
-
-    SDL_SendPendingSignalEvents(); // in case we had a signal handler fire, etc.
+    SDL_PumpEventMaintenance();
 
     if (push_sentinel && SDL_EventEnabled(SDL_EVENT_POLL_SENTINEL)) {
         SDL_Event sentinel;

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -50,7 +50,7 @@ struct SDL_Thread
     SDL_ThreadID threadid;
     SYS_ThreadHandle handle;
     int status;
-    SDL_AtomicInt state; /* SDL_THREAD_STATE_* */
+    SDL_AtomicInt state; /* SDL_ThreadState */
     SDL_error errbuf;
     char *name;
     size_t stacksize; // 0 for default, >0 for user-specified stack size.

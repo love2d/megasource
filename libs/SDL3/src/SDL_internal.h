@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -78,7 +78,18 @@
 #ifndef _DARWIN_C_SOURCE
 #define _DARWIN_C_SOURCE 1 // for memset_pattern4()
 #endif
+#include <Availability.h>
+
+#ifndef __IPHONE_OS_VERSION_MAX_ALLOWED
+#define __IPHONE_OS_VERSION_MAX_ALLOWED 0
 #endif
+#ifndef __APPLETV_OS_VERSION_MAX_ALLOWED
+#define __APPLETV_OS_VERSION_MAX_ALLOWED 0
+#endif
+#ifndef __MAC_OS_X_VERSION_MAX_ALLOWED
+#define __MAC_OS_X_VERSION_MAX_ALLOWED 0
+#endif
+#endif // SDL_PLATFORM_APPLE
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -215,6 +226,10 @@
 // the (unavailable and unneeded) _beginthreadex/_endthreadex functions.
 #define SDL_BeginThreadFunction NULL
 #define SDL_EndThreadFunction NULL
+#endif
+
+#ifdef SDL_NOLONGLONG
+#error We cannot build a valid SDL3 library without long long support
 #endif
 
 /* Enable internal definitions in SDL API headers */

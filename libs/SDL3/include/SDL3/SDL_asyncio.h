@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -67,14 +67,14 @@
  *
  * ## Best Practices
  *
- * Simple non-blocking i/o--for an app that just wants to pick up data
+ * Simple non-blocking I/O--for an app that just wants to pick up data
  * whenever it's ready without losing framerate waiting on disks to spin--can
  * use whatever pattern works well for the program. In this case, simply call
  * SDL_ReadAsyncIO, or maybe SDL_LoadFileAsync, as needed. Once a frame, call
  * SDL_GetAsyncIOResult to check for any completed tasks and deal with the
  * data as it arrives.
  *
- * If two separate pieces of the same program need their own i/o, it is legal
+ * If two separate pieces of the same program need their own I/O, it is legal
  * for each to create their own queue. This will prevent either piece from
  * accidentally consuming the other's completed tasks. Each queue does require
  * some amount of resources, but it is not an overwhelming cost. Do not make a
@@ -83,7 +83,7 @@
  * were submitted, so it doesn't generally matter what order tasks are
  * started.
  *
- * One async i/o queue can be shared by multiple threads, or one thread can
+ * One async I/O queue can be shared by multiple threads, or one thread can
  * have more than one queue, but the most efficient way--if ruthless
  * efficiency is the goal--is to have one queue per thread, with multiple
  * threads working in parallel, and attempt to keep each queue loaded with
@@ -117,7 +117,7 @@ extern "C" {
  * This operates as an opaque handle. One can then request read or write
  * operations on it.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.2.0.
  *
  * \sa SDL_AsyncIOFromFile
  */
@@ -126,7 +126,7 @@ typedef struct SDL_AsyncIO SDL_AsyncIO;
 /**
  * Types of asynchronous I/O tasks.
  *
- * \since This enum is available since SDL 3.0.0.
+ * \since This enum is available since SDL 3.2.0.
  */
 typedef enum SDL_AsyncIOTaskType
 {
@@ -138,19 +138,19 @@ typedef enum SDL_AsyncIOTaskType
 /**
  * Possible outcomes of an asynchronous I/O task.
  *
- * \since This enum is available since SDL 3.0.0.
+ * \since This enum is available since SDL 3.2.0.
  */
 typedef enum SDL_AsyncIOResult
 {
     SDL_ASYNCIO_COMPLETE,  /**< request was completed without error */
     SDL_ASYNCIO_FAILURE,   /**< request failed for some reason; check SDL_GetError()! */
-    SDL_ASYNCIO_CANCELLED  /**< request was cancelled before completing. */
+    SDL_ASYNCIO_CANCELED   /**< request was canceled before completing. */
 } SDL_AsyncIOResult;
 
 /**
  * Information about a completed asynchronous I/O request.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.2.0.
  */
 typedef struct SDL_AsyncIOOutcome
 {
@@ -172,7 +172,7 @@ typedef struct SDL_AsyncIOOutcome
  * allowing an app to manage multiple pending tasks in one place, in whatever
  * order they complete.
  *
- * \since This struct is available since SDL 3.0.0.
+ * \since This struct is available since SDL 3.2.0.
  *
  * \sa SDL_CreateAsyncIOQueue
  * \sa SDL_ReadAsyncIO
