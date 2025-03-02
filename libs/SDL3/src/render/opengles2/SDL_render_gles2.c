@@ -539,7 +539,7 @@ static GLuint GLES2_CacheShader(GLES2_RenderData *data, GLES2_ShaderType type, G
                 SDL_asprintf(&message, "%s%s", last_message, shader_src_list[i]);
                 SDL_free(last_message);
             }
-            SDL_Log("%s\n", message);
+            SDL_Log("%s", message);
             SDL_free(message);
         }
 #endif
@@ -1041,7 +1041,7 @@ static bool SetTextureAddressMode(GLES2_RenderData *data, GLenum textype, SDL_Te
         data->glTexParameteri(textype, GL_TEXTURE_WRAP_T, GL_REPEAT);
         break;
     default:
-        return SDL_SetError("Unknown texture address mode: %d\n", addressMode);
+        return SDL_SetError("Unknown texture address mode: %d", addressMode);
     }
     return true;
 }
@@ -2099,8 +2099,8 @@ static bool GLES2_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, SDL
     renderer->window = window;
 
     renderer->name = GLES2_RenderDriver.name;
-    SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_RGBA32);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_BGRA32);
+    SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_RGBA32);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_BGRX32);
     SDL_AddSupportedTextureFormat(renderer, SDL_PIXELFORMAT_RGBX32);
 

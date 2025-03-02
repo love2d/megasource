@@ -287,9 +287,9 @@ static SDL_vidpid_list blacklist_devices = {
 
 static Uint32 initial_flightstick_devices[] = {
     MAKE_VIDPID(0x044f, 0x0402), // HOTAS Warthog Joystick
-    MAKE_VIDPID(0x0738, 0x2221), // Saitek Pro Flight X-56 Rhino Stick
     MAKE_VIDPID(0x044f, 0xb10a), // ThrustMaster, Inc. T.16000M Joystick
     MAKE_VIDPID(0x046d, 0xc215), // Logitech Extreme 3D
+    MAKE_VIDPID(0x0738, 0x2221), // Saitek Pro Flight X-56 Rhino Stick
     MAKE_VIDPID(0x231d, 0x0126), // Gunfighter Mk.III 'Space Combat Edition' (right)
     MAKE_VIDPID(0x231d, 0x0127), // Gunfighter Mk.III 'Space Combat Edition' (left)
     MAKE_VIDPID(0x362c, 0x0001), // Yawman Arrow
@@ -313,10 +313,10 @@ static SDL_vidpid_list gamecube_devices = {
 };
 
 static Uint32 initial_rog_gamepad_mice[] = {
-    MAKE_VIDPID(0x0b05, 0x1906), // ROG Pugio II
-    MAKE_VIDPID(0x0b05, 0x1958), // ROG Chakram Core Mouse
     MAKE_VIDPID(0x0b05, 0x18e3), // ROG Chakram (wired) Mouse
     MAKE_VIDPID(0x0b05, 0x18e5), // ROG Chakram (wireless) Mouse
+    MAKE_VIDPID(0x0b05, 0x1906), // ROG Pugio II
+    MAKE_VIDPID(0x0b05, 0x1958), // ROG Chakram Core Mouse
     MAKE_VIDPID(0x0b05, 0x1a18), // ROG Chakram X (wired) Mouse
     MAKE_VIDPID(0x0b05, 0x1a1a), // ROG Chakram X (wireless) Mouse
     MAKE_VIDPID(0x0b05, 0x1a1c), // ROG Chakram X (Bluetooth) Mouse
@@ -341,37 +341,37 @@ static SDL_vidpid_list throttle_devices = {
 
 static Uint32 initial_wheel_devices[] = {
     MAKE_VIDPID(0x0079, 0x1864), // DragonRise Inc. Wired Wheel (active mode) (also known as PXN V900 (PS3), Superdrive SV-750, or a Genesis Seaborg 400)
+    MAKE_VIDPID(0x044f, 0xb65d), // Thrustmaster Wheel FFB
+    MAKE_VIDPID(0x044f, 0xb65e), // Thrustmaster T500RS
+    MAKE_VIDPID(0x044f, 0xb664), // Thrustmaster TX (initial mode)
+    MAKE_VIDPID(0x044f, 0xb669), // Thrustmaster TX (active mode)
+    MAKE_VIDPID(0x044f, 0xb66d), // Thrustmaster T300RS (PS4 mode)
+    MAKE_VIDPID(0x044f, 0xb66d), // Thrustmaster Wheel FFB
+    MAKE_VIDPID(0x044f, 0xb66e), // Thrustmaster T300RS (normal mode)
+    MAKE_VIDPID(0x044f, 0xb66f), // Thrustmaster T300RS (advanced mode)
+    MAKE_VIDPID(0x044f, 0xb677), // Thrustmaster T150
+    MAKE_VIDPID(0x044f, 0xb67f), // Thrustmaster TMX
+    MAKE_VIDPID(0x044f, 0xb691), // Thrustmaster TS-XW (initial mode)
+    MAKE_VIDPID(0x044f, 0xb692), // Thrustmaster TS-XW (active mode)
+    MAKE_VIDPID(0x044f, 0xb696), // Thrustmaster T248
+    MAKE_VIDPID(0x046d, 0xc24f), // Logitech G29 (PS3)
+    MAKE_VIDPID(0x046d, 0xc260), // Logitech G29 (PS4)
+    MAKE_VIDPID(0x046d, 0xc261), // Logitech G920 (initial mode)
+    MAKE_VIDPID(0x046d, 0xc262), // Logitech G920 (active mode)
+    MAKE_VIDPID(0x046d, 0xc266), // Logitech G923 for Playstation 4 and PC (PC mode)
+    MAKE_VIDPID(0x046d, 0xc267), // Logitech G923 for Playstation 4 and PC (PS4 mode)
+    MAKE_VIDPID(0x046d, 0xc268), // Logitech PRO Racing Wheel (PC mode)
+    MAKE_VIDPID(0x046d, 0xc269), // Logitech PRO Racing Wheel (PS4/PS5 mode)
+    MAKE_VIDPID(0x046d, 0xc26d), // Logitech G923 (Xbox)
+    MAKE_VIDPID(0x046d, 0xc26e), // Logitech G923
+    MAKE_VIDPID(0x046d, 0xc272), // Logitech PRO Racing Wheel for Xbox (PC mode)
     MAKE_VIDPID(0x046d, 0xc294), // Logitech generic wheel
     MAKE_VIDPID(0x046d, 0xc295), // Logitech Momo Force
     MAKE_VIDPID(0x046d, 0xc298), // Logitech Driving Force Pro
     MAKE_VIDPID(0x046d, 0xc299), // Logitech G25
     MAKE_VIDPID(0x046d, 0xc29a), // Logitech Driving Force GT
     MAKE_VIDPID(0x046d, 0xc29b), // Logitech G27
-    MAKE_VIDPID(0x046d, 0xc24f), // Logitech G29 (PS3)
-    MAKE_VIDPID(0x046d, 0xc260), // Logitech G29 (PS4)
-    MAKE_VIDPID(0x046d, 0xc261), // Logitech G920 (initial mode)
-    MAKE_VIDPID(0x046d, 0xc262), // Logitech G920 (active mode)
-    MAKE_VIDPID(0x046d, 0xc268), // Logitech PRO Racing Wheel (PC mode)
-    MAKE_VIDPID(0x046d, 0xc269), // Logitech PRO Racing Wheel (PS4/PS5 mode)
-    MAKE_VIDPID(0x046d, 0xc272), // Logitech PRO Racing Wheel for Xbox (PC mode)
-    MAKE_VIDPID(0x046d, 0xc26d), // Logitech G923 (Xbox)
-    MAKE_VIDPID(0x046d, 0xc26e), // Logitech G923
-    MAKE_VIDPID(0x046d, 0xc266), // Logitech G923 for Playstation 4 and PC (PC mode)
-    MAKE_VIDPID(0x046d, 0xc267), // Logitech G923 for Playstation 4 and PC (PS4 mode)
     MAKE_VIDPID(0x046d, 0xca03), // Logitech Momo Racing
-    MAKE_VIDPID(0x044f, 0xb65d), // Thrustmaster Wheel FFB
-    MAKE_VIDPID(0x044f, 0xb66d), // Thrustmaster Wheel FFB
-    MAKE_VIDPID(0x044f, 0xb677), // Thrustmaster T150
-    MAKE_VIDPID(0x044f, 0xb696), // Thrustmaster T248
-    MAKE_VIDPID(0x044f, 0xb66e), // Thrustmaster T300RS (normal mode)
-    MAKE_VIDPID(0x044f, 0xb66f), // Thrustmaster T300RS (advanced mode)
-    MAKE_VIDPID(0x044f, 0xb66d), // Thrustmaster T300RS (PS4 mode)
-    MAKE_VIDPID(0x044f, 0xb65e), // Thrustmaster T500RS
-    MAKE_VIDPID(0x044f, 0xb664), // Thrustmaster TX (initial mode)
-    MAKE_VIDPID(0x044f, 0xb669), // Thrustmaster TX (active mode)
-    MAKE_VIDPID(0x044f, 0xb67f), // Thrustmaster TMX
-    MAKE_VIDPID(0x044f, 0xb691), // Thrustmaster TS-XW (initial mode)
-    MAKE_VIDPID(0x044f, 0xb692), // Thrustmaster TS-XW (active mode)
     MAKE_VIDPID(0x0483, 0x0522), // Simagic Wheelbase (including M10, Alpha Mini, Alpha, Alpha U)
     MAKE_VIDPID(0x0483, 0xa355), // VRS DirectForce Pro Wheel Base
     MAKE_VIDPID(0x0eb7, 0x0001), // Fanatec ClubSport Wheel Base V2
@@ -410,8 +410,8 @@ static SDL_vidpid_list wheel_devices = {
 };
 
 static Uint32 initial_zero_centered_devices[] = {
-    MAKE_VIDPID(0x0e8f, 0x3013), // HuiJia SNES USB adapter
     MAKE_VIDPID(0x05a0, 0x3232), // 8Bitdo Zero Gamepad
+    MAKE_VIDPID(0x0e8f, 0x3013), // HuiJia SNES USB adapter
 };
 static SDL_vidpid_list zero_centered_devices = {
     SDL_HINT_JOYSTICK_ZERO_CENTERED_DEVICES, 0, 0, NULL,
@@ -2546,158 +2546,14 @@ void SDL_GetJoystickGUIDInfo(SDL_GUID guid, Uint16 *vendor, Uint16 *product, Uin
     }
 }
 
-static int PrefixMatch(const char *a, const char *b)
-{
-    int matchlen = 0;
-    while (*a && *b) {
-        if (SDL_tolower((unsigned char)*a++) == SDL_tolower((unsigned char)*b++)) {
-            ++matchlen;
-        } else {
-            break;
-        }
-    }
-    return matchlen;
-}
-
 char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_name, const char *product_name)
 {
-    static struct
-    {
-        const char *prefix;
-        const char *replacement;
-    } replacements[] = {
-        { "ASTRO Gaming", "ASTRO" },
-        { "Bensussen Deutsch & Associates,Inc.(BDA)", "BDA" },
-        { "Guangzhou Chicken Run Network Technology Co., Ltd.", "GameSir" },
-        { "HORI CO.,LTD", "HORI" },
-        { "HORI CO.,LTD.", "HORI" },
-        { "Mad Catz Inc.", "Mad Catz" },
-        { "Nintendo Co., Ltd.", "Nintendo" },
-        { "NVIDIA Corporation ", "" },
-        { "Performance Designed Products", "PDP" },
-        { "QANBA USA, LLC", "Qanba" },
-        { "QANBA USA,LLC", "Qanba" },
-        { "Unknown ", "" },
-    };
-    const char *custom_name;
-    char *name;
-    size_t i, len;
-
-    custom_name = GuessControllerName(vendor, product);
+    const char *custom_name = GuessControllerName(vendor, product);
     if (custom_name) {
         return SDL_strdup(custom_name);
     }
 
-    if (!vendor_name) {
-        vendor_name = "";
-    }
-    if (!product_name) {
-        product_name = "";
-    }
-
-    while (*vendor_name == ' ') {
-        ++vendor_name;
-    }
-    while (*product_name == ' ') {
-        ++product_name;
-    }
-
-    if (*vendor_name && *product_name) {
-        len = (SDL_strlen(vendor_name) + 1 + SDL_strlen(product_name) + 1);
-        name = (char *)SDL_malloc(len);
-        if (name) {
-            (void)SDL_snprintf(name, len, "%s %s", vendor_name, product_name);
-        }
-    } else if (*product_name) {
-        name = SDL_strdup(product_name);
-    } else if (vendor || product) {
-        // Couldn't find a controller name, try to give it one based on device type
-        switch (SDL_GetGamepadTypeFromVIDPID(vendor, product, NULL, true)) {
-        case SDL_GAMEPAD_TYPE_XBOX360:
-            name = SDL_strdup("Xbox 360 Controller");
-            break;
-        case SDL_GAMEPAD_TYPE_XBOXONE:
-            name = SDL_strdup("Xbox One Controller");
-            break;
-        case SDL_GAMEPAD_TYPE_PS3:
-            name = SDL_strdup("PS3 Controller");
-            break;
-        case SDL_GAMEPAD_TYPE_PS4:
-            name = SDL_strdup("PS4 Controller");
-            break;
-        case SDL_GAMEPAD_TYPE_PS5:
-            name = SDL_strdup("DualSense Wireless Controller");
-            break;
-        case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
-            name = SDL_strdup("Nintendo Switch Pro Controller");
-            break;
-        default:
-            len = (6 + 1 + 6 + 1);
-            name = (char *)SDL_malloc(len);
-            if (name) {
-                (void)SDL_snprintf(name, len, "0x%.4x/0x%.4x", vendor, product);
-            }
-            break;
-        }
-    } else {
-        name = SDL_strdup("Controller");
-    }
-
-    if (!name) {
-        return NULL;
-    }
-
-    // Trim trailing whitespace
-    for (len = SDL_strlen(name); (len > 0 && name[len - 1] == ' '); --len) {
-        // continue
-    }
-    name[len] = '\0';
-
-    // Compress duplicate spaces
-    for (i = 0; i < (len - 1);) {
-        if (name[i] == ' ' && name[i + 1] == ' ') {
-            SDL_memmove(&name[i], &name[i + 1], (len - i));
-            --len;
-        } else {
-            ++i;
-        }
-    }
-
-    // Perform any manufacturer replacements
-    for (i = 0; i < SDL_arraysize(replacements); ++i) {
-        size_t prefixlen = SDL_strlen(replacements[i].prefix);
-        if (SDL_strncasecmp(name, replacements[i].prefix, prefixlen) == 0) {
-            size_t replacementlen = SDL_strlen(replacements[i].replacement);
-            if (replacementlen <= prefixlen) {
-                SDL_memcpy(name, replacements[i].replacement, replacementlen);
-                SDL_memmove(name + replacementlen, name + prefixlen, (len - prefixlen) + 1);
-                len -= (prefixlen - replacementlen);
-            } else {
-                // FIXME: Need to handle the expand case by reallocating the string
-            }
-            break;
-        }
-    }
-
-    /* Remove duplicate manufacturer or product in the name
-     * e.g. Razer Razer Raiju Tournament Edition Wired
-     */
-    for (i = 1; i < (len - 1); ++i) {
-        int matchlen = PrefixMatch(name, &name[i]);
-        while (matchlen > 0) {
-            if (name[matchlen] == ' ' || name[matchlen] == '-') {
-                SDL_memmove(name, name + matchlen + 1, len - matchlen);
-                break;
-            }
-            --matchlen;
-        }
-        if (matchlen > 0) {
-            // We matched the manufacturer's name and removed it
-            break;
-        }
-    }
-
-    return name;
+    return SDL_CreateDeviceName(vendor, product, vendor_name, product_name, "Controller");
 }
 
 SDL_GUID SDL_CreateJoystickGUID(Uint16 bus, Uint16 vendor, Uint16 product, Uint16 version, const char *vendor_name, const char *product_name, Uint8 driver_signature, Uint8 driver_data)
@@ -2963,7 +2819,7 @@ bool SDL_IsJoystickXboxSeriesX(Uint16 vendor_id, Uint16 product_id)
         }
     }
     if (vendor_id == USB_VENDOR_THRUSTMASTER) {
-        if (product_id == USB_PRODUCT_THRUSTMASTER_ESWAPX_PRO) {
+        if (product_id == USB_PRODUCT_THRUSTMASTER_ESWAPX_PRO_SERIES_X) {
             return true;
         }
     }

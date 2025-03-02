@@ -124,6 +124,9 @@ struct SDL_Window
 
     SDL_PropertiesID props;
 
+    int num_renderers;
+    SDL_Renderer **renderers;
+
     SDL_WindowData *internal;
 
     SDL_Window *prev;
@@ -501,6 +504,7 @@ typedef struct VideoBootStrap
     const char *desc;
     SDL_VideoDevice *(*create)(void);
     bool (*ShowMessageBox)(const SDL_MessageBoxData *messageboxdata, int *buttonID);  // can be done without initializing backend!
+    bool is_preferred;
 } VideoBootStrap;
 
 // Not all of these are available in a given build. Use #ifdefs, etc.
