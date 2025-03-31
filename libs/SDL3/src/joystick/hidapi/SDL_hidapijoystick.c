@@ -868,10 +868,8 @@ static SDL_HIDAPI_Device *HIDAPI_AddDevice(const struct SDL_hid_device_info *inf
         return NULL;
     }
     SDL_SetObjectValid(device, SDL_OBJECT_TYPE_HIDAPI_JOYSTICK, true);
-    device->path = SDL_strdup(info->path);
-    if (!device->path) {
-        SDL_free(device);
-        return NULL;
+    if (info->path) {
+        device->path = SDL_strdup(info->path);
     }
     device->seen = true;
     device->vendor_id = info->vendor_id;
@@ -1135,12 +1133,13 @@ check_removed:
                 goto check_removed;
             } else {
                 HIDAPI_DelDevice(device);
+                device = NULL;
 
                 // Update the device list again in case this device comes back
                 SDL_HIDAPI_change_count = 0;
             }
         }
-        if (device->broken && device->parent) {
+        if (device && device->broken && device->parent) {
             HIDAPI_DelDevice(device->parent);
 
             // We deleted a different device here, restart the loop
