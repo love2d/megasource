@@ -6,7 +6,8 @@
 #include "AL/al.h"
 #include "AL/alext.h"
 
-#include "alc/effects/base.h"
+#include "alc/context.h"
+#include "alnumeric.h"
 #include "effects.h"
 
 
@@ -14,14 +15,16 @@ namespace {
 
 constexpr EffectProps genDefaultDialogProps() noexcept
 {
-    DedicatedDialogProps props{};
+    DedicatedProps props{};
+    props.Target = DedicatedProps::Dialog;
     props.Gain = 1.0f;
     return props;
 }
 
 constexpr EffectProps genDefaultLfeProps() noexcept
 {
-    DedicatedLfeProps props{};
+    DedicatedProps props{};
+    props.Target = DedicatedProps::Lfe;
     props.Gain = 1.0f;
     return props;
 }
@@ -30,91 +33,81 @@ constexpr EffectProps genDefaultLfeProps() noexcept
 
 const EffectProps DedicatedDialogEffectProps{genDefaultDialogProps()};
 
-void EffectHandler::SetParami(DedicatedDialogProps&, ALenum param, int)
-{ throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer property 0x%04x", param}; }
-void EffectHandler::SetParamiv(DedicatedDialogProps&, ALenum param, const int*)
-{
-    throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer-vector property 0x%04x",
-        param};
-}
-void EffectHandler::SetParamf(DedicatedDialogProps &props, ALenum param, float val)
+void DedicatedDialogEffectHandler::SetParami(ALCcontext *context, DedicatedProps&, ALenum param, int)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer property {:#04x}", as_unsigned(param)); }
+void DedicatedDialogEffectHandler::SetParamiv(ALCcontext *context, DedicatedProps&, ALenum param, const int*)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer-vector property {:#04x}", as_unsigned(param)); }
+void DedicatedDialogEffectHandler::SetParamf(ALCcontext *context, DedicatedProps &props, ALenum param, float val)
 {
     switch(param)
     {
     case AL_DEDICATED_GAIN:
         if(!(val >= 0.0f && std::isfinite(val)))
-            throw effect_exception{AL_INVALID_VALUE, "Dedicated gain out of range"};
+            context->throw_error(AL_INVALID_VALUE, "Dedicated gain out of range");
         props.Gain = val;
-        break;
-
-    default:
-        throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated float property 0x%04x", param};
+        return;
     }
-}
-void EffectHandler::SetParamfv(DedicatedDialogProps &props, ALenum param, const float *vals)
-{ SetParamf(props, param, *vals); }
 
-void EffectHandler::GetParami(const DedicatedDialogProps&, ALenum param, int*)
-{ throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer property 0x%04x", param}; }
-void EffectHandler::GetParamiv(const DedicatedDialogProps&, ALenum param, int*)
-{
-    throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer-vector property 0x%04x",
-        param};
+    context->throw_error(AL_INVALID_ENUM, "Invalid dedicated float property {:#04x}",
+        as_unsigned(param));
 }
-void EffectHandler::GetParamf(const DedicatedDialogProps &props, ALenum param, float *val)
+void DedicatedDialogEffectHandler::SetParamfv(ALCcontext *context, DedicatedProps &props, ALenum param, const float *vals)
+{ SetParamf(context, props, param, *vals); }
+
+void DedicatedDialogEffectHandler::GetParami(ALCcontext *context, const DedicatedProps&, ALenum param, int*)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer property {:#04x}", as_unsigned(param)); }
+void DedicatedDialogEffectHandler::GetParamiv(ALCcontext *context, const DedicatedProps&, ALenum param, int*)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer-vector property {:#04x}", as_unsigned(param)); }
+void DedicatedDialogEffectHandler::GetParamf(ALCcontext *context, const DedicatedProps &props, ALenum param, float *val)
 {
     switch(param)
     {
-    case AL_DEDICATED_GAIN: *val = props.Gain; break;
-    default:
-        throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated float property 0x%04x", param};
+    case AL_DEDICATED_GAIN: *val = props.Gain; return;
     }
+
+    context->throw_error(AL_INVALID_ENUM, "Invalid dedicated float property {:#04x}",
+        as_unsigned(param));
 }
-void EffectHandler::GetParamfv(const DedicatedDialogProps &props, ALenum param, float *vals)
-{ GetParamf(props, param, vals); }
+void DedicatedDialogEffectHandler::GetParamfv(ALCcontext *context, const DedicatedProps &props, ALenum param, float *vals)
+{ GetParamf(context, props, param, vals); }
 
 
 const EffectProps DedicatedLfeEffectProps{genDefaultLfeProps()};
 
-void EffectHandler::SetParami(DedicatedLfeProps&, ALenum param, int)
-{ throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer property 0x%04x", param}; }
-void EffectHandler::SetParamiv(DedicatedLfeProps&, ALenum param, const int*)
-{
-    throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer-vector property 0x%04x",
-        param};
-}
-void EffectHandler::SetParamf(DedicatedLfeProps &props, ALenum param, float val)
+void DedicatedLfeEffectHandler::SetParami(ALCcontext *context, DedicatedProps&, ALenum param, int)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer property {:#04x}", as_unsigned(param)); }
+void DedicatedLfeEffectHandler::SetParamiv(ALCcontext *context, DedicatedProps&, ALenum param, const int*)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer-vector property {:#04x}", as_unsigned(param)); }
+void DedicatedLfeEffectHandler::SetParamf(ALCcontext *context, DedicatedProps &props, ALenum param, float val)
 {
     switch(param)
     {
     case AL_DEDICATED_GAIN:
         if(!(val >= 0.0f && std::isfinite(val)))
-            throw effect_exception{AL_INVALID_VALUE, "Dedicated gain out of range"};
+            context->throw_error(AL_INVALID_VALUE, "Dedicated gain out of range");
         props.Gain = val;
-        break;
-
-    default:
-        throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated float property 0x%04x", param};
+        return;
     }
-}
-void EffectHandler::SetParamfv(DedicatedLfeProps &props, ALenum param, const float *vals)
-{ SetParamf(props, param, *vals); }
 
-void EffectHandler::GetParami(const DedicatedLfeProps&, ALenum param, int*)
-{ throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer property 0x%04x", param}; }
-void EffectHandler::GetParamiv(const DedicatedLfeProps&, ALenum param, int*)
-{
-    throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated integer-vector property 0x%04x",
-        param};
+    context->throw_error(AL_INVALID_ENUM, "Invalid dedicated float property {:#04x}",
+        as_unsigned(param));
 }
-void EffectHandler::GetParamf(const DedicatedLfeProps &props, ALenum param, float *val)
+void DedicatedLfeEffectHandler::SetParamfv(ALCcontext *context, DedicatedProps &props, ALenum param, const float *vals)
+{ SetParamf(context, props, param, *vals); }
+
+void DedicatedLfeEffectHandler::GetParami(ALCcontext *context, const DedicatedProps&, ALenum param, int*)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer property {:#04x}", as_unsigned(param)); }
+void DedicatedLfeEffectHandler::GetParamiv(ALCcontext *context, const DedicatedProps&, ALenum param, int*)
+{ context->throw_error(AL_INVALID_ENUM, "Invalid dedicated integer-vector property {:#04x}", as_unsigned(param)); }
+void DedicatedLfeEffectHandler::GetParamf(ALCcontext *context, const DedicatedProps &props, ALenum param, float *val)
 {
     switch(param)
     {
-    case AL_DEDICATED_GAIN: *val = props.Gain; break;
-    default:
-        throw effect_exception{AL_INVALID_ENUM, "Invalid dedicated float property 0x%04x", param};
+    case AL_DEDICATED_GAIN: *val = props.Gain; return;
     }
+
+    context->throw_error(AL_INVALID_ENUM, "Invalid dedicated float property {:#04x}",
+        as_unsigned(param));
 }
-void EffectHandler::GetParamfv(const DedicatedLfeProps &props, ALenum param, float *vals)
-{ GetParamf(props, param, vals); }
+void DedicatedLfeEffectHandler::GetParamfv(ALCcontext *context, const DedicatedProps &props, ALenum param, float *vals)
+{ GetParamf(context, props, param, vals); }

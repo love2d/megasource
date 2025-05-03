@@ -37,26 +37,11 @@ void AL_APIENTRY alFlushMappedBufferDirectSOFT(ALCcontext *context, ALuint buffe
 #endif
 #endif
 
-#ifndef AL_SOFT_bformat_hoa
-#define AL_SOFT_bformat_hoa
-#define AL_UNPACK_AMBISONIC_ORDER_SOFT           0x199D
-#endif
-
 #ifndef AL_SOFT_convolution_effect
 #define AL_SOFT_convolution_effect
 #define AL_EFFECT_CONVOLUTION_SOFT               0xA000
 #define AL_CONVOLUTION_ORIENTATION_SOFT          0x100F /* same as AL_ORIENTATION */
 #define AL_EFFECTSLOT_STATE_SOFT                 0x199E
-typedef void (AL_APIENTRY*LPALAUXILIARYEFFECTSLOTPLAYSOFT)(ALuint slotid) AL_API_NOEXCEPT17;
-typedef void (AL_APIENTRY*LPALAUXILIARYEFFECTSLOTPLAYVSOFT)(ALsizei n, const ALuint *slotids) AL_API_NOEXCEPT17;
-typedef void (AL_APIENTRY*LPALAUXILIARYEFFECTSLOTSTOPSOFT)(ALuint slotid) AL_API_NOEXCEPT17;
-typedef void (AL_APIENTRY*LPALAUXILIARYEFFECTSLOTSTOPVSOFT)(ALsizei n, const ALuint *slotids) AL_API_NOEXCEPT17;
-#ifdef AL_ALEXT_PROTOTYPES
-AL_API void AL_APIENTRY alAuxiliaryEffectSlotPlaySOFT(ALuint slotid) AL_API_NOEXCEPT;
-AL_API void AL_APIENTRY alAuxiliaryEffectSlotPlayvSOFT(ALsizei n, const ALuint *slotids) AL_API_NOEXCEPT;
-AL_API void AL_APIENTRY alAuxiliaryEffectSlotStopSOFT(ALuint slotid) AL_API_NOEXCEPT;
-AL_API void AL_APIENTRY alAuxiliaryEffectSlotStopvSOFT(ALsizei n, const ALuint *slotids) AL_API_NOEXCEPT;
-#endif
 #endif
 
 #ifndef AL_SOFT_hold_on_disconnect
@@ -80,15 +65,18 @@ AL_API void AL_APIENTRY alAuxiliaryEffectSlotStopvSOFT(ALsizei n, const ALuint *
 #define AL_FORMAT_71CHN_I32                      0x19E5
 #define AL_FORMAT_71CHN_FLOAT32                  0x19E6
 
-#define AL_FORMAT_UHJ2CHN_I32_SOFT               0x19E7
-#define AL_FORMAT_UHJ3CHN_I32_SOFT               0x19E8
-#define AL_FORMAT_UHJ4CHN_I32_SOFT               0x19E9
+#define AL_FORMAT_BFORMAT2D_I32                  0x19E7
+#define AL_FORMAT_BFORMAT3D_I32                  0x19E8
+
+#define AL_FORMAT_UHJ2CHN_I32_SOFT               0x19E9
+#define AL_FORMAT_UHJ3CHN_I32_SOFT               0x19EA
+#define AL_FORMAT_UHJ4CHN_I32_SOFT               0x19EB
 #endif
 
 #ifndef AL_SOFT_source_panning
 #define AL_SOFT_source_panning
-#define AL_PANNING_ENABLED_SOFT                  0x19EA
-#define AL_PAN_SOFT                              0x19EB
+#define AL_PANNING_ENABLED_SOFT                  0x19EC
+#define AL_PAN_SOFT                              0x19ED
 #endif
 
 /* Non-standard exports. Not part of any extension. */
@@ -100,6 +88,11 @@ void ALC_APIENTRY alsoft_set_log_callback(LPALSOFTLOGCALLBACK callback, void *us
 /* Functions from abandoned extensions. Only here for binary compatibility. */
 AL_API void AL_APIENTRY alSourceQueueBufferLayersSOFT(ALuint src, ALsizei nb,
     const ALuint *buffers) noexcept;
+
+AL_API void AL_APIENTRY alAuxiliaryEffectSlotPlaySOFT(ALuint slotid) noexcept;
+AL_API void AL_APIENTRY alAuxiliaryEffectSlotPlayvSOFT(ALsizei n, const ALuint *slotids) noexcept;
+AL_API void AL_APIENTRY alAuxiliaryEffectSlotStopSOFT(ALuint slotid) noexcept;
+AL_API void AL_APIENTRY alAuxiliaryEffectSlotStopvSOFT(ALsizei n, const ALuint *slotids) noexcept;
 
 AL_API ALint64SOFT AL_APIENTRY alGetInteger64SOFT(ALenum pname) AL_API_NOEXCEPT;
 AL_API void AL_APIENTRY alGetInteger64vSOFT(ALenum pname, ALint64SOFT *values) AL_API_NOEXCEPT;

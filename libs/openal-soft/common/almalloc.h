@@ -12,7 +12,7 @@
 
 namespace gsl {
 template<typename T> using owner = T;
-};
+}
 
 
 #define DISABLE_ALLOC                                                         \
@@ -88,6 +88,9 @@ constexpr bool operator!=(const allocator<T,N>&, const allocator<U,M>&) noexcept
 { return allocator<T,N>::Alignment != allocator<U,M>::Alignment; }
 
 
+#ifdef __cpp_lib_to_address
+using std::to_address;
+#else
 template<typename T>
 constexpr T *to_address(T *p) noexcept
 {
@@ -100,7 +103,7 @@ constexpr auto to_address(const T &p) noexcept
 {
     return ::al::to_address(p.operator->());
 }
-
+#endif
 
 template<typename T, typename ...Args>
 constexpr T* construct_at(T *ptr, Args&& ...args)
@@ -120,31 +123,74 @@ class out_ptr_t {
     static_assert(!std::is_same_v<PT,void*>);
 
     SP &mRes;
-    std::variant<PT,void*> mPtr{};
+    std::variant<PT,void*> mPtr;
 
 public:
-    out_ptr_t(SP &res) : mRes{res} { }
-    ~out_ptr_t()
-    {
-        auto set_res = [this](auto &ptr)
-        { mRes.reset(static_cast<PT>(ptr)); };
-        std::visit(set_res, mPtr);
-    }
+    explicit out_ptr_t(SP &res) : mRes{res} { }
+    ~out_ptr_t() { std::visit([this](auto &ptr) { mRes.reset(static_cast<PT>(ptr)); }, mPtr); }
+
+    out_ptr_t() = delete;
     out_ptr_t(const out_ptr_t&) = delete;
     out_ptr_t& operator=(const out_ptr_t&) = delete;
 
-    operator PT*() noexcept
+    operator PT*() noexcept /* NOLINT(google-explicit-constructor) */
     { return &std::get<PT>(mPtr); }
 
-    operator void**() noexcept
+    operator void**() noexcept /* NOLINT(google-explicit-constructor) */
     { return &mPtr.template emplace<void*>(); }
 };
 
 template<typename T=void, typename SP, typename ...Args>
-auto out_ptr(SP &res)
+auto out_ptr(SP &res, Args&& ...args)
 {
-    using ptype = typename SP::element_type*;
-    return out_ptr_t<SP,ptype>{res};
+    static_assert(sizeof...(args) == 0);
+    if constexpr(std::is_same_v<T,void>)
+    {
+        using ptype = typename SP::element_type*;
+        return out_ptr_t<SP,ptype,Args...>{res};
+    }
+    else
+        return out_ptr_t<SP,T,Args...>{res};
+}
+
+
+template<typename SP, typename PT, typename ...Args>
+class inout_ptr_t {
+    static_assert(!std::is_same_v<PT,void*>);
+
+    SP &mRes;
+    std::variant<PT,void*> mPtr;
+
+public:
+    explicit inout_ptr_t(SP &res) : mRes{res}, mPtr{res.get()} { }
+    ~inout_ptr_t()
+    {
+        mRes.release();
+        std::visit([this](auto &ptr) { mRes.reset(static_cast<PT>(ptr)); }, mPtr);
+    }
+
+    inout_ptr_t() = delete;
+    inout_ptr_t(const inout_ptr_t&) = delete;
+    inout_ptr_t& operator=(const inout_ptr_t&) = delete;
+
+    operator PT*() noexcept /* NOLINT(google-explicit-constructor) */
+    { return &std::get<PT>(mPtr); }
+
+    operator void**() noexcept /* NOLINT(google-explicit-constructor) */
+    { return &mPtr.template emplace<void*>(mRes.get()); }
+};
+
+template<typename T=void, typename SP, typename ...Args>
+auto inout_ptr(SP &res, Args&& ...args)
+{
+    static_assert(sizeof...(args) == 0);
+    if constexpr(std::is_same_v<T,void>)
+    {
+        using ptype = typename SP::element_type*;
+        return inout_ptr_t<SP,ptype,Args...>{res};
+    }
+    else
+        return inout_ptr_t<SP,T,Args...>{res};
 }
 
 } // namespace al

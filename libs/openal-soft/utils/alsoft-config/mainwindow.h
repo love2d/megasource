@@ -13,7 +13,7 @@ class MainWindow;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
-private slots:
+private Q_SLOTS:
     void cancelCloseAction();
 
     void saveCurrentConfig();
@@ -29,7 +29,7 @@ private slots:
 
     void updatePeriodSizeEdit(int size);
     void updatePeriodSizeSlider();
-    void updatePeriodCountEdit(int size);
+    void updatePeriodCountEdit(int count);
     void updatePeriodCountSlider();
 
     void selectQuadDecoderFile();
@@ -76,7 +76,7 @@ private:
 
     void closeEvent(QCloseEvent *event) override;
 
-    void selectDecoderFile(QLineEdit *line, const char *name);
+    void selectDecoderFile(QLineEdit *line, const char *caption);
 
     QStringList collectHrtfs();
 

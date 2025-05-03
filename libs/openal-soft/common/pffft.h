@@ -96,9 +96,8 @@ enum pffft_direction_t { PFFFT_FORWARD, PFFFT_BACKWARD };
 /* type of transform */
 enum pffft_transform_t { PFFFT_REAL, PFFFT_COMPLEX };
 
-void pffft_destroy_setup(gsl::owner<PFFFT_Setup*> setup) noexcept;
 struct PFFFTSetupDeleter {
-    void operator()(gsl::owner<PFFFT_Setup*> setup) const noexcept { pffft_destroy_setup(setup); }
+    void operator()(gsl::owner<PFFFT_Setup*> setup) const noexcept;
 };
 using PFFFTSetupPtr = std::unique_ptr<PFFFT_Setup,PFFFTSetupDeleter>;
 
@@ -175,7 +174,7 @@ void pffft_zconvolve_accumulate(const PFFFT_Setup *setup, const float *dft_a, co
 
 
 struct PFFFTSetup {
-    PFFFTSetupPtr mSetup{};
+    PFFFTSetupPtr mSetup;
 
     PFFFTSetup() = default;
     PFFFTSetup(const PFFFTSetup&) = delete;
@@ -188,6 +187,8 @@ struct PFFFTSetup {
 
     PFFFTSetup& operator=(const PFFFTSetup&) = delete;
     PFFFTSetup& operator=(PFFFTSetup&& rhs) noexcept = default;
+
+    [[nodiscard]] explicit operator bool() const noexcept { return mSetup != nullptr; }
 
     void transform(const float *input, float *output, float *work, pffft_direction_t direction) const
     { pffft_transform(mSetup.get(), input, output, work, direction); }
@@ -205,8 +206,6 @@ struct PFFFTSetup {
 
     void zconvolve_accumulate(const float *dft_a, const float *dft_b, float *dft_ab) const
     { pffft_zconvolve_accumulate(mSetup.get(), dft_a, dft_b, dft_ab); }
-
-    [[nodiscard]] operator bool() const noexcept { return mSetup != nullptr; }
 };
 
 #endif // PFFFT_H

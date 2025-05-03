@@ -87,7 +87,7 @@ void DistortionState::update(const ContextBase *context, const EffectSlot *slot,
     /* Divide normalized frequency by the amount of oversampling done during
      * processing.
      */
-    auto frequency = static_cast<float>(device->Frequency);
+    auto frequency = static_cast<float>(device->mSampleRate);
     mLowpass.setParamsFromBandwidth(BiquadType::LowPass, cutoff/frequency/4.0f, 1.0f, bandwidth);
 
     cutoff = props.EQCenter;
@@ -124,7 +124,7 @@ void DistortionState::process(const size_t samplesToDo, const al::span<const Flo
          * (which is fortunately first step of distortion). So combine three
          * operations into the one.
          */
-        mLowpass.process({mBuffer[0].data(), todo}, mBuffer[1]);
+        mLowpass.process(al::span{mBuffer[0]}.first(todo), mBuffer[1]);
 
         /* Second step, do distortion using waveshaper function to emulate
          * signal processing during tube overdriving. Three steps of
@@ -142,22 +142,30 @@ void DistortionState::process(const size_t samplesToDo, const al::span<const Flo
             proc_sample);
 
         /* Third step, do bandpass filtering of distorted signal. */
-        mBandpass.process({mBuffer[0].data(), todo}, mBuffer[1]);
+        mBandpass.process(al::span{mBuffer[0]}.first(todo), mBuffer[1]);
 
         todo >>= 2;
         auto outgains = mGain.cbegin();
-        for(FloatBufferLine &RESTRICT output : samplesOut)
+        auto proc_bufline = [this,base,todo,&outgains](FloatBufferSpan output)
         {
             /* Fourth step, final, do attenuation and perform decimation,
              * storing only one sample out of four.
              */
             const float gain{*(outgains++)};
             if(!(std::fabs(gain) > GainSilenceThreshold))
-                continue;
+                return;
 
-            for(size_t i{0u};i < todo;i++)
-                output[base+i] += gain * mBuffer[1][i*4];
-        }
+            auto src = mBuffer[1].cbegin();
+            const auto dst = al::span{output}.subspan(base, todo);
+            auto dec_sample = [gain,&src](float sample) noexcept -> float
+            {
+                sample += *src * gain;
+                src += 4;
+                return sample;
+            };
+            std::transform(dst.begin(), dst.end(), dst.begin(), dec_sample);
+        };
+        std::for_each(samplesOut.begin(), samplesOut.end(), proc_bufline);
 
         base += todo;
     }

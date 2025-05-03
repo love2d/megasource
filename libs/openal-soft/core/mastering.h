@@ -2,12 +2,13 @@
 #define CORE_MASTERING_H
 
 #include <array>
+#include <bitset>
 #include <memory>
 
-#include "almalloc.h"
 #include "alnumeric.h"
 #include "alspan.h"
 #include "bufferline.h"
+#include "opthelpers.h"
 #include "vector.h"
 
 struct SlidingHold;
@@ -25,9 +26,7 @@ using uint = unsigned int;
  *
  *   http://c4dm.eecs.qmul.ac.uk/audioengineering/compressors/
  */
-class Compressor {
-    size_t mNumChans{0u};
-
+class SIMDALIGN Compressor {
     struct AutoFlags {
         bool Knee : 1;
         bool Attack : 1;
@@ -67,16 +66,21 @@ class Compressor {
 
     Compressor() = default;
 
-    void linkChannels(const uint SamplesToDo, const FloatBufferLine *OutBuffer);
+    void linkChannels(const uint SamplesToDo, const al::span<const FloatBufferLine> OutBuffer);
     void crestDetector(const uint SamplesToDo);
     void peakDetector(const uint SamplesToDo);
     void peakHoldDetector(const uint SamplesToDo);
     void gainCompressor(const uint SamplesToDo);
-    void signalDelay(const uint SamplesToDo, FloatBufferLine *OutBuffer);
+    void signalDelay(const uint SamplesToDo, const al::span<FloatBufferLine> OutBuffer);
 
 public:
+    enum {
+        AutoKnee, AutoAttack, AutoRelease, AutoPostGain, AutoDeclip, FlagsCount
+    };
+    using FlagBits = std::bitset<FlagsCount>;
+
     ~Compressor();
-    void process(const uint SamplesToDo, FloatBufferLine *OutBuffer);
+    void process(const uint SamplesToDo, al::span<FloatBufferLine> InOut);
     [[nodiscard]] auto getLookAhead() const noexcept -> uint { return mLookAhead; }
 
     /**
@@ -106,11 +110,9 @@ public:
      *        automating release time.
      */
     static std::unique_ptr<Compressor> Create(const size_t NumChans, const float SampleRate,
-        const bool AutoKnee, const bool AutoAttack, const bool AutoRelease,
-        const bool AutoPostGain, const bool AutoDeclip, const float LookAheadTime,
-        const float HoldTime, const float PreGainDb, const float PostGainDb,
-        const float ThresholdDb, const float Ratio, const float KneeDb, const float AttackTime,
-        const float ReleaseTime);
+        const FlagBits autoflags, const float LookAheadTime, const float HoldTime,
+        const float PreGainDb, const float PostGainDb, const float ThresholdDb, const float Ratio,
+        const float KneeDb, const float AttackTime, const float ReleaseTime);
 };
 using CompressorPtr = std::unique_ptr<Compressor>;
 

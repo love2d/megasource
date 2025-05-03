@@ -73,12 +73,9 @@ void BFormatDec::process(const al::span<FloatBufferLine> OutBuffer,
         const auto lfSamples = al::span<float>{mSamples[sLFBand]}.first(SamplesToDo);
         for(auto &chandec : decoder)
         {
-            chandec.mXOver.process({input->data(), SamplesToDo}, hfSamples, lfSamples);
-            MixSamples(hfSamples, OutBuffer, chandec.mGains[sHFBand].data(),
-                chandec.mGains[sHFBand].data(), 0, 0);
-            MixSamples(lfSamples, OutBuffer, chandec.mGains[sLFBand].data(),
-                chandec.mGains[sLFBand].data(), 0, 0);
-            ++input;
+            chandec.mXOver.process(al::span{*input++}.first(SamplesToDo), hfSamples, lfSamples);
+            MixSamples(hfSamples, OutBuffer, chandec.mGains[sHFBand], chandec.mGains[sHFBand],0,0);
+            MixSamples(lfSamples, OutBuffer, chandec.mGains[sLFBand], chandec.mGains[sLFBand],0,0);
         }
     };
     auto decode_singleband = [=](std::vector<ChannelDecoderSingle> &decoder)
@@ -86,9 +83,8 @@ void BFormatDec::process(const al::span<FloatBufferLine> OutBuffer,
         auto input = InSamples.cbegin();
         for(auto &chandec : decoder)
         {
-            MixSamples(al::span{*input}.first(SamplesToDo), OutBuffer, chandec.mGains.data(),
-                chandec.mGains.data(), 0, 0);
-            ++input;
+            MixSamples(al::span{*input++}.first(SamplesToDo), OutBuffer, chandec.mGains,
+                chandec.mGains, 0, 0);
         }
     };
 
@@ -106,8 +102,8 @@ void BFormatDec::processStablize(const al::span<FloatBufferLine> OutBuffer,
      */
     const auto leftout = al::span<float>{OutBuffer[lidx]}.first(SamplesToDo);
     const auto rightout = al::span<float>{OutBuffer[ridx]}.first(SamplesToDo);
-    const al::span<float> mid{al::assume_aligned<16>(mStablizer->MidDirect.data()), SamplesToDo};
-    const al::span<float> side{al::assume_aligned<16>(mStablizer->Side.data()), SamplesToDo};
+    const auto mid = al::span{mStablizer->MidDirect}.first(SamplesToDo);
+    const auto side = al::span{mStablizer->Side}.first(SamplesToDo);
     std::transform(leftout.cbegin(), leftout.cend(), rightout.cbegin(), mid.begin(),std::plus{});
     std::transform(leftout.cbegin(), leftout.cend(), rightout.cbegin(), side.begin(),std::minus{});
     std::fill_n(leftout.begin(), leftout.size(), 0.0f);

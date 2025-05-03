@@ -11,7 +11,6 @@
 
 #include "almalloc.h"
 #include "alspan.h"
-#include "atomic.h"
 #include "ambidefs.h"
 #include "bufferline.h"
 #include "flexarray.h"
@@ -20,7 +19,7 @@
 
 
 struct alignas(16) HrtfStore {
-    std::atomic<uint> mRef;
+    std::atomic<uint> mRef{};
 
     uint mSampleRate : 24;
     uint mIrSize : 8;
@@ -38,12 +37,12 @@ struct alignas(16) HrtfStore {
         ushort azCount;
         ushort irOffset;
     };
-    Elevation *mElev;
-    const HrirArray *mCoeffs;
-    const ubyte2 *mDelays;
+    al::span<Elevation> mElev;
+    al::span<const HrirArray> mCoeffs;
+    al::span<const ubyte2> mDelays;
 
-    void getCoeffs(float elevation, float azimuth, float distance, float spread, HrirArray &coeffs,
-        const al::span<uint,2> delays) const;
+    void getCoeffs(float elevation, float azimuth, float distance, float spread,
+        const HrirSpan coeffs, const al::span<uint,2> delays) const;
 
     void add_ref();
     void dec_ref();
@@ -75,7 +74,7 @@ struct DirectHrtfState {
     uint mIrSize{0};
     al::FlexArray<HrtfChannelState> mChannels;
 
-    DirectHrtfState(size_t numchans) : mChannels{numchans} { }
+    explicit DirectHrtfState(size_t numchans) : mChannels{numchans} { }
     /**
      * Produces HRTF filter coefficients for decoding B-Format, given a set of
      * virtual speaker positions, a matching decoding matrix, and per-order

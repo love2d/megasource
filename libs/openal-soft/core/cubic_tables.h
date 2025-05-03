@@ -5,14 +5,18 @@
 #include <cstddef>
 
 #include "cubic_defs.h"
+#include "opthelpers.h"
 
 
-struct CubicTable {
+struct SIMDALIGN CubicTable {
     std::array<CubicCoefficients,CubicPhaseCount> mTable{};
 };
 
 struct GaussianTable : CubicTable { GaussianTable(); };
 inline const GaussianTable gGaussianFilter;
+
+struct SplineTable : CubicTable { SplineTable(); };
+inline const SplineTable gSplineFilter;
 
 
 struct CubicFilter {

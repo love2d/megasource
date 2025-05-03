@@ -5,13 +5,14 @@
 #include <cstdarg>
 #include <cstddef>
 #include <memory>
-#include <ratio>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "alc/events.h"
 #include "core/device.h"
 #include "core/except.h"
-#include "alc/events.h"
+#include "fmt/core.h"
 
 
 using uint = unsigned int;
@@ -34,9 +35,16 @@ struct BackendBase {
     virtual ClockLatency getClockLatency();
 
     DeviceBase *const mDevice;
+    std::string mDeviceName;
 
-    BackendBase(DeviceBase *device) noexcept : mDevice{device} { }
+    BackendBase() = delete;
+    BackendBase(const BackendBase&) = delete;
+    BackendBase(BackendBase&&) = delete;
+    explicit BackendBase(DeviceBase *device) noexcept : mDevice{device} { }
     virtual ~BackendBase() = default;
+
+    void operator=(const BackendBase&) = delete;
+    void operator=(BackendBase&&) = delete;
 
 protected:
     /** Sets the default channel order used by most non-WaveFormatEx-based APIs. */
@@ -64,18 +72,24 @@ inline ClockLatency GetClockLatency(DeviceBase *device, BackendBase *backend)
 
 
 struct BackendFactory {
+    BackendFactory() = default;
+    BackendFactory(const BackendFactory&) = delete;
+    BackendFactory(BackendFactory&&) = delete;
     virtual ~BackendFactory() = default;
 
-    virtual bool init() = 0;
+    void operator=(const BackendFactory&) = delete;
+    void operator=(BackendFactory&&) = delete;
 
-    virtual bool querySupport(BackendType type) = 0;
+    virtual auto init() -> bool = 0;
 
-    virtual alc::EventSupport queryEventSupport(alc::EventType, BackendType)
+    virtual auto querySupport(BackendType type) -> bool = 0;
+
+    virtual auto queryEventSupport(alc::EventType, BackendType) -> alc::EventSupport
     { return alc::EventSupport::NoSupport; }
 
-    virtual std::string probe(BackendType type) = 0;
+    virtual auto enumerate(BackendType type) -> std::vector<std::string> = 0;
 
-    virtual BackendPtr createBackend(DeviceBase *device, BackendType type) = 0;
+    virtual auto createBackend(DeviceBase *device, BackendType type) -> BackendPtr = 0;
 };
 
 namespace al {
@@ -89,14 +103,19 @@ enum class backend_error {
 class backend_exception final : public base_exception {
     backend_error mErrorCode;
 
+    static auto make_string(fmt::string_view fmt, fmt::format_args args) -> std::string;
+
 public:
-#ifdef __MINGW32__
-    [[gnu::format(__MINGW_PRINTF_FORMAT, 3, 4)]]
-#else
-    [[gnu::format(printf, 3, 4)]]
-#endif
-    backend_exception(backend_error code, const char *msg, ...);
+    template<typename ...Args>
+    backend_exception(backend_error code, fmt::format_string<Args...> fmt, Args&& ...args)
+        : base_exception{make_string(fmt, fmt::make_format_args(args...))}, mErrorCode{code}
+    { }
+    backend_exception(const backend_exception&) = default;
+    backend_exception(backend_exception&&) = default;
     ~backend_exception() override;
+
+    backend_exception& operator=(const backend_exception&) = default;
+    backend_exception& operator=(backend_exception&&) = default;
 
     [[nodiscard]] auto errorCode() const noexcept -> backend_error { return mErrorCode; }
 };

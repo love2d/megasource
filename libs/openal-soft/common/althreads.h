@@ -9,7 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#elif defined(__APPLE__)
+#elif defined(__STDC_NO_THREADS__) || !__has_include(<threads.h>)
 
 #include <pthread.h>
 
@@ -55,7 +55,7 @@ class tss {
     }
 
 #ifdef _WIN32
-    DWORD mTss;
+    DWORD mTss{TLS_OUT_OF_INDEXES};
 
 public:
     tss() : mTss{TlsAlloc()}
@@ -79,9 +79,9 @@ public:
     [[nodiscard]]
     auto get() const noexcept -> T { return from_ptr(TlsGetValue(mTss)); }
 
-#elif defined(__APPLE__)
+#elif defined(__STDC_NO_THREADS__) || !__has_include(<threads.h>)
 
-    pthread_key_t mTss;
+    pthread_key_t mTss{};
 
 public:
     tss()
@@ -107,7 +107,7 @@ public:
 
 #else
 
-    tss_t mTss;
+    tss_t mTss{};
 
 public:
     tss()

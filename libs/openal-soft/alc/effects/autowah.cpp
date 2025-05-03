@@ -122,7 +122,7 @@ void AutowahState::update(const ContextBase *context, const EffectSlot *slot,
 {
     auto &props = std::get<AutowahProps>(*props_);
     const DeviceBase *device{context->mDevice};
-    const auto frequency = static_cast<float>(device->Frequency);
+    const auto frequency = static_cast<float>(device->mSampleRate);
 
     const float ReleaseTime{std::clamp(props.ReleaseTime, 0.001f, 1.0f)};
 
@@ -214,7 +214,7 @@ void AutowahState::process(const size_t samplesToDo,
         chandata->mFilter.z2 = z2;
 
         /* Now, mix the processed sound data to the output. */
-        MixSamples({mBufferOut.data(), samplesToDo}, samplesOut[outidx].data(),
+        MixSamples(al::span{mBufferOut}.first(samplesToDo), samplesOut[outidx],
             chandata->mCurrentGain, chandata->mTargetGain, samplesToDo);
         ++chandata;
     }

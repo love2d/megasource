@@ -27,29 +27,22 @@ ContextBase::ContextBase(DeviceBase *device) : mDevice{device}
 
 ContextBase::~ContextBase()
 {
-    if(auto curarray = mActiveAuxSlots.exchange(nullptr, std::memory_order_relaxed))
-        std::destroy_n(curarray->end(), curarray->size());
-
+    mActiveAuxSlots.store(nullptr, std::memory_order_relaxed);
     mVoices.store(nullptr, std::memory_order_relaxed);
 
     if(mAsyncEvents)
     {
         size_t count{0};
-        auto evt_vec = mAsyncEvents->getReadVector();
-        if(evt_vec.first.len > 0)
+        for(auto &evt : mAsyncEvents->getReadVector())
         {
-            std::destroy_n(std::launder(reinterpret_cast<AsyncEvent*>(evt_vec.first.buf)),
-                evt_vec.first.len);
-            count += evt_vec.first.len;
-        }
-        if(evt_vec.second.len > 0)
-        {
-            std::destroy_n(std::launder(reinterpret_cast<AsyncEvent*>(evt_vec.second.buf)),
-                evt_vec.second.len);
-            count += evt_vec.second.len;
+            if(evt.len > 0)
+            {
+                std::destroy_n(std::launder(reinterpret_cast<AsyncEvent*>(evt.buf)), evt.len);
+                count += evt.len;
+            }
         }
         if(count > 0)
-            TRACE("Destructed %zu orphaned event%s\n", count, (count==1)?"":"s");
+            TRACE("Destructed {} orphaned event{}", count, (count==1)?"":"s");
         mAsyncEvents->readAdvance(count);
     }
 }
@@ -74,7 +67,7 @@ void ContextBase::allocVoiceProps()
 {
     static constexpr size_t clustersize{std::tuple_size_v<VoicePropsCluster::element_type>};
 
-    TRACE("Increasing allocated voice properties to %zu\n",
+    TRACE("Increasing allocated voice properties to {}",
         (mVoicePropClusters.size()+1) * clustersize);
 
     auto clusterptr = std::make_unique<VoicePropsCluster::element_type>();
@@ -106,7 +99,7 @@ void ContextBase::allocVoices(size_t addcount)
     if(addcount >= std::numeric_limits<int>::max()/clustersize - mVoiceClusters.size())
         throw std::runtime_error{"Allocating too many voices"};
     const size_t totalcount{(mVoiceClusters.size()+addcount) * clustersize};
-    TRACE("Increasing allocated voices to %zu\n", totalcount);
+    TRACE("Increasing allocated voices to {}", totalcount);
 
     while(addcount)
     {
@@ -129,7 +122,7 @@ void ContextBase::allocEffectSlotProps()
 {
     static constexpr size_t clustersize{std::tuple_size_v<EffectSlotPropsCluster::element_type>};
 
-    TRACE("Increasing allocated effect slot properties to %zu\n",
+    TRACE("Increasing allocated effect slot properties to {}",
         (mEffectSlotPropClusters.size()+1) * clustersize);
 
     auto clusterptr = std::make_unique<EffectSlotPropsCluster::element_type>();
@@ -159,7 +152,7 @@ EffectSlot *ContextBase::getEffectSlot()
     if(1 >= std::numeric_limits<int>::max()/clusterptr->size() - mEffectSlotClusters.size())
         throw std::runtime_error{"Allocating too many effect slots"};
     const size_t totalcount{(mEffectSlotClusters.size()+1) * clusterptr->size()};
-    TRACE("Increasing allocated effect slots to %zu\n", totalcount);
+    TRACE("Increasing allocated effect slots to {}", totalcount);
 
     mEffectSlotClusters.emplace_back(std::move(clusterptr));
     return mEffectSlotClusters.back()->data();
@@ -170,7 +163,7 @@ void ContextBase::allocContextProps()
 {
     static constexpr size_t clustersize{std::tuple_size_v<ContextPropsCluster::element_type>};
 
-    TRACE("Increasing allocated context properties to %zu\n",
+    TRACE("Increasing allocated context properties to {}",
         (mContextPropClusters.size()+1) * clustersize);
 
     auto clusterptr = std::make_unique<ContextPropsCluster::element_type>();

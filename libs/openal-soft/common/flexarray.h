@@ -17,7 +17,7 @@ namespace al {
  * trivially destructible.
  */
 template<typename T, size_t alignment, bool = std::is_trivially_destructible<T>::value>
-struct alignas(std::max(alignment, alignof(al::span<T>))) FlexArrayStorage : al::span<T> {
+struct alignas(alignment) FlexArrayStorage : al::span<T> {
     /* NOLINTBEGIN(bugprone-sizeof-expression) clang-tidy warns about the
      * sizeof(T) being suspicious when T is a pointer type, which it will be
      * for flexible arrays of pointers.
@@ -30,7 +30,7 @@ struct alignas(std::max(alignment, alignof(al::span<T>))) FlexArrayStorage : al:
      * arrays store their payloads after the end of the object, which must be
      * the last in the whole parent chain.
      */
-    FlexArrayStorage(size_t size) noexcept(std::is_nothrow_constructible_v<T>)
+    explicit FlexArrayStorage(size_t size) noexcept(std::is_nothrow_constructible_v<T>)
         : al::span<T>{::new(static_cast<void*>(this+1)) T[size], size}
     { }
     /* NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic) */
@@ -41,12 +41,12 @@ struct alignas(std::max(alignment, alignof(al::span<T>))) FlexArrayStorage : al:
 };
 
 template<typename T, size_t alignment>
-struct alignas(std::max(alignment, alignof(al::span<T>))) FlexArrayStorage<T,alignment,false> : al::span<T> {
+struct alignas(alignment) FlexArrayStorage<T,alignment,false> : al::span<T> {
     static constexpr size_t Sizeof(size_t count, size_t base=0u) noexcept
     { return sizeof(FlexArrayStorage) + sizeof(T)*count + base; }
 
     /* NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic) */
-    FlexArrayStorage(size_t size) noexcept(std::is_nothrow_constructible_v<T>)
+    explicit FlexArrayStorage(size_t size) noexcept(std::is_nothrow_constructible_v<T>)
         : al::span<T>{::new(static_cast<void*>(this+1)) T[size], size}
     { }
     /* NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic) */
@@ -73,7 +73,8 @@ struct FlexArray {
     using reference = T&;
     using const_reference = const T&;
 
-    using Storage_t_ = FlexArrayStorage<element_type, std::max(alignof(T), Align)>;
+    static constexpr std::size_t StorageAlign{std::max(alignof(T), Align)};
+    using Storage_t_ = FlexArrayStorage<element_type,std::max(alignof(al::span<T>), StorageAlign)>;
 
     using iterator = typename Storage_t_::iterator;
     using const_iterator = typename Storage_t_::const_iterator;
@@ -87,7 +88,8 @@ struct FlexArray {
     static std::unique_ptr<FlexArray> Create(index_type count)
     { return std::unique_ptr<FlexArray>{new(FamCount{count}) FlexArray{count}}; }
 
-    FlexArray(index_type size) noexcept(std::is_nothrow_constructible_v<Storage_t_,index_type>)
+    explicit FlexArray(index_type size)
+        noexcept(std::is_nothrow_constructible_v<Storage_t_,index_type>)
         : mStore{size}
     { }
     ~FlexArray() = default;

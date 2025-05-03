@@ -78,7 +78,7 @@ struct EchoState final : public EffectState {
 
 void EchoState::deviceUpdate(const DeviceBase *Device, const BufferStorage*)
 {
-    const auto frequency = static_cast<float>(Device->Frequency);
+    const auto frequency = static_cast<float>(Device->mSampleRate);
 
     // Use the next power of 2 for the buffer length, so the tap offsets can be
     // wrapped using a mask instead of a modulo
@@ -100,7 +100,7 @@ void EchoState::update(const ContextBase *context, const EffectSlot *slot,
 {
     auto &props = std::get<EchoProps>(*props_);
     const DeviceBase *device{context->mDevice};
-    const auto frequency = static_cast<float>(device->Frequency);
+    const auto frequency = static_cast<float>(device->mSampleRate);
 
     mDelayTap[0] = std::max(float2uint(std::round(props.Delay*frequency)), 1u);
     mDelayTap[1] = float2uint(std::round(props.LRDelay*frequency)) + mDelayTap[0];
@@ -160,8 +160,8 @@ void EchoState::process(const size_t samplesToDo, const al::span<const FloatBuff
     mOffset = offset;
 
     for(size_t c{0};c < 2;c++)
-        MixSamples({mTempBuffer[c].data(), samplesToDo}, samplesOut, mGains[c].Current.data(),
-            mGains[c].Target.data(), samplesToDo, 0);
+        MixSamples(al::span{mTempBuffer[c]}.first(samplesToDo), samplesOut, mGains[c].Current,
+            mGains[c].Target, samplesToDo, 0);
 }
 
 

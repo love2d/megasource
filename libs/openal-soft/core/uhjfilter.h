@@ -2,11 +2,12 @@
 #define CORE_UHJFILTER_H
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
-#include "almalloc.h"
 #include "alspan.h"
 #include "bufferline.h"
+#include "opthelpers.h"
 
 
 inline constexpr std::size_t UhjLength256{256};
@@ -19,8 +20,8 @@ enum class UhjQualityType : std::uint8_t {
     Default = IIR
 };
 
-extern UhjQualityType UhjDecodeQuality;
-extern UhjQualityType UhjEncodeQuality;
+inline UhjQualityType UhjDecodeQuality{UhjQualityType::Default};
+inline UhjQualityType UhjEncodeQuality{UhjQualityType::Default};
 
 
 struct UhjAllPassFilter {
@@ -29,15 +30,17 @@ struct UhjAllPassFilter {
         std::array<float,2> z{};
     };
     std::array<AllPassState,4> mState;
-
-    void processOne(const al::span<const float,4> coeffs, float x);
-    void process(const al::span<const float,4> coeffs, const al::span<const float> src,
-        const bool update, float *RESTRICT dst);
 };
 
 
-struct UhjEncoderBase {
+struct SIMDALIGN UhjEncoderBase {
+    UhjEncoderBase() = default;
+    UhjEncoderBase(const UhjEncoderBase&) = delete;
+    UhjEncoderBase(UhjEncoderBase&&) = delete;
     virtual ~UhjEncoderBase() = default;
+
+    void operator=(const UhjEncoderBase&) = delete;
+    void operator=(UhjEncoderBase&&) = delete;
 
     virtual std::size_t getDelay() noexcept = 0;
 
@@ -82,7 +85,7 @@ struct UhjEncoder final : public UhjEncoderBase {
      * with an additional +3dB boost).
      */
     void encode(float *LeftOut, float *RightOut, const al::span<const float*const,3> InSamples,
-        const std::size_t SamplesToDo) override;
+        const std::size_t SamplesToDo) final;
 };
 
 struct UhjEncoderIIR final : public UhjEncoderBase {
@@ -110,18 +113,24 @@ struct UhjEncoderIIR final : public UhjEncoderBase {
      * with an additional +3dB boost).
      */
     void encode(float *LeftOut, float *RightOut, const al::span<const float*const,3> InSamples,
-        const std::size_t SamplesToDo) override;
+        const std::size_t SamplesToDo) final;
 };
 
 
-struct DecoderBase {
+struct SIMDALIGN DecoderBase {
     static constexpr std::size_t sMaxPadding{256};
 
     /* For 2-channel UHJ, shelf filters should use these LF responses. */
     static constexpr float sWLFScale{0.661f};
     static constexpr float sXYLFScale{1.293f};
 
+    DecoderBase() = default;
+    DecoderBase(const DecoderBase&) = delete;
+    DecoderBase(DecoderBase&&) = delete;
     virtual ~DecoderBase() = default;
+
+    void operator=(const DecoderBase&) = delete;
+    void operator=(DecoderBase&&) = delete;
 
     virtual void decode(const al::span<float*> samples, const std::size_t samplesToDo,
         const bool updateState) = 0;
@@ -156,7 +165,7 @@ struct UhjDecoder final : public DecoderBase {
      * B-Format decoder, as it needs different shelf filters.
      */
     void decode(const al::span<float*> samples, const std::size_t samplesToDo,
-        const bool updateState) override;
+        const bool updateState) final;
 };
 
 struct UhjDecoderIIR final : public DecoderBase {
@@ -180,7 +189,7 @@ struct UhjDecoderIIR final : public DecoderBase {
     UhjAllPassFilter mFilter1Q;
 
     void decode(const al::span<float*> samples, const std::size_t samplesToDo,
-        const bool updateState) override;
+        const bool updateState) final;
 };
 
 template<std::size_t N>
@@ -204,7 +213,7 @@ struct UhjStereoDecoder final : public DecoderBase {
      * channels, and the third left empty.
      */
     void decode(const al::span<float*> samples, const std::size_t samplesToDo,
-        const bool updateState) override;
+        const bool updateState) final;
 };
 
 struct UhjStereoDecoderIIR final : public DecoderBase {
@@ -223,7 +232,7 @@ struct UhjStereoDecoderIIR final : public DecoderBase {
     UhjAllPassFilter mFilter2S;
 
     void decode(const al::span<float*> samples, const std::size_t samplesToDo,
-        const bool updateState) override;
+        const bool updateState) final;
 };
 
 #endif /* CORE_UHJFILTER_H */

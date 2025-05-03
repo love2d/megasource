@@ -30,13 +30,16 @@ inline constexpr float GainSilenceThreshold{0.00001f}; /* -100dB */
 enum class Resampler : std::uint8_t {
     Point,
     Linear,
-    Cubic,
+    Spline,
+    Gaussian,
     FastBSinc12,
     BSinc12,
     FastBSinc24,
     BSinc24,
+    FastBSinc48,
+    BSinc48,
 
-    Max = BSinc24
+    Max = BSinc48
 };
 
 /* Interpolator state. Kind of a misnomer since the interpolator itself is
@@ -51,7 +54,7 @@ struct BsincState {
      * delta coefficients. Starting at phase index 0, each subsequent phase
      * index follows contiguously.
      */
-    const float *filter;
+    al::span<const float> filter;
 };
 
 struct CubicState {
@@ -59,49 +62,51 @@ struct CubicState {
      * each subsequent phase index follows contiguously.
      */
     al::span<const CubicCoefficients,CubicPhaseCount> filter;
-    CubicState(al::span<const CubicCoefficients,CubicPhaseCount> f) : filter{f} { }
+    explicit CubicState(al::span<const CubicCoefficients,CubicPhaseCount> f) : filter{f} { }
 };
 
 using InterpState = std::variant<std::monostate,CubicState,BsincState>;
 
-using ResamplerFunc = void(*)(const InterpState *state, const float *src, uint frac,
+using ResamplerFunc = void(*)(const InterpState *state, const al::span<const float> src, uint frac,
     const uint increment, const al::span<float> dst);
 
 ResamplerFunc PrepareResampler(Resampler resampler, uint increment, InterpState *state);
 
 
 template<typename TypeTag, typename InstTag>
-void Resample_(const InterpState *state, const float *src, uint frac, const uint increment,
-    const al::span<float> dst);
+void Resample_(const InterpState *state, const al::span<const float> src, uint frac,
+    const uint increment, const al::span<float> dst);
 
 template<typename InstTag>
 void Mix_(const al::span<const float> InSamples, const al::span<FloatBufferLine> OutBuffer,
-    float *CurrentGains, const float *TargetGains, const size_t Counter, const size_t OutPos);
+    const al::span<float> CurrentGains, const al::span<const float> TargetGains,
+    const size_t Counter, const size_t OutPos);
 template<typename InstTag>
-void Mix_(const al::span<const float> InSamples, float *OutBuffer, float &CurrentGain,
-    const float TargetGain, const size_t Counter);
+void Mix_(const al::span<const float> InSamples, const al::span<float> OutBuffer,
+    float &CurrentGain, const float TargetGain, const size_t Counter);
 
 template<typename InstTag>
-void MixHrtf_(const float *InSamples, float2 *AccumSamples, const uint IrSize,
-    const MixHrtfFilter *hrtfparams, const size_t BufferSize);
+void MixHrtf_(const al::span<const float> InSamples, const al::span<float2> AccumSamples,
+    const uint IrSize, const MixHrtfFilter *hrtfparams, const size_t SamplesToDo);
 template<typename InstTag>
-void MixHrtfBlend_(const float *InSamples, float2 *AccumSamples, const uint IrSize,
-    const HrtfFilter *oldparams, const MixHrtfFilter *newparams, const size_t BufferSize);
+void MixHrtfBlend_(const al::span<const float> InSamples, const al::span<float2> AccumSamples,
+    const uint IrSize, const HrtfFilter *oldparams, const MixHrtfFilter *newparams,
+    const size_t SamplesToDo);
 template<typename InstTag>
 void MixDirectHrtf_(const FloatBufferSpan LeftOut, const FloatBufferSpan RightOut,
-    const al::span<const FloatBufferLine> InSamples, float2 *AccumSamples,
-    const al::span<float,BufferLineSize> TempBuf, HrtfChannelState *ChanState, const size_t IrSize,
-    const size_t BufferSize);
+    const al::span<const FloatBufferLine> InSamples, const al::span<float2> AccumSamples,
+    const al::span<float,BufferLineSize> TempBuf, const al::span<HrtfChannelState> ChanState,
+    const size_t IrSize, const size_t SamplesToDo);
 
 /* Vectorized resampler helpers */
 template<size_t N>
-constexpr void InitPosArrays(uint frac, const uint increment, const al::span<uint,N> frac_arr,
-    const al::span<uint,N> pos_arr)
+constexpr void InitPosArrays(uint pos, uint frac, const uint increment,
+    const al::span<uint,N> frac_arr, const al::span<uint,N> pos_arr)
 {
     static_assert(pos_arr.size() == frac_arr.size());
-    pos_arr[0] = 0;
+    pos_arr[0] = pos;
     frac_arr[0] = frac;
-    for(size_t i{1};i < pos_arr.size();i++)
+    for(size_t i{1};i < pos_arr.size();++i)
     {
         const uint frac_tmp{frac_arr[i-1] + increment};
         pos_arr[i] = pos_arr[i-1] + (frac_tmp>>MixerFracBits);

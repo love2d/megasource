@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <string_view>
 
 
 using uint = unsigned int;
@@ -25,6 +26,11 @@ enum Channel : unsigned char {
     TopBackLeft,
     TopBackCenter,
     TopBackRight,
+
+    BottomFrontLeft,
+    BottomFrontRight,
+    BottomBackLeft,
+    BottomBackRight,
 
     Aux0,
     Aux1,
@@ -67,12 +73,13 @@ enum DevFmtChannels : unsigned char {
     DevFmtX61,
     DevFmtX71,
     DevFmtX714,
+    DevFmtX7144,
     DevFmtX3D71,
     DevFmtAmbi3D,
 
     DevFmtChannelsDefault = DevFmtStereo
 };
-inline constexpr size_t MaxOutputChannels{16};
+inline constexpr std::size_t MaxOutputChannels{16};
 
 /* DevFmtType traits, providing the type, etc given a DevFmtType. */
 template<DevFmtType T>
@@ -102,8 +109,8 @@ uint ChannelsFromDevFmt(DevFmtChannels chans, uint ambiorder) noexcept;
 inline uint FrameSizeFromDevFmt(DevFmtChannels chans, DevFmtType type, uint ambiorder) noexcept
 { return ChannelsFromDevFmt(chans, ambiorder) * BytesFromDevFmt(type); }
 
-const char *DevFmtTypeString(DevFmtType type) noexcept;
-const char *DevFmtChannelsString(DevFmtChannels chans) noexcept;
+auto DevFmtTypeString(DevFmtType type) noexcept -> std::string_view;
+auto DevFmtChannelsString(DevFmtChannels chans) noexcept -> std::string_view;
 
 enum class DevAmbiLayout : bool {
     FuMa,

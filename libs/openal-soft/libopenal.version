@@ -188,8 +188,5 @@ alSourcei64vSOFT;
 alSourceQueueBufferLayersSOFT;
 alUnmapBufferSOFT;
 
-# love2d-mod
-Java_org_love2d_android_GameActivity_nativeSetDefaultStreamValues;
-
 local: *;
 };

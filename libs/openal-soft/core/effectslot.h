@@ -4,7 +4,6 @@
 #include <atomic>
 #include <memory>
 
-#include "almalloc.h"
 #include "device.h"
 #include "effects/base.h"
 #include "flexarray.h"
@@ -20,20 +19,18 @@ enum class EffectSlotType : unsigned char {
     None,
     Reverb,
     Chorus,
-    Distortion,
-    Echo,
-    Flanger,
-    FrequencyShifter,
-    VocalMorpher,
-    PitchShifter,
-    RingModulator,
     Autowah,
     Compressor,
+    Convolution,
+    Dedicated,
+    Distortion,
+    Echo,
     Equalizer,
-    EAXReverb,
-    DedicatedLFE,
-    DedicatedDialog,
-    Convolution
+    Flanger,
+    FrequencyShifter,
+    PitchShifter,
+    RingModulator,
+    VocalMorpher,
 };
 
 struct EffectSlotProps {
@@ -46,7 +43,7 @@ struct EffectSlotProps {
 
     al::intrusive_ptr<EffectState> State;
 
-    std::atomic<EffectSlotProps*> next;
+    std::atomic<EffectSlotProps*> next{};
 };
 
 
@@ -67,7 +64,7 @@ struct EffectSlot {
     EffectSlot *Target{nullptr};
 
     EffectSlotType EffectType{EffectSlotType::None};
-    EffectProps mEffectProps{};
+    EffectProps mEffectProps;
     al::intrusive_ptr<EffectState> mEffectState;
 
     float RoomRolloff{0.0f}; /* Added to the source's room rolloff, not multiplied. */
