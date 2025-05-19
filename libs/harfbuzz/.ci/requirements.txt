@@ -245,7 +245,7 @@ pygments==2.16.1 \
     # via gcovr
 
 # The following packages are considered to be unsafe in a requirements file:
-setuptools==73.0.1 \
-    --hash=sha256:b208925fcb9f7af924ed2dc04708ea89791e24bde0d3020b27df0e116088b34e \
-    --hash=sha256:d59a3e788ab7e012ab2c4baed1b376da6366883ee20d7a5fc426816e3d7b1193
+setuptools==78.1.1 \
+    --hash=sha256:c3a9c4211ff4c309edb8b8c4f1cbfa7ae324c4ba9f91ff254e3d305b9fd54561 \
+    --hash=sha256:fcc17fd9cd898242f6b4adfaca46137a9edef687f43e6f78469692a5e70d851d
     # via -r requirements.in
