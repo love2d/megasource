@@ -87,16 +87,18 @@ typedef struct
     // Get absolute mouse coordinates. (x) and (y) are never NULL and set to zero before call.
     SDL_MouseButtonFlags (*GetGlobalMouseState)(float *x, float *y);
 
-    // Platform-specific system mouse transform
-    void (*ApplySystemScale)(void *internal, Uint64 timestamp, SDL_Window *window, SDL_MouseID mouseID, float *x, float *y);
+    // Platform-specific system mouse transform applied in relative mode
+    SDL_MouseMotionTransformCallback ApplySystemScale;
     void *system_scale_data;
+
+    // User-defined mouse input transform applied in relative mode
+    SDL_MouseMotionTransformCallback InputTransform;
+    void *input_transform_data;
 
     // integer mode data
     Uint8 integer_mode_flags; // 1 to enable mouse quantization, 2 to enable wheel quantization
     float integer_mode_residual_motion_x;
     float integer_mode_residual_motion_y;
-    float integer_mode_residual_scroll_x;
-    float integer_mode_residual_scroll_y;
 
     // Data common to all mice
     SDL_Window *focus;
@@ -105,12 +107,14 @@ typedef struct
     float x_accu;
     float y_accu;
     float last_x, last_y; // the last reported x and y coordinates
+    float residual_scroll_x;
+    float residual_scroll_y;
     double click_motion_x;
     double click_motion_y;
     bool has_position;
     bool relative_mode;
     bool relative_mode_warp_motion;
-    bool relative_mode_cursor_visible;
+    bool relative_mode_hide_cursor;
     bool relative_mode_center;
     bool warp_emulation_hint;
     bool warp_emulation_active;
@@ -144,7 +148,7 @@ typedef struct
     SDL_Cursor *cursors;
     SDL_Cursor *def_cursor;
     SDL_Cursor *cur_cursor;
-    bool cursor_shown;
+    bool cursor_visible;
 
     // Driver-dependent data.
     void *internal;
@@ -165,8 +169,14 @@ extern void SDL_AddMouse(SDL_MouseID mouseID, const char *name, bool send_event)
 // A mouse has been removed from the system
 extern void SDL_RemoveMouse(SDL_MouseID mouseID, bool send_event);
 
+// Set or update the name of a mouse instance.
+extern void SDL_SetMouseName(SDL_MouseID mouseID, const char *name);
+
 // Get the mouse state structure
 extern SDL_Mouse *SDL_GetMouse(void);
+
+// Set the default mouse cursor
+extern void SDL_RedrawCursor(void);
 
 // Set the default mouse cursor
 extern void SDL_SetDefaultCursor(SDL_Cursor *cursor);

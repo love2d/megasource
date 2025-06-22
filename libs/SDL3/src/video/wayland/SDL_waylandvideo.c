@@ -24,6 +24,7 @@
 #ifdef SDL_VIDEO_DRIVER_WAYLAND
 
 #include "../../core/linux/SDL_system_theme.h"
+#include "../../core/linux/SDL_progressbar.h"
 #include "../../events/SDL_events_c.h"
 
 #include "SDL_waylandclipboard.h"
@@ -65,6 +66,7 @@
 #include "xdg-shell-client-protocol.h"
 #include "xdg-toplevel-icon-v1-client-protocol.h"
 #include "color-management-v1-client-protocol.h"
+#include "pointer-warp-v1-client-protocol.h"
 
 #ifdef HAVE_LIBDECOR_H
 #include <libdecor.h>
@@ -446,9 +448,6 @@ static void Wayland_DeleteDevice(SDL_VideoDevice *device)
         WAYLAND_wl_display_disconnect(data->display);
         SDL_ClearProperty(SDL_GetGlobalProperties(), SDL_PROP_GLOBAL_VIDEO_WAYLAND_WL_DISPLAY_POINTER);
     }
-    if (device->wakeup_lock) {
-        SDL_DestroyMutex(device->wakeup_lock);
-    }
     SDL_free(data);
     SDL_free(device);
     SDL_WAYLAND_UnloadSymbols();
@@ -495,6 +494,9 @@ static bool Wayland_IsPreferred(struct wl_display *display)
 
     wl_registry_destroy(registry);
 
+    if (!preferred_data.has_fifo_v1) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_VIDEO, "This compositor lacks support for the fifo-v1 protocol; falling back to XWayland for GPU performance reasons (set SDL_VIDEO_DRIVER=wayland to override)");
+    }
     return preferred_data.has_fifo_v1;
 }
 
@@ -502,7 +504,6 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
 {
     SDL_VideoDevice *device;
     SDL_VideoData *data;
-    struct SDL_WaylandInput *input;
     struct wl_display *display = SDL_GetPointerProperty(SDL_GetGlobalProperties(),
                                                  SDL_PROP_GLOBAL_VIDEO_WAYLAND_WL_DISPLAY_POINTER, NULL);
     bool display_is_external = !!display;
@@ -549,32 +550,16 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
         return NULL;
     }
 
-    input = SDL_calloc(1, sizeof(*input));
-    if (!input) {
-        SDL_free(data);
-        if (!display_is_external) {
-            WAYLAND_wl_display_disconnect(display);
-        }
-        SDL_WAYLAND_UnloadSymbols();
-        return NULL;
-    }
-
-    input->display = data;
-    input->sx_w = wl_fixed_from_int(0);
-    input->sy_w = wl_fixed_from_int(0);
-    input->xkb.current_group = XKB_GROUP_INVALID;
-
     data->initializing = true;
     data->display = display;
-    data->input = input;
     data->display_externally_owned = display_is_external;
     data->scale_to_display_enabled = SDL_GetHintBoolean(SDL_HINT_VIDEO_WAYLAND_SCALE_TO_DISPLAY, false);
+    WAYLAND_wl_list_init(&data->seat_list);
     WAYLAND_wl_list_init(&external_window_list);
 
     // Initialize all variables that we clean on shutdown
     device = SDL_calloc(1, sizeof(SDL_VideoDevice));
     if (!device) {
-        SDL_free(input);
         SDL_free(data);
         if (!display_is_external) {
             WAYLAND_wl_display_disconnect(display);
@@ -589,7 +574,6 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
     }
 
     device->internal = data;
-    device->wakeup_lock = SDL_CreateMutex();
 
     // Set the function pointers
     device->VideoInit = Wayland_VideoInit;
@@ -643,9 +627,13 @@ static SDL_VideoDevice *Wayland_CreateDevice(bool require_preferred_protocols)
     device->DestroyWindow = Wayland_DestroyWindow;
     device->SetWindowHitTest = Wayland_SetWindowHitTest;
     device->FlashWindow = Wayland_FlashWindow;
+#ifdef SDL_USE_LIBDBUS
+    device->ApplyWindowProgress = DBUS_ApplyWindowProgress;
+#endif // SDL_USE_LIBDBUS
     device->HasScreenKeyboardSupport = Wayland_HasScreenKeyboardSupport;
     device->ShowWindowSystemMenu = Wayland_ShowWindowSystemMenu;
     device->SyncWindow = Wayland_SyncWindow;
+    device->SetWindowFocusable = Wayland_SetWindowFocusable;
 
 #ifdef SDL_USE_LIBDBUS
     if (SDL_SystemTheme_Init())
@@ -1071,6 +1059,9 @@ static void display_handle_done(void *data,
         internal->placeholder.current_orientation = internal->orientation;
         internal->placeholder.internal = internal;
 
+        internal->placeholder.props = SDL_CreateProperties();
+        SDL_SetPointerProperty(internal->placeholder.props, SDL_PROP_DISPLAY_WAYLAND_WL_OUTPUT_POINTER, internal->output);
+
         // During initialization, the displays will be added after enumeration is complete.
         if (!video->initializing) {
             internal->display = SDL_AddVideoDisplay(&internal->placeholder, true);
@@ -1264,16 +1255,15 @@ static void display_handle_global(void *data, struct wl_registry *registry, uint
     } else if (SDL_strcmp(interface, "wl_output") == 0) {
         Wayland_add_display(d, id, SDL_min(version, SDL_WL_OUTPUT_VERSION));
     } else if (SDL_strcmp(interface, "wl_seat") == 0) {
-        d->input->seat = wl_registry_bind(d->registry, id, &wl_seat_interface, SDL_min(SDL_WL_SEAT_VERSION, version));
-        Wayland_input_initialize_seat(d);
+        struct wl_seat *seat = wl_registry_bind(d->registry, id, &wl_seat_interface, SDL_min(SDL_WL_SEAT_VERSION, version));
+        Wayland_DisplayCreateSeat(d, seat, id);
     } else if (SDL_strcmp(interface, "xdg_wm_base") == 0) {
-        d->shell.xdg = wl_registry_bind(d->registry, id, &xdg_wm_base_interface, SDL_min(version, 6));
+        d->shell.xdg = wl_registry_bind(d->registry, id, &xdg_wm_base_interface, SDL_min(version, 7));
         xdg_wm_base_add_listener(d->shell.xdg, &shell_listener_xdg, NULL);
     } else if (SDL_strcmp(interface, "wl_shm") == 0) {
         d->shm = wl_registry_bind(registry, id, &wl_shm_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_relative_pointer_manager_v1") == 0) {
         d->relative_pointer_manager = wl_registry_bind(d->registry, id, &zwp_relative_pointer_manager_v1_interface, 1);
-        Wayland_input_init_relative_pointer(d);
     } else if (SDL_strcmp(interface, "zwp_pointer_constraints_v1") == 0) {
         d->pointer_constraints = wl_registry_bind(d->registry, id, &zwp_pointer_constraints_v1_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_keyboard_shortcuts_inhibit_manager_v1") == 0) {
@@ -1283,18 +1273,18 @@ static void display_handle_global(void *data, struct wl_registry *registry, uint
     } else if (SDL_strcmp(interface, "xdg_activation_v1") == 0) {
         d->activation_manager = wl_registry_bind(d->registry, id, &xdg_activation_v1_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_text_input_manager_v3") == 0) {
-        Wayland_create_text_input_manager(d, id);
+        Wayland_DisplayCreateTextInputManager(d, id);
     } else if (SDL_strcmp(interface, "wl_data_device_manager") == 0) {
         d->data_device_manager = wl_registry_bind(d->registry, id, &wl_data_device_manager_interface, SDL_min(3, version));
-        Wayland_create_data_device(d);
+        Wayland_DisplayInitDataDeviceManager(d);
     } else if (SDL_strcmp(interface, "zwp_primary_selection_device_manager_v1") == 0) {
         d->primary_selection_device_manager = wl_registry_bind(d->registry, id, &zwp_primary_selection_device_manager_v1_interface, 1);
-        Wayland_create_primary_selection_device(d);
+        Wayland_DisplayInitPrimarySelectionDeviceManager(d);
     } else if (SDL_strcmp(interface, "zxdg_decoration_manager_v1") == 0) {
         d->decoration_manager = wl_registry_bind(d->registry, id, &zxdg_decoration_manager_v1_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_tablet_manager_v2") == 0) {
         d->tablet_manager = wl_registry_bind(d->registry, id, &zwp_tablet_manager_v2_interface, 1);
-        Wayland_input_init_tablet_support(d->input, d->tablet_manager);
+        Wayland_DisplayInitTabletManager(d);
     } else if (SDL_strcmp(interface, "zxdg_output_manager_v1") == 0) {
         version = SDL_min(version, 3); // Versions 1 through 3 are supported.
         d->xdg_output_manager = wl_registry_bind(d->registry, id, &zxdg_output_manager_v1_interface, version);
@@ -1305,14 +1295,10 @@ static void display_handle_global(void *data, struct wl_registry *registry, uint
         d->fractional_scale_manager = wl_registry_bind(d->registry, id, &wp_fractional_scale_manager_v1_interface, 1);
     } else if (SDL_strcmp(interface, "zwp_input_timestamps_manager_v1") == 0) {
         d->input_timestamps_manager = wl_registry_bind(d->registry, id, &zwp_input_timestamps_manager_v1_interface, 1);
-        if (d->input) {
-            Wayland_RegisterTimestampListeners(d->input);
-        }
+        Wayland_DisplayInitInputTimestampManager(d);
     } else if (SDL_strcmp(interface, "wp_cursor_shape_manager_v1") == 0) {
         d->cursor_shape_manager = wl_registry_bind(d->registry, id, &wp_cursor_shape_manager_v1_interface, 1);
-        if (d->input) {
-            Wayland_CreateCursorShapeDevice(d->input);
-        }
+        Wayland_DisplayInitCursorShapeManager(d);
     } else if (SDL_strcmp(interface, "zxdg_exporter_v2") == 0) {
         d->zxdg_exporter_v2 = wl_registry_bind(d->registry, id, &zxdg_exporter_v2_interface, 1);
     } else if (SDL_strcmp(interface, "xdg_wm_dialog_v1") == 0) {
@@ -1326,6 +1312,8 @@ static void display_handle_global(void *data, struct wl_registry *registry, uint
     } else if (SDL_strcmp(interface, "wp_color_manager_v1") == 0) {
         d->wp_color_manager_v1 = wl_registry_bind(d->registry, id, &wp_color_manager_v1_interface, 1);
         Wayland_InitColorManager(d);
+    } else if (SDL_strcmp(interface, "wp_pointer_warp_v1") == 0) {
+        d->wp_pointer_warp_v1 = wl_registry_bind(d->registry, id, &wp_pointer_warp_v1_interface, 1);
     }
 }
 
@@ -1333,7 +1321,7 @@ static void display_remove_global(void *data, struct wl_registry *registry, uint
 {
     SDL_VideoData *d = data;
 
-    // We don't get an interface, just an ID, so assume it's a wl_output :shrug:
+    // We don't get an interface, just an ID, so check outputs and seats.
     for (int i = 0; i < d->output_count; ++i) {
         SDL_DisplayData *disp = d->output_list[i];
         if (disp->registry_id == id) {
@@ -1344,7 +1332,21 @@ static void display_remove_global(void *data, struct wl_registry *registry, uint
             }
 
             d->output_count--;
-            break;
+            return;
+        }
+    }
+
+    struct SDL_WaylandSeat *seat, *temp;
+    wl_list_for_each_safe (seat, temp, &d->seat_list, link)
+    {
+        if (seat->registry_id == id) {
+            if (seat->keyboard.wl_keyboard) {
+                SDL_RemoveKeyboard(seat->keyboard.sdl_id, true);
+            }
+            if (seat->keyboard.wl_keyboard) {
+                SDL_RemoveMouse(seat->pointer.sdl_id, true);
+            }
+            Wayland_SeatDestroy(seat, true);
         }
     }
 }
@@ -1484,6 +1486,7 @@ static bool Wayland_GetDisplayBounds(SDL_VideoDevice *_this, SDL_VideoDisplay *d
 static void Wayland_VideoCleanup(SDL_VideoDevice *_this)
 {
     SDL_VideoData *data = _this->internal;
+    SDL_WaylandSeat *seat, *tmp;
     int i;
 
     Wayland_FiniMouse(data);
@@ -1494,7 +1497,9 @@ static void Wayland_VideoCleanup(SDL_VideoDevice *_this)
     }
     SDL_free(data->output_list);
 
-    Wayland_display_destroy_input(data);
+    wl_list_for_each_safe (seat, tmp, &data->seat_list, link) {
+        Wayland_SeatDestroy(seat, false);
+    }
 
     if (data->pointer_constraints) {
         zwp_pointer_constraints_v1_destroy(data->pointer_constraints);
@@ -1616,6 +1621,11 @@ static void Wayland_VideoCleanup(SDL_VideoDevice *_this)
     if (data->wp_color_manager_v1) {
         wp_color_manager_v1_destroy(data->wp_color_manager_v1);
         data->wp_color_manager_v1 = NULL;
+    }
+
+    if (data->wp_pointer_warp_v1) {
+        wp_pointer_warp_v1_destroy(data->wp_pointer_warp_v1);
+        data->wp_pointer_warp_v1 = NULL;
     }
 
     if (data->compositor) {

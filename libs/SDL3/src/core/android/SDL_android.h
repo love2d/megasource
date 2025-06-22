@@ -55,6 +55,8 @@ bool Android_WaitLifecycleEvent(SDL_AndroidLifecycleEvent *event, Sint64 timeout
 void Android_LockActivityMutex(void);
 void Android_UnlockActivityMutex(void);
 
+void Android_SetAllowRecreateActivity(bool enabled);
+
 // Interface from the SDL library into the Android Java activity
 extern void Android_JNI_SetActivityTitle(const char *title);
 extern void Android_JNI_SetWindowStyle(bool fullscreen);
@@ -149,7 +151,7 @@ bool SDL_IsAndroidTablet(void);
 bool SDL_IsAndroidTV(void);
 
 // File Dialogs
-bool Android_JNI_OpenFileDialog(SDL_DialogFileCallback callback, void* userdata,
+bool Android_JNI_OpenFileDialog(SDL_DialogFileCallback callback, void *userdata,
     const SDL_DialogFileFilter *filters, int nfilters, bool forwrite,
     bool multiple);
 

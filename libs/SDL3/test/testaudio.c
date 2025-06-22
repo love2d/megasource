@@ -718,16 +718,15 @@ static Texture *CreateTexture(const char *fname)
     if (!tex) {
         SDL_Log("Out of memory!");
     } else {
-        int texw, texh;
-        tex->texture = LoadTexture(state->renderers[0], fname, true, &texw, &texh);
+        tex->texture = LoadTexture(state->renderers[0], fname, true);
         if (!tex->texture) {
             SDL_Log("Failed to load '%s': %s", fname, SDL_GetError());
             SDL_free(tex);
             return NULL;
         }
         SDL_SetTextureBlendMode(tex->texture, SDL_BLENDMODE_BLEND);
-        tex->w = (float) texw;
-        tex->h = (float) texh;
+        tex->w = (float)tex->texture->w;
+        tex->h = (float)tex->texture->h;
     }
     return tex;
 }
@@ -1060,6 +1059,10 @@ static void WindowResized(const int newwinw, const int newwinh)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     int i;
+
+    char version[32];  /* use SDL's version number, since this test program is part of SDL's sources. */
+    SDL_snprintf(version, sizeof (version), "%d.%d.%d", SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_MICRO_VERSION);
+    SDL_SetAppMetadata("SDL testaudio", version, "org.libsdl.testaudio");
 
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     if (!state) {

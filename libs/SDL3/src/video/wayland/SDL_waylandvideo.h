@@ -32,7 +32,7 @@
 #include "../../core/linux/SDL_ime.h"
 
 struct xkb_context;
-struct SDL_WaylandInput;
+struct SDL_WaylandSeat;
 
 typedef struct
 {
@@ -56,7 +56,6 @@ struct SDL_VideoData
     struct wl_shm *shm;
     SDL_WaylandCursorTheme *cursor_themes;
     int num_cursor_themes;
-    struct wl_pointer *pointer;
     struct
     {
         struct xdg_wm_base *xdg;
@@ -66,6 +65,7 @@ struct SDL_VideoData
     } shell;
     struct zwp_relative_pointer_manager_v1 *relative_pointer_manager;
     struct zwp_pointer_constraints_v1 *pointer_constraints;
+    struct wp_pointer_warp_v1 *wp_pointer_warp_v1;
     struct wp_cursor_shape_manager_v1 *cursor_shape_manager;
     struct wl_data_device_manager *data_device_manager;
     struct zwp_primary_selection_device_manager_v1 *primary_selection_device_manager;
@@ -87,14 +87,17 @@ struct SDL_VideoData
     struct zwp_tablet_manager_v2 *tablet_manager;
 
     struct xkb_context *xkb_context;
-    struct SDL_WaylandInput *input;
+
+    struct wl_list seat_list;
+    struct SDL_WaylandSeat *last_implicit_grab_seat;
+    struct SDL_WaylandSeat *last_incoming_data_offer_seat;
+    struct SDL_WaylandSeat *last_incoming_primary_selection_seat;
+
     SDL_DisplayData **output_list;
     int output_count;
     int output_max;
 
-    int relative_mouse_mode;
     bool display_externally_owned;
-
     bool scale_to_display_enabled;
 };
 

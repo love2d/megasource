@@ -40,6 +40,10 @@
 #define SDL_JOYSTICK_HIDAPI_XBOXONE
 #define SDL_JOYSTICK_HIDAPI_SHIELD
 #define SDL_JOYSTICK_HIDAPI_STEAM_HORI
+#define SDL_JOYSTICK_HIDAPI_LG4FF
+#define SDL_JOYSTICK_HIDAPI_8BITDO
+#define SDL_JOYSTICK_HIDAPI_FLYDIGI
+#define SDL_JOYSTICK_HIDAPI_GIP
 
 // Joystick capability definitions
 #define SDL_JOYSTICK_CAP_MONO_LED       0x00000001
@@ -139,6 +143,7 @@ typedef struct SDL_HIDAPI_DeviceDriver
 // HIDAPI device support
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverCombined;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverGameCube;
+extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverGIP;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverJoyCons;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverLuna;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverNintendoClassic;
@@ -157,6 +162,9 @@ extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverXbox360;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverXbox360W;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverXboxOne;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverSteamHori;
+extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverLg4ff;
+extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_Driver8BitDo;
+extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverFlydigi;
 
 // Return true if a HID device is present and supported as a joystick of the given type
 extern bool HIDAPI_IsDeviceTypePresent(SDL_GamepadType type);

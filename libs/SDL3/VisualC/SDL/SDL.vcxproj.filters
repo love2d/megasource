@@ -82,6 +82,9 @@
     <Filter Include="haptic\windows">
       <UniqueIdentifier>{ebc2fca3-3c26-45e3-815e-3e0581d5e226}</UniqueIdentifier>
     </Filter>
+    <Filter Include="haptic\hidapi">
+      <UniqueIdentifier>{06DB01C0-65B5-4DE7-8ADC-C0B0CA3A1E69}</UniqueIdentifier>
+    </Filter>
     <Filter Include="haptic\dummy">
       <UniqueIdentifier>{47c445a2-7014-4e15-9660-7c89a27dddcf}</UniqueIdentifier>
     </Filter>
@@ -534,9 +537,6 @@
     <ClInclude Include="..\..\src\events\SDL_events_c.h">
       <Filter>events</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\events\SDL_eventfilter_c.h">
-      <Filter>events</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\events\SDL_keyboard_c.h">
       <Filter>events</Filter>
     </ClInclude>
@@ -562,6 +562,9 @@
       <Filter>events</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\haptic\SDL_syshaptic.h">
+      <Filter>haptic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\haptic\SDL_hidapihaptic.h">
       <Filter>haptic</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\haptic\SDL_haptic_c.h">
@@ -620,6 +623,9 @@
     </ClInclude>
     <ClInclude Include="..\..\src\haptic\windows\SDL_windowshaptic_c.h">
       <Filter>haptic\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\haptic\hidapi\SDL_hidapihaptic_c.h">
+      <Filter>haptic\hidapi</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\joystick\hidapi\SDL_hidapijoystick_c.h">
       <Filter>joystick\hidapi</Filter>
@@ -953,6 +959,7 @@
     <ClInclude Include="..\..\include\SDL3\SDL_storage.h" />
     <ClInclude Include="..\..\include\SDL3\SDL_time.h" />
     <ClInclude Include="..\..\src\events\SDL_categories_c.h" />
+    <ClInclude Include="..\..\src\events\SDL_eventwatch_c.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\audio\wasapi\SDL_wasapi.c" />
@@ -1040,7 +1047,7 @@
     <ClCompile Include="..\..\src\core\SDL_core_unsupported.c">
       <Filter>core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\core\windows\SDL_gameinput.c">
+    <ClCompile Include="..\..\src\core\windows\SDL_gameinput.cpp">
       <Filter>core\windows</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\core\windows\SDL_hid.c">
@@ -1077,9 +1084,6 @@
       <Filter>events</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\events\SDL_events.c">
-      <Filter>events</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\events\SDL_eventfilter.c">
       <Filter>events</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\events\SDL_keyboard.c">
@@ -1163,19 +1167,34 @@
     <ClCompile Include="..\..\src\haptic\windows\SDL_windowshaptic.c">
       <Filter>haptic\windows</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\haptic\hidapi\SDL_hidapihaptic.c">
+      <Filter>haptic\hidapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\haptic\hidapi\SDL_hidapihaptic_lg4ff.c">
+      <Filter>haptic\hidapi</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\haptic\dummy\SDL_syshaptic.c">
       <Filter>haptic\dummy</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\dummy\SDL_sysjoystick.c">
       <Filter>joystick\dummy</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\joystick\gdk\SDL_gameinputjoystick.c">
+    <ClCompile Include="..\..\src\joystick\gdk\SDL_gameinputjoystick.cpp">
       <Filter>joystick\gdk</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_8bitdo.c">
+      <Filter>joystick\hidapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_flydigi.c">
+      <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_combined.c">
       <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_gamecube.c">
+      <Filter>joystick\hidapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_gip.c">
       <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_luna.c">
@@ -1221,6 +1240,9 @@
       <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_xboxone.c">
+      <Filter>joystick\hidapi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_lg4ff.c">
       <Filter>joystick\hidapi</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapijoystick.c">
@@ -1346,7 +1368,7 @@
     <ClCompile Include="..\..\src\video\windows\SDL_windowskeyboard.c">
       <Filter>video\windows</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\video\windows\SDL_windowsgameinput.c">
+    <ClCompile Include="..\..\src\video\windows\SDL_windowsgameinput.cpp">
       <Filter>video\windows</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\video\windows\SDL_windowsmessagebox.c">
@@ -1585,11 +1607,12 @@
     <ClCompile Include="..\..\src\storage\generic\SDL_genericstorage.c" />
     <ClCompile Include="..\..\src\storage\steam\SDL_steamstorage.c" />
     <ClCompile Include="..\..\src\storage\SDL_storage.c" />
+    <ClCompile Include="..\..\src\events\SDL_eventwatch.c" />
+    <ClCompile Include="..\..\src\core\windows\pch_cpp.cpp">
+      <Filter>core\windows</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\src\core\windows\version.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="..\..\src\stdlib\SDL_mslibc_x64.masm" />
   </ItemGroup>
 </Project>
