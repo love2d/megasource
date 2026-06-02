@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -213,6 +213,10 @@ static void loop(void *arg)
             break;
 
         case SDL_EVENT_KEY_DOWN:
+            if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
+                loop_data->done = true;
+                break;
+            }
             if (event.key.key == SDLK_C) {
                 int x, y, w, h;
                 SDL_GetWindowPosition(window, &x, &y);
@@ -341,6 +345,11 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    while (active) {
+        Object *next = active->next;
+        SDL_free(active);
+        active = next;
+    }
     SDL_DestroyRenderer(loop_data.renderer);
     SDL_DestroyWindow(window);
 

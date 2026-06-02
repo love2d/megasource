@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -31,10 +31,24 @@
 
 typedef struct SDL_CursorData SDL_CursorData;
 
+struct SDL_Cursor;
+
+typedef struct
+{
+    Uint64 last_update;
+    int num_frames;
+    int current_frame;
+    struct SDL_Cursor **frames;
+    Uint32 *durations;
+} SDL_CursorAnimation;
+
 struct SDL_Cursor
 {
-    struct SDL_Cursor *next;
+    SDL_CursorAnimation *animation;
+
     SDL_CursorData *internal;
+
+    struct SDL_Cursor *next;
 };
 
 typedef struct
@@ -59,6 +73,9 @@ typedef struct
 {
     // Create a cursor from a surface
     SDL_Cursor *(*CreateCursor)(SDL_Surface *surface, int hot_x, int hot_y);
+
+    // Create an animated cursor from a sequence of surfaces
+    SDL_Cursor *(*CreateAnimatedCursor)(SDL_CursorFrameInfo *frames, int frame_count, int hot_x, int hot_y);
 
     // Create a system cursor
     SDL_Cursor *(*CreateSystemCursor)(SDL_SystemCursor id);
@@ -164,13 +181,10 @@ extern void SDL_PostInitMouse(void);
 extern bool SDL_IsMouse(Uint16 vendor, Uint16 product);
 
 // A mouse has been added to the system
-extern void SDL_AddMouse(SDL_MouseID mouseID, const char *name, bool send_event);
+extern void SDL_AddMouse(SDL_MouseID mouseID, const char *name);
 
 // A mouse has been removed from the system
-extern void SDL_RemoveMouse(SDL_MouseID mouseID, bool send_event);
-
-// Set or update the name of a mouse instance.
-extern void SDL_SetMouseName(SDL_MouseID mouseID, const char *name);
+extern void SDL_RemoveMouse(SDL_MouseID mouseID);
 
 // Get the mouse state structure
 extern SDL_Mouse *SDL_GetMouse(void);
@@ -183,6 +197,9 @@ extern void SDL_SetDefaultCursor(SDL_Cursor *cursor);
 
 // Get the preferred default system cursor
 extern SDL_SystemCursor SDL_GetDefaultSystemCursor(void);
+
+// Update the current cursor animation if needed
+extern void SDL_UpdateCursorAnimation(void);
 
 // Set the mouse focus window
 extern void SDL_SetMouseFocus(SDL_Window *window);
@@ -208,7 +225,7 @@ extern void SDL_PerformWarpMouseInWindow(SDL_Window *window, float x, float y, b
 // Relative mouse mode
 extern bool SDL_SetRelativeMouseMode(bool enabled);
 extern bool SDL_GetRelativeMouseMode(void);
-extern void SDL_UpdateRelativeMouseMode(void);
+extern bool SDL_UpdateRelativeMouseMode(void);
 extern void SDL_DisableMouseWarpEmulation(void);
 
 // TODO RECONNECT: Set mouse state to "zero"

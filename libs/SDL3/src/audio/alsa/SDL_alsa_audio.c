@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -82,6 +82,7 @@ static int (*ALSA_snd_pcm_nonblock)(snd_pcm_t *, int);
 static int (*ALSA_snd_pcm_wait)(snd_pcm_t *, int);
 static int (*ALSA_snd_pcm_sw_params_set_avail_min)(snd_pcm_t *, snd_pcm_sw_params_t *, snd_pcm_uframes_t);
 static int (*ALSA_snd_pcm_reset)(snd_pcm_t *);
+static snd_pcm_state_t (*ALSA_snd_pcm_state)(snd_pcm_t *);
 static int (*ALSA_snd_device_name_hint)(int, const char *, void ***);
 static char *(*ALSA_snd_device_name_get_hint)(const void *, const char *);
 static int (*ALSA_snd_device_name_free_hint)(void **);
@@ -98,7 +99,6 @@ static void (*ALSA_snd_pcm_info_set_device)(snd_pcm_info_t *, unsigned int);
 static void (*ALSA_snd_pcm_info_set_subdevice)(snd_pcm_info_t *, unsigned int);
 static void (*ALSA_snd_pcm_info_set_stream)(snd_pcm_info_t *, snd_pcm_stream_t);
 static int (*ALSA_snd_ctl_pcm_info)(snd_ctl_t *, snd_pcm_info_t *);
-static unsigned int (*ALSA_snd_pcm_info_get_subdevices_count)(const snd_pcm_info_t *);
 static const char *(*ALSA_snd_ctl_card_info_get_id)(const snd_ctl_card_info_t *);
 static const char *(*ALSA_snd_pcm_info_get_name)(const snd_pcm_info_t *);
 static const char *(*ALSA_snd_pcm_info_get_subdevice_name)(const snd_pcm_info_t *);
@@ -172,6 +172,7 @@ static bool load_alsa_syms(void)
     SDL_ALSA_SYM(snd_pcm_wait);
     SDL_ALSA_SYM(snd_pcm_sw_params_set_avail_min);
     SDL_ALSA_SYM(snd_pcm_reset);
+    SDL_ALSA_SYM(snd_pcm_state);
     SDL_ALSA_SYM(snd_device_name_hint);
     SDL_ALSA_SYM(snd_device_name_get_hint);
     SDL_ALSA_SYM(snd_device_name_free_hint);
@@ -207,6 +208,13 @@ static bool load_alsa_syms(void)
 #undef SDL_ALSA_SYM
 
 #ifdef SDL_AUDIO_DRIVER_ALSA_DYNAMIC
+
+SDL_ELF_NOTE_DLOPEN(
+    "audio-libalsa",
+    "Support for audio through libalsa",
+    SDL_ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED,
+    SDL_AUDIO_DRIVER_ALSA_DYNAMIC
+)
 
 static void UnloadALSALibrary(void)
 {
@@ -346,6 +354,20 @@ static char *get_pcm_str(void *handle)
     return pcm_str;
 }
 
+static int RecoverALSADevice(snd_pcm_t *pcm, int errnum)
+{
+    const snd_pcm_state_t prerecovery = ALSA_snd_pcm_state(pcm);
+    const int status = ALSA_snd_pcm_recover(pcm, errnum, 0);  // !!! FIXME: third parameter is non-zero to prevent libasound from printing error messages. Should we do that?
+    if (status == 0) {
+        const snd_pcm_state_t postrecovery = ALSA_snd_pcm_state(pcm);
+        if ((prerecovery == SND_PCM_STATE_XRUN) && (postrecovery == SND_PCM_STATE_PREPARED)) {
+            ALSA_snd_pcm_start(pcm);  // restart the device if it stopped due to an overrun or underrun.
+        }
+    }
+    return status;
+}
+
+
 // This function waits until it is possible to write a full sound buffer
 static bool ALSA_WaitDevice(SDL_AudioDevice *device)
 {
@@ -356,7 +378,7 @@ static bool ALSA_WaitDevice(SDL_AudioDevice *device)
     while (!SDL_GetAtomicInt(&device->shutdown)) {
         const int rc = ALSA_snd_pcm_avail(device->hidden->pcm);
         if (rc < 0) {
-            const int status = ALSA_snd_pcm_recover(device->hidden->pcm, rc, 0);
+            const int status = RecoverALSADevice(device->hidden->pcm, rc);
             if (status < 0) {
                 // Hmm, not much we can do - abort
                 SDL_LogError(SDL_LOG_CATEGORY_AUDIO, "ALSA wait failed (unrecoverable): %s", ALSA_snd_strerror(rc));
@@ -384,7 +406,7 @@ static bool ALSA_PlayDevice(SDL_AudioDevice *device, const Uint8 *buffer, int bu
         SDL_assert(rc != 0);  // assuming this can't happen if we used snd_pcm_wait and queried for available space.
         if (rc < 0) {
             SDL_assert(rc != -EAGAIN);  // assuming this can't happen if we used snd_pcm_wait and queried for available space. snd_pcm_recover won't handle it!
-            const int status = ALSA_snd_pcm_recover(device->hidden->pcm, rc, 0);
+            const int status = RecoverALSADevice(device->hidden->pcm, rc);
             if (status < 0) {
                 // Hmm, not much we can do - abort
                 SDL_LogError(SDL_LOG_CATEGORY_AUDIO, "ALSA write failed (unrecoverable): %s", ALSA_snd_strerror(rc));
@@ -439,7 +461,7 @@ static int ALSA_RecordDevice(SDL_AudioDevice *device, void *buffer, int buflen)
     SDL_assert(rc != -EAGAIN);  // assuming this can't happen if we used snd_pcm_wait and queried for available space. snd_pcm_recover won't handle it!
 
     if (rc < 0) {
-        const int status = ALSA_snd_pcm_recover(device->hidden->pcm, rc, 0);
+        const int status = RecoverALSADevice(device->hidden->pcm, rc);
         if (status < 0) {
             // Hmm, not much we can do - abort
             SDL_LogError(SDL_LOG_CATEGORY_AUDIO, "ALSA read failed (unrecoverable): %s", ALSA_snd_strerror(rc));
@@ -462,8 +484,6 @@ static void ALSA_CloseDevice(SDL_AudioDevice *device)
 {
     if (device->hidden) {
         if (device->hidden->pcm) {
-            // Wait for the submitted audio to drain. ALSA_snd_pcm_drop() can hang, so don't use that.
-            SDL_Delay(((device->sample_frames * 1000) / device->spec.freq) * 2);
             ALSA_snd_pcm_close(device->hidden->pcm);
         }
         SDL_free(device->hidden->mixbuf);
@@ -652,7 +672,7 @@ static void swizzle_map_compute_alsa_subscan(const struct ALSA_pcm_cfg_ctx *ctx,
     }
 }
 
-// XXX: this must stay playback/recording symetric.
+// XXX: this must stay playback/recording symmetric.
 static void swizzle_map_compute(const struct ALSA_pcm_cfg_ctx *ctx, int *swizzle_map, bool *needs_swizzle)
 {
     *needs_swizzle = false;
@@ -1001,7 +1021,7 @@ static int ALSA_pcm_cfg_hw_chans_n_scan(struct ALSA_pcm_cfg_ctx *ctx, unsigned i
             SDL_SetError("ALSA: Couldn't set the period size: %s", ALSA_snd_strerror(status));
             return -1;
         }
-        // let approximate the minimun number of periods per buffer (we target a double buffer)
+        // let approximate the minimum number of periods per buffer (we target a double buffer)
         ctx->periods = 2;
         status = ALSA_snd_pcm_hw_params_set_periods_min(ctx->device->hidden->pcm, ctx->hwparams, &(ctx->periods), NULL);
         if (status < 0) {
@@ -1069,7 +1089,7 @@ static bool ALSA_pcm_cfg_hw(struct ALSA_pcm_cfg_ctx *ctx)
     }
 
     // Here, status == CHANS_N_NOT_CONFIGURED
-    return SDL_SetError("ALSA: Coudn't configure targetting any SDL supported channel number");
+    return SDL_SetError("ALSA: Couldn't configure targeting any SDL supported channel number");
 }
 #undef CHANS_N_SCAN_MODE__EQUAL_OR_ABOVE_REQUESTED_CHANS_N
 #undef CHANS_N_SCAN_MODE__BELOW_REQUESTED_CHANS_N
@@ -1150,14 +1170,14 @@ static bool ALSA_OpenDevice(SDL_AudioDevice *device)
         goto err_close_pcm;
     }
 
-    // from here, we get only the alsa chmap queries in cfg_ctx to explicitely clean, hwparams is
+    // from here, we get only the alsa chmap queries in cfg_ctx to explicitly clean, hwparams is
     // uninstalled upon pcm closing
 
     // This is useful for debugging
     #if SDL_ALSA_DEBUG
     snd_pcm_uframes_t bufsize;
     ALSA_snd_pcm_hw_params_get_buffer_size(cfg_ctx.hwparams, &bufsize);
-    SDL_LogError(SDL_LOG_CATEGORY_AUDIO,
+    SDL_LogDebug(SDL_LOG_CATEGORY_AUDIO,
                      "ALSA: period size = %ld, periods = %u, buffer size = %lu",
                      cfg_ctx.persize, cfg_ctx.periods, bufsize);
     #endif
@@ -1470,7 +1490,7 @@ static void ALSA_udev_callback(SDL_UDEV_deviceevent udev_type, int udev_class, c
     }
 }
 
-static bool ALSA_start_udev()
+static bool ALSA_start_udev(void)
 {
     udev_initialized = SDL_UDEV_Init();
     if (udev_initialized) {
@@ -1483,7 +1503,7 @@ static bool ALSA_start_udev()
     return udev_initialized;
 }
 
-static void ALSA_stop_udev()
+static void ALSA_stop_udev(void)
 {
     if (udev_initialized) {
         SDL_UDEV_DelCallback(ALSA_udev_callback);
@@ -1494,12 +1514,12 @@ static void ALSA_stop_udev()
 
 #else
 
-static bool ALSA_start_udev()
+static bool ALSA_start_udev(void)
 {
     return false;
 }
 
-static void ALSA_stop_udev()
+static void ALSA_stop_udev(void)
 {
 }
 

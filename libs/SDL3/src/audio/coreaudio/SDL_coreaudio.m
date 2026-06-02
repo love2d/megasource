@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -420,7 +420,8 @@ static bool UpdateAudioSession(SDL_AudioDevice *device, bool open, bool allow_pl
 
         hint = SDL_GetHint(SDL_HINT_AUDIO_CATEGORY);
         if (hint) {
-            if (SDL_strcasecmp(hint, "AVAudioSessionCategoryAmbient") == 0) {
+            if (SDL_strcasecmp(hint, "AVAudioSessionCategoryAmbient") == 0 ||
+                SDL_strcasecmp(hint, "ambient") == 0) {
                 category = AVAudioSessionCategoryAmbient;
             } else if (SDL_strcasecmp(hint, "AVAudioSessionCategorySoloAmbient") == 0) {
                 category = AVAudioSessionCategorySoloAmbient;

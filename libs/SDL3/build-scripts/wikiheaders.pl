@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 # Simple DirectMedia Layer
-# Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+# Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 #
 # This software is provided 'as-is', without any express or implied
 # warranty.  In no event will the authors be held liable for any damages
@@ -37,6 +37,11 @@ my $versionfname = 'include/SDL_version.h';
 my $versionmajorregex = '\A\#define\s+SDL_MAJOR_VERSION\s+(\d+)\Z';
 my $versionminorregex = '\A\#define\s+SDL_MINOR_VERSION\s+(\d+)\Z';
 my $versionmicroregex = '\A\#define\s+SDL_MICRO_VERSION\s+(\d+)\Z';
+my $wikidocsectionsym = 'SDL_WIKI_DOCUMENTATION_SECTION';
+my $forceinlinesym = 'SDL_FORCE_INLINE';
+my $deprecatedsym = 'SDL_DEPRECATED';
+my $declspecsym = '(?:SDLMAIN_|SDL_)?DECLSPEC';
+my $callconvsym = 'SDLCALL';
 my $mainincludefname = 'SDL.h';
 my $selectheaderregex = '\ASDL.*?\.h\Z';
 my $projecturl = 'https://libsdl.org/';
@@ -58,6 +63,11 @@ my $quickreftitle = undef;
 my $quickrefurl = undef;
 my $quickrefdesc = undef;
 my $quickrefmacroregex = undef;
+my $envvarenabled = 0;
+my $envvartitle = 'Environment Variables';
+my $envvardesc = undef;
+my $envvarsymregex = undef;
+my $envvarsymreplace = undef;
 my $changeformat = undef;
 my $manpath = undef;
 my $gitrev = undef;
@@ -137,6 +147,17 @@ if (defined $optionsfname) {
             $quickrefurl = $val, next if $key eq 'quickrefurl';
             $quickrefdesc = $val, next if $key eq 'quickrefdesc';
             $quickrefmacroregex = $val, next if $key eq 'quickrefmacroregex';
+            $envvarenabled = int($val), next if $key eq 'envvarenabled';
+            $envvartitle = $val, next if $key eq 'envvartitle';
+            $envvardesc = $val, next if $key eq 'envvardesc';
+            $envvarsymregex = $val, next if $key eq 'envvarsymregex';
+            $envvarsymreplace = $val, next if $key eq 'envvarsymreplace';
+            $wikidocsectionsym = $val, next if $key eq 'wikidocsectionsym';
+            $forceinlinesym = $val, next if $key eq 'forceinlinesym';
+            $deprecatedsym = $val, next if $key eq 'deprecatedsym';
+            $declspecsym = $val, next if $key eq 'declspecsym';
+            $callconvsym = $val, next if $key eq 'callconvsym';
+
         }
     }
     close(OPTIONS);
@@ -343,7 +364,7 @@ sub wikify_chunk {
 
         # Convert obvious API things to wikilinks.
         if (defined $apiprefixregex) {
-            $str =~ s/(\A|[^\/a-zA-Z0-9_])($apiprefixregex[a-zA-Z0-9_]+)/$1\[$2\]\($2\)/gms;
+            $str =~ s/(\A|[^\/a-zA-Z0-9_\[])($apiprefixregex[a-zA-Z0-9_]+)/$1\[$2\]\($2\)/gms;
         }
 
         $str = $codedstr . $str;
@@ -426,6 +447,7 @@ sub dewikify_chunk {
         }
     } elsif ($dewikify_mode eq 'manpage') {
         # make sure these can't become part of roff syntax.
+        $str =~ s/\\/\\(rs/gms;
         $str =~ s/\./\\[char46]/gms;
         $str =~ s/"/\\(dq/gms;
         $str =~ s/'/\\(aq/gms;
@@ -739,6 +761,7 @@ sub print_undocumented_section {
     }
 }
 
+# !!! FIXME: generalize this for other libraries to use.
 sub strip_fn_declaration_metadata {
     my $decl = shift;
     $decl =~ s/SDL_(PRINTF|SCANF)_FORMAT_STRING\s*//;  # don't want this metadata as part of the documentation.
@@ -1034,6 +1057,55 @@ sub generate_quickref {
 }
 
 
+sub generate_envvar_wiki_page {
+    my $briefsref = shift;
+    my $path = shift;
+
+    return if not $envvarenabled or not defined $envvarsymregex or not defined $envvarsymreplace;
+
+    my $replace = "\"$envvarsymreplace\"";
+    my $tmppath = "$path.tmp";
+    open(my $fh, '>', $tmppath) or die("Can't open '$tmppath': $!\n");
+
+    print $fh "<!-- DO NOT EDIT THIS PAGE ON THE WIKI. IT WILL BE OVERWRITTEN BY WIKIHEADERS AND CHANGES WILL BE LOST! -->\n\n";
+    print $fh "# $envvartitle\n\n";
+
+    if (defined $envvardesc) {
+        my $desc = "$envvardesc";
+        $desc =~ s/\\n/\n/g;  # replace "\n" strings with actual newlines.
+        print $fh "$desc\n\n";
+    }
+
+    print $fh "## Environment Variable List\n\n";
+
+    foreach (sort keys %headersyms) {
+        my $sym = $_;
+        next if $headersymstype{$sym} != 2;  # not a #define? skip it.
+        my $hint = "$_";
+        next if not $hint =~ s/$envvarsymregex/$replace/ee;
+
+        my $brief = $$briefsref{$sym};
+        if (not defined $brief) {
+            $brief = '';
+        } else {
+            $brief = "$brief";
+            chomp($brief);
+            my $thiswikitype = defined $wikitypes{$sym} ? $wikitypes{$sym} : 'md';  # default to MarkDown for new stuff.
+            $brief = ": " . dewikify($thiswikitype, $brief);
+        }
+        print $fh "- [$hint]($sym)$brief\n";
+    }
+
+    print $fh "\n";
+
+    close($fh);
+
+    rename($tmppath, $path) or die("Can't rename '$tmppath' to '$path': $!\n");
+}
+
+
+
+
 my $incpath = "$srcpath";
 $incpath .= "/$incsubdir" if $incsubdir ne '';
 
@@ -1093,7 +1165,7 @@ while (my $d = readdir(DH)) {
         } elsif ($ignoring_lines) {
             push @contents, $_;
             next;
-        } elsif (/\A\s*\#\s*ifndef\s+SDL_WIKI_DOCUMENTATION_SECTION\s*\Z/) {
+        } elsif (/\A\s*\#\s*ifndef\s+$wikidocsectionsym\s*\Z/) {
             $ignoring_lines = 1;
             push @contents, $_;
             next;
@@ -1102,13 +1174,13 @@ while (my $d = readdir(DH)) {
             #print("CATEGORY FOR '$dent' CHANGED TO " . (defined($current_wiki_category) ? "'$current_wiki_category'" : '(undef)') . "\n");
             push @contents, $_;
             next;
-        } elsif (/\A\s*extern\s+(SDL_DEPRECATED\s+|)(SDLMAIN_|SDL_)?DECLSPEC/) {  # a function declaration without a doxygen comment?
+        } elsif (/\A\s*extern\s+(?:$deprecatedsym\s+|)$declspecsym/) {  # a function declaration without a doxygen comment?
             $symtype = 1;   # function declaration
             @templines = ();
             $decl = $_;
             $str = '';
             $has_doxygen = 0;
-        } elsif (/\A\s*SDL_FORCE_INLINE/) {  # a (forced-inline) function declaration without a doxygen comment?
+        } elsif (/\A\s*$forceinlinesym/) {  # a (forced-inline) function declaration without a doxygen comment?
             $symtype = 1;   # function declaration
             @templines = ();
             $decl = $_;
@@ -1175,9 +1247,9 @@ while (my $d = readdir(DH)) {
                 $lineno++ if defined $decl;
                 $decl = '' if not defined $decl;
                 chomp($decl);
-                if ($decl =~ /\A\s*extern\s+(SDL_DEPRECATED\s+|)(SDLMAIN_|SDL_)?DECLSPEC/) {
+                if ($decl =~ /\A\s*extern\s+(?:$deprecatedsym\s+|)$declspecsym/) {
                     $symtype = 1;   # function declaration
-                } elsif ($decl =~ /\A\s*SDL_FORCE_INLINE/) {
+                } elsif ($decl =~ /\A\s*$forceinlinesym/) {
                     $symtype = 1;   # (forced-inline) function declaration
                 } elsif ($decl =~ /\A\s*\#\s*define\s+/) {
                     $symtype = 2;   # macro
@@ -1214,7 +1286,7 @@ while (my $d = readdir(DH)) {
             }
             $headercategorydocs{$current_wiki_category} = $sym;
         } elsif ($symtype == 1) {  # a function
-            my $is_forced_inline = ($decl =~ /\A\s*SDL_FORCE_INLINE/);
+            my $is_forced_inline = ($decl =~ /\A\s*$forceinlinesym/);
 
             if ($is_forced_inline) {
                 if (not $decl =~ /\)\s*(\{.*|)\s*\Z/) {
@@ -1251,14 +1323,14 @@ while (my $d = readdir(DH)) {
 
             my $paramsstr = undef;
 
-            if (!$is_forced_inline && $decl =~ /\A\s*extern\s+(SDL_DEPRECATED\s+|)(SDLMAIN_|SDL_)?DECLSPEC\w*\s+(const\s+|)(unsigned\s+|)(.*?)([\*\s]+)(\*?)\s*SDLCALL\s+(.*?)\s*\((.*?)\);/) {
-                $sym = $8;
-                $rettype = "$3$4$5$6";
-                $paramsstr = $9;
-             } elsif ($is_forced_inline && $decl =~ /\A\s*SDL_FORCE_INLINE\s+(SDL_DEPRECATED\s+|)(const\s+|)(unsigned\s+|)(.*?)([\*\s]+)(.*?)\s*\((.*?)\);/) {
+            if (!$is_forced_inline && $decl =~ /\A\s*extern\s+(?:$deprecatedsym\s+|)$declspecsym\w*\s+(const\s+|)(unsigned\s+|)(.*?)([\*\s]+)(\*?)\s*$callconvsym\s+(.*?)\s*\((.*?)\);/) {
                 $sym = $6;
-                $rettype = "$2$3$4$5";
+                $rettype = "$1$2$3$4$5";
                 $paramsstr = $7;
+             } elsif ($is_forced_inline && $decl =~ /\A\s*$forceinlinesym\s+(?:$deprecatedsym\s+|)(const\s+|)(unsigned\s+|)(.*?)([\*\s]+)(.*?)\s*\((.*?)\);/) {
+                $sym = $5;
+                $rettype = "$1$2$3$4";
+                $paramsstr = $6;
              } else {
                 #print "Found doxygen but no function sig:\n$str\n\n";
                 foreach (@templines) {
@@ -1324,7 +1396,7 @@ while (my $d = readdir(DH)) {
 
                         $decl = $_;
                         $temp = $decl;
-                        $temp =~ s/\Aextern\s+(SDL_DEPRECATED\s+|)(SDLMAIN_|SDL_)?DECLSPEC\w*\s+(.*?)\s+(\*?)SDLCALL\s+/$3$4 /;
+                        $temp =~ s/\Aextern\s+(?:$deprecatedsym\s+|)$declspecsym\w*\s+(.*?)\s+(\*?)$callconvsym\s+/$1$2 /;
                         $shrink_length = length($decl) - length($temp);
                         $decl = $temp;
                     } else {
@@ -1389,7 +1461,7 @@ while (my $d = readdir(DH)) {
             }
             $decl .= $additional_decl;
         } elsif ($symtype == 2) {  # a macro
-            if ($decl =~ /\A\s*\#\s*define\s+(.*?)(\(.*?\)|)\s+/) {
+            if ($decl =~ /\A\s*\#\s*define\s+(.*?)(\(.*?\)|)(\s+|\Z)/) {
                 $sym = $1;
             } else {
                 #print "Found doxygen but no macro:\n$str\n\n";
@@ -2089,7 +2161,7 @@ if ($copy_direction == 1) {  # --copy-to-headers
         opendir(DH, $wikipath) or die("Can't opendir '$wikipath': $!\n");
         while (readdir(DH)) {
             my $dent = $_;
-            if ($dent =~ /\AREADME\-.*?\.md\Z/) {  # we only bridge Markdown files here that start with "README-".
+            if ($dent =~ /\A(README|INTRO)\-.*?\.md\Z/) {  # we only bridge Markdown files here that start with "README-" or "INTRO-".
                 filecopy("$wikipath/$dent", "$readmepath/$dent", "\n");
             }
         }
@@ -2199,10 +2271,10 @@ if ($copy_direction == 1) {  # --copy-to-headers
 
                 $desc =~ s/[\s\n]+\Z//ms;
 
-                if (0) {  # !!! FIXME: disabled because it's not currently suitable for general use, but for manually inspecting the output, it can be useful.
-                    if (($desc =~ /\A[A-Z]/) && (not $desc =~ /\ASDL_/)) {
-                        print STDERR "WARNING: $sym\'s '\\param $arg' text starts with a capital letter: '$desc'. Fixing.\n";
-                        $desc = lcfirst($desc);
+                if (0) {
+                    if (($desc =~ /\A[a-z]/) && (not $desc =~ /$apiprefixregex/)) {
+                        print STDERR "WARNING: $sym\'s '\\param $arg' text starts with a lowercase letter: '$desc'. Fixing.\n";
+                        $desc = ucfirst($desc);
                     }
                 }
 
@@ -2246,8 +2318,8 @@ if ($copy_direction == 1) {  # --copy-to-headers
                 }
                 $desc =~ s/[\s\n]+\Z//ms;
 
-                if (0) {  # !!! FIXME: disabled because it's not currently suitable for general use, but for manually inspecting the output, it can be useful.
-                    if (($desc =~ /\A[A-Z]/) && (not $desc =~ /\ASDL_/)) {
+                if (0) {
+                    if (($desc =~ /\A[A-Z]/) && (not $desc =~ /$apiprefixregex/)) {
                         print STDERR "WARNING: $sym\'s '\\returns' text starts with a capital letter: '$desc'. Fixing.\n";
                         $desc = lcfirst($desc);
                     }
@@ -2391,7 +2463,7 @@ if ($copy_direction == 1) {  # --copy-to-headers
                 } else {
                     die("Unexpected symbol type $symtype!");
                 }
-                my $str = "This $symtypename is available since SDL 3.0.0.";
+                my $str = "This $symtypename is available since $projectshortname 3.0.0.";
                 $sections{'Version'} = wordwrap(wikify($wikitype, $str)) . "\n";
             }
         }
@@ -2702,7 +2774,7 @@ __EOF__
             opendir(DH, $readmepath) or die("Can't opendir '$readmepath': $!\n");
             while (my $d = readdir(DH)) {
                 my $dent = $d;
-                if ($dent =~ /\AREADME\-.*?\.md\Z/) {  # we only bridge Markdown files here that start with "README-".
+                if ($dent =~ /\A(README|INTRO)\-.*?\.md\Z/) {  # we only bridge Markdown files here that start with "README-" or "INTRO".
                     filecopy("$readmepath/$dent", "$wikipath/$dent", "\n");
                 }
             }
@@ -2712,7 +2784,7 @@ __EOF__
             opendir(DH, $wikipath) or die("Can't opendir '$wikipath': $!\n");
             while (my $d = readdir(DH)) {
                 my $dent = $d;
-                if ($dent =~ /\A(README\-.*?)\.md\Z/) {
+                if ($dent =~ /\A((README|INTRO)\-.*?)\.md\Z/) {
                     push @pages, $1;
                 }
             }
@@ -2733,6 +2805,11 @@ __EOF__
         generate_quickref(\%briefs, "$wikipath/QuickReference.md", 0);
         generate_quickref(\%briefs, "$wikipath/QuickReferenceNoUnicode.md", 1);
     }
+
+    if ($envvarenabled and defined $envvarsymregex and defined $envvarsymreplace) {
+        generate_envvar_wiki_page(\%briefs, "$wikipath/EnvironmentVariables.md");
+    }
+
 } elsif ($copy_direction == -2) { # --copy-to-manpages
     # This only takes from the wiki data, since it has sections we omit from the headers, like code examples.
 
@@ -2835,6 +2912,11 @@ __EOF__
         $brief = shift @briefsplit;
         $brief = dewikify($wikitype, $brief);
 
+        # Hack: `apropros` doesn't like escaped character things like `\[char46]` for `.`...since almost every
+        # manpage will end their Brief section with a period and it won't wordwrap to risk being a groff control
+        # character, just replace it.
+        $brief =~ s/\\\[char46\]/./g;
+
         if (defined $remarks) {
             $remarks = dewikify($wikitype, join("\n", @briefsplit) . $remarks);
         }
@@ -2851,7 +2933,7 @@ __EOF__
         $str .= ".\\\" Please report issues in this manpage's content at:\n";
         $str .= ".\\\"   $bugreporturl\n";
         $str .= ".\\\" Please report issues in the generation of this manpage from the wiki at:\n";
-        $str .= ".\\\"   https://github.com/libsdl-org/SDL/issues/new?title=Misgenerated%20manpage%20for%20$sym\n";
+        $str .= ".\\\"   https://github.com/libsdl-org/SDL/issues/new?title=Misgenerated%20manpage%20for%20$sym\n";  # !!! FIXME: if this becomes a problem for other projects, we'll generalize this.
         $str .= ".\\\" $projectshortname can be found at $projecturl\n";
 
         # Define a .URL macro. The "www.tmac" thing decides if we're using GNU roff (which has a .URL macro already), and if so, overrides the macro we just created.

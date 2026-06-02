@@ -267,8 +267,12 @@ class Archiver:
 
     def close(self):
         # Archiver is intentionally made invalid after this function
+        for zf in self._zip_files:
+            zf.close()
         del self._zip_files
         self._zip_files = None
+        for tf in self._tar_files:
+            tf.close()
         del self._tar_files
         self._tar_files = None
 
@@ -542,6 +546,7 @@ class AndroidApiVersion:
     def __repr__(self) -> str:
         return f"<{self.name} ({'.'.join(str(v) for v in self.ints)})>"
 
+ANDROID_ABI_EXTRA_LINK_OPTIONS = {}
 
 class Releaser:
     def __init__(self, release_info: dict, commit: str, revision: str, root: Path, dist_path: Path, section_printer: SectionPrinter, executer: Executer, cmake_generator: str, deps_path: Path, overwrite: bool, github: bool, fast: bool):
@@ -1013,6 +1018,7 @@ class Releaser:
         android_devel_file_tree = ArchiveFileTree()
 
         for android_abi in android_abis:
+            extra_link_options = ANDROID_ABI_EXTRA_LINK_OPTIONS.get(android_abi, "")
             with self.section_printer.group(f"Building for Android {android_api} {android_abi}"):
                 build_dir = self.root / "build-android" / f"{android_abi}-build"
                 install_dir = self.root / "install-android" / f"{android_abi}-install"
@@ -1026,6 +1032,9 @@ class Releaser:
                     # NDK 21e does not support -ffile-prefix-map
                     # f'''-DCMAKE_C_FLAGS="-ffile-prefix-map={self.root}=/src/{self.project}"''',
                     # f'''-DCMAKE_CXX_FLAGS="-ffile-prefix-map={self.root}=/src/{self.project}"''',
+                    f"-DANDROID_USE_LEGACY_TOOLCHAIN=0",
+                    f"-DCMAKE_EXE_LINKER_FLAGS={extra_link_options}",
+                    f"-DCMAKE_SHARED_LINKER_FLAGS={extra_link_options}",
                     f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain_file}",
                     f"-DCMAKE_PREFIX_PATH={str(android_deps_path)}",
                     f"-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH",
@@ -1122,8 +1131,7 @@ class Releaser:
         for dep, depinfo in self.release_info.get("dependencies", {}).items():
             startswith = depinfo["startswith"]
             dep_repo = depinfo["repo"]
-            # FIXME: dropped "--exclude-pre-releases"
-            dep_string_data = self.executer.check_output(["gh", "-R", dep_repo, "release", "list", "--exclude-drafts", "--json", "name,createdAt,tagName", "--jq", f'[.[]|select(.name|startswith("{startswith}"))]|max_by(.createdAt)']).strip()
+            dep_string_data = self.executer.check_output(["gh", "-R", dep_repo, "release", "list", "--exclude-drafts", "--exclude-pre-releases", "--json", "name,createdAt,tagName", "--jq", f'[.[]|select(.name|startswith("{startswith}"))]|max_by(.createdAt)']).strip()
             dep_data = json.loads(dep_string_data)
             dep_tag = dep_data["tagName"]
             dep_version = dep_data["name"]
@@ -1513,7 +1521,7 @@ def main(argv=None) -> int:
         if args.android_home is None or not Path(args.android_home).is_dir():
             parser.error("Invalid $ANDROID_HOME or --android-home: must be a directory containing the Android SDK")
         if args.android_ndk_home is None or not Path(args.android_ndk_home).is_dir():
-            parser.error("Invalid $ANDROID_NDK_HOME or --android_ndk_home: must be a directory containing the Android NDK")
+            parser.error("Invalid $ANDROID_NDK_HOME or --android-ndk-home: must be a directory containing the Android NDK")
         if args.android_api is None:
             with section_printer.group("Detect Android APIS"):
                 args.android_api = releaser._detect_android_api(android_home=args.android_home)

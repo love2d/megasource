@@ -390,45 +390,84 @@ macro(CheckX11)
         set(SDL_VIDEO_DRIVER_X11_SUPPORTS_GENERIC_EVENTS 1)
       endif()
 
-      check_symbol_exists(XkbLookupKeySym "X11/Xlib.h;X11/XKBlib.h" SDL_VIDEO_DRIVER_X11_HAS_XKBLOOKUPKEYSYM)
+      check_include_file("X11/XKBlib.h" SDL_VIDEO_DRIVER_X11_HAS_XKBLIB)
 
-      if(SDL_X11_XCURSOR AND HAVE_XCURSOR_H AND XCURSOR_LIB)
-        set(HAVE_X11_XCURSOR TRUE)
-        if(HAVE_X11_SHARED)
-          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XCURSOR "\"${XCURSOR_LIB_SONAME}\"")
+      if(SDL_X11_XCURSOR)
+        if (HAVE_XCURSOR_H AND XCURSOR_LIB)
+          set(HAVE_X11_XCURSOR TRUE)
+          if(HAVE_X11_SHARED)
+            set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XCURSOR "\"${XCURSOR_LIB_SONAME}\"")
+          else()
+            sdl_link_dependency(xcursor LIBS X11::Xcursor CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xcursor_PKG_CONFIG_SPEC})
+          endif()
+          set(SDL_VIDEO_DRIVER_X11_XCURSOR 1)
         else()
-          sdl_link_dependency(xcursor LIBS X11::Xcursor CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xcursor_PKG_CONFIG_SPEC})
+          SDL_missing_dependency(XCURSOR SDL_X11_XCURSOR)
         endif()
-        set(SDL_VIDEO_DRIVER_X11_XCURSOR 1)
       endif()
 
-      if(SDL_X11_XDBE AND HAVE_XDBE_H)
-        set(HAVE_X11_XDBE TRUE)
-        set(SDL_VIDEO_DRIVER_X11_XDBE 1)
+      if(SDL_X11_XDBE)
+        if(HAVE_XDBE_H)
+          set(HAVE_X11_XDBE TRUE)
+          set(SDL_VIDEO_DRIVER_X11_XDBE 1)
+        else()
+          SDL_missing_dependency(XDBE SDL_X11_XDBE)
+        endif()
       endif()
 
-      if(SDL_X11_XINPUT AND HAVE_XINPUT2_H AND XI_LIB)
-        set(HAVE_X11_XINPUT TRUE)
-        if(HAVE_X11_SHARED)
-          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XINPUT2 "\"${XI_LIB_SONAME}\"")
-        else()
-          sdl_link_dependency(xi LIBS X11::Xi CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xi_PKG_CONFIG_SPEC})
-        endif()
-        set(SDL_VIDEO_DRIVER_X11_XINPUT2 1)
+      if(SDL_X11_XINPUT)
+        if(HAVE_XINPUT2_H AND XI_LIB)
+          set(HAVE_X11_XINPUT TRUE)
+          if(HAVE_X11_SHARED)
+            set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XINPUT2 "\"${XI_LIB_SONAME}\"")
+          else()
+            sdl_link_dependency(xi LIBS X11::Xi CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xi_PKG_CONFIG_SPEC})
+          endif()
+          set(SDL_VIDEO_DRIVER_X11_XINPUT2 1)
 
-        # Check for multitouch
-        check_c_source_compiles_static("
-            #include <X11/Xlib.h>
-            #include <X11/Xproto.h>
-            #include <X11/extensions/XInput2.h>
-            int event_type = XI_TouchBegin;
-            XITouchClassInfo *t;
-            Status XIAllowTouchEvents(Display *a,int b,unsigned int c,Window d,int f) {
-              return (Status)0;
-            }
-            int main(int argc, char **argv) { return 0; }" HAVE_XINPUT2_MULTITOUCH)
-        if(HAVE_XINPUT2_MULTITOUCH)
-          set(SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_MULTITOUCH 1)
+          # Check for scroll info
+          check_c_source_compiles("
+              #include <X11/Xlib.h>
+              #include <X11/Xproto.h>
+              #include <X11/extensions/XInput2.h>
+              XIScrollClassInfo *s;
+              int main(int argc, char **argv) {}" HAVE_XINPUT2_SCROLLINFO)
+          if(HAVE_XINPUT2_SCROLLINFO)
+            set(SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_SCROLLINFO 1)
+          endif()
+
+          # Check for multitouch
+          check_c_source_compiles_static("
+              #include <X11/Xlib.h>
+              #include <X11/Xproto.h>
+              #include <X11/extensions/XInput2.h>
+              int event_type = XI_TouchBegin;
+              XITouchClassInfo *t;
+              Status XIAllowTouchEvents(Display *a,int b,unsigned int c,Window d,int f) {
+                return (Status)0;
+              }
+              int main(int argc, char **argv) { return 0; }" HAVE_XINPUT2_MULTITOUCH)
+          if(HAVE_XINPUT2_MULTITOUCH)
+            set(SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_MULTITOUCH 1)
+          endif()
+
+          # Check for gesture
+          check_c_source_compiles("
+              #include <X11/Xlib.h>
+              #include <X11/Xproto.h>
+              #include <X11/extensions/XInput2.h>
+              int event_type = XI_GesturePinchBegin;
+              XIGesturePinchEvent *t;
+              Status XIAllowTouchEvents(Display *a,int b,unsigned int c,Window d,int f) {
+                return (Status)0;
+              }
+              int main(int argc, char **argv) { return 0; }" HAVE_XINPUT2_GESTURE)
+          if(HAVE_XINPUT2_GESTURE)
+            set(SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_GESTURE 1)
+          endif()
+
+        else()
+          SDL_missing_dependency(XINPUT SDL_X11_XINPUT)
         endif()
       endif()
 
@@ -442,54 +481,78 @@ macro(CheckX11)
             BarrierEventID b;
             int main(int argc, char **argv) { return 0; }" HAVE_XFIXES_H)
       endif()
-      if(SDL_X11_XFIXES AND HAVE_XFIXES_H AND HAVE_XINPUT2_H AND XFIXES_LIB)
-        if(HAVE_X11_SHARED)
-          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XFIXES "\"${XFIXES_LIB_SONAME}\"")
+      if(SDL_X11_XFIXES)
+        if (HAVE_XFIXES_H AND HAVE_XINPUT2_H AND XFIXES_LIB)
+          if(HAVE_X11_SHARED)
+            set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XFIXES "\"${XFIXES_LIB_SONAME}\"")
+          else()
+            sdl_link_dependency(xfixes LIBS X11::Xfixes CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xfixes_PKG_CONFIG_SPEC})
+          endif()
+          set(SDL_VIDEO_DRIVER_X11_XFIXES 1)
+          set(HAVE_X11_XFIXES TRUE)
         else()
-          sdl_link_dependency(xfixes LIBS X11::Xfixes CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xfixes_PKG_CONFIG_SPEC})
+          SDL_missing_dependency(XFIXES SDL_X11_XFIXES)
         endif()
-        set(SDL_VIDEO_DRIVER_X11_XFIXES 1)
-        set(HAVE_X11_XFIXES TRUE)
       endif()
 
-      if(SDL_X11_XSYNC AND HAVE_XSYNC_H AND XEXT_LIB)
-        set(SDL_VIDEO_DRIVER_X11_XSYNC 1)
-        set(HAVE_X11_XSYNC TRUE)
-      endif()
-
-      if(SDL_X11_XRANDR AND HAVE_XRANDR_H AND XRANDR_LIB)
-        if(HAVE_X11_SHARED)
-          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XRANDR "\"${XRANDR_LIB_SONAME}\"")
+      if(SDL_X11_XSYNC)
+        if(HAVE_XSYNC_H AND XEXT_LIB)
+          set(SDL_VIDEO_DRIVER_X11_XSYNC 1)
+          set(HAVE_X11_XSYNC TRUE)
         else()
-          sdl_link_dependency(xrandr LIBS X11::Xrandr CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xrandr_PKG_CONFIG_SPEC})
+          SDL_missing_dependency(XSYNC SDL_X11_XSYNC)
         endif()
-        set(SDL_VIDEO_DRIVER_X11_XRANDR 1)
-        set(HAVE_X11_XRANDR TRUE)
       endif()
 
-      if(SDL_X11_XSCRNSAVER AND HAVE_XSS_H AND XSS_LIB)
-        if(HAVE_X11_SHARED)
-          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XSS "\"${XSS_LIB_SONAME}\"")
+      if(SDL_X11_XRANDR)
+        if(HAVE_XRANDR_H AND XRANDR_LIB)
+          if(HAVE_X11_SHARED)
+            set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XRANDR "\"${XRANDR_LIB_SONAME}\"")
+          else()
+            sdl_link_dependency(xrandr LIBS X11::Xrandr CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xrandr_PKG_CONFIG_SPEC})
+          endif()
+          set(SDL_VIDEO_DRIVER_X11_XRANDR 1)
+          set(HAVE_X11_XRANDR TRUE)
         else()
-          sdl_link_dependency(xss LIBS X11::Xss CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xss_PKG_CONFIG_SPEC})
+          SDL_missing_dependency(XRANDR SDL_X11_XRANDR)
         endif()
-        set(SDL_VIDEO_DRIVER_X11_XSCRNSAVER 1)
-        set(HAVE_X11_XSCRNSAVER TRUE)
       endif()
 
-      if(SDL_X11_XSHAPE AND HAVE_XSHAPE_H)
-        set(SDL_VIDEO_DRIVER_X11_XSHAPE 1)
-        set(HAVE_X11_XSHAPE TRUE)
-      endif()
-
-      if(SDL_X11_XTEST AND HAVE_XTEST_H AND XTST_LIB)
-        if(HAVE_X11_SHARED)
-          set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XTEST "\"${XTST_LIB_SONAME}\"")
+      if(SDL_X11_XSCRNSAVER)
+        if(HAVE_XSS_H AND XSS_LIB)
+          if(HAVE_X11_SHARED)
+            set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XSS "\"${XSS_LIB_SONAME}\"")
+          else()
+            sdl_link_dependency(xss LIBS X11::Xss CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xss_PKG_CONFIG_SPEC})
+          endif()
+          set(SDL_VIDEO_DRIVER_X11_XSCRNSAVER 1)
+          set(HAVE_X11_XSCRNSAVER TRUE)
         else()
-          sdl_link_dependency(xtst LIBS X11::Xtst CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xtst_PKG_CONFIG_SPEC})
+          SDL_missing_dependency(XSCRNSAVER SDL_X11_XSCRNSAVER)
         endif()
-        set(SDL_VIDEO_DRIVER_X11_XTEST 1)
-        set(HAVE_X11_XTEST TRUE)
+      endif()
+
+      if(SDL_X11_XSHAPE)
+        if(HAVE_XSHAPE_H)
+          set(SDL_VIDEO_DRIVER_X11_XSHAPE 1)
+          set(HAVE_X11_XSHAPE TRUE)
+        else()
+          SDL_missing_dependency(XSHAPE SDL_X11_XSHAPE)
+        endif()
+      endif()
+
+      if(SDL_X11_XTEST)
+        if(HAVE_XTEST_H AND XTST_LIB)
+          if(HAVE_X11_SHARED)
+            set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XTEST "\"${XTST_LIB_SONAME}\"")
+          else()
+            sdl_link_dependency(xtst LIBS X11::Xtst CMAKE_MODULE X11 PKG_CONFIG_SPECS ${Xtst_PKG_CONFIG_SPEC})
+          endif()
+          set(SDL_VIDEO_DRIVER_X11_XTEST 1)
+          set(HAVE_X11_XTEST TRUE)
+        else()
+          SDL_missing_dependency(XTEST SDL_X11_XTEST)
+        endif()
       endif()
     endif()
   endif()
@@ -498,6 +561,56 @@ macro(CheckX11)
     sdl_compile_definitions(PRIVATE "MESA_EGL_NO_X11_HEADERS" "EGL_NO_X11")
   endif()
   cmake_pop_check_state()
+endmacro()
+
+macro(CheckFribidi)
+  if(SDL_FRIBIDI)
+    set(FRIBIDI_PKG_CONFIG_SPEC fribidi)
+    set(PC_FRIBIDI_FOUND FALSE)
+    if(PKG_CONFIG_FOUND)
+      pkg_check_modules(PC_FRIBIDI IMPORTED_TARGET ${FRIBIDI_PKG_CONFIG_SPEC})
+    endif()
+    if(PC_FRIBIDI_FOUND)
+      set(HAVE_FRIBIDI TRUE)
+      set(HAVE_FRIBIDI_H 1)
+      if(SDL_FRIBIDI_SHARED AND NOT HAVE_SDL_LOADSO)
+        message(WARNING "You must have SDL_LoadObject() support for dynamic fribidi loading")
+      endif()
+      FindLibraryAndSONAME("fribidi" LIBDIRS ${PC_FRIBIDI_LIBRARY_DIRS})
+      if(SDL_FRIBIDI_SHARED AND FRIBIDI_LIB AND HAVE_SDL_LOADSO)
+        set(SDL_FRIBIDI_DYNAMIC "\"${FRIBIDI_LIB_SONAME}\"")
+        set(HAVE_FRIBIDI_SHARED TRUE)
+        sdl_include_directories(PRIVATE SYSTEM $<TARGET_PROPERTY:PkgConfig::PC_FRIBIDI,INTERFACE_INCLUDE_DIRECTORIES>)
+      else()
+        sdl_link_dependency(fribidi LIBS PkgConfig::PC_FRIBIDI PKG_CONFIG_PREFIX PC_FRIBIDI PKG_CONFIG_SPECS ${FRIBIDI_PKG_CONFIG_SPEC})
+      endif()
+    endif()
+  endif()
+endmacro()
+
+macro(CheckLibThai)
+  if(SDL_LIBTHAI)
+    set(LIBTHAI_PKG_CONFIG_SPEC libthai)
+    set(PC_LIBTHAI_FOUND FALSE)
+    if(PKG_CONFIG_FOUND)
+      pkg_check_modules(PC_LIBTHAI IMPORTED_TARGET ${LIBTHAI_PKG_CONFIG_SPEC})
+    endif()
+    if(PC_LIBTHAI_FOUND)
+      set(HAVE_LIBTHAI TRUE)
+      set(HAVE_LIBTHAI_H 1)
+      if(SDL_LIBTHAI_SHARED AND NOT HAVE_SDL_LOADSO)
+        message(WARNING "You must have SDL_LoadObject() support for dynamic libthai loading")
+      endif()
+      FindLibraryAndSONAME("thai" LIBDIRS ${PC_LIBTHAI_LIBRARY_DIRS})
+      if(SDL_LIBTHAI_SHARED AND THAI_LIB AND HAVE_SDL_LOADSO)
+        set(SDL_LIBTHAI_DYNAMIC "\"${THAI_LIB_SONAME}\"")
+        set(HAVE_LIBTHAI_SHARED TRUE)
+        sdl_include_directories(PRIVATE SYSTEM $<TARGET_PROPERTY:PkgConfig::PC_LIBTHAI,INTERFACE_INCLUDE_DIRECTORIES>)
+      else()
+        sdl_link_dependency(libthai LIBS PkgConfig::PC_LIBTHAI PKG_CONFIG_PREFIX PC_LIBTHAI PKG_CONFIG_SPECS ${LIBTHAI_PKG_CONFIG_SPEC})
+      endif()
+    endif()
+  endif()
 endmacro()
 
 macro(WaylandProtocolGen _SCANNER _CODE_MODE _XML _PROTL)
@@ -712,13 +825,29 @@ macro(CheckOpenVR)
   endif()
 endmacro()
 
+# Requires
+# - N/A
+macro(FindOpenGLHeaders)
+  find_package(OpenGL MODULE)
+  # OPENGL_INCLUDE_DIRS is preferred over OPENGL_INCLUDE_DIR, but was only added in 3.29,
+  # If the CMake minimum version is changed to be >= 3.29, the second check should be removed.
+  if(OPENGL_INCLUDE_DIRS)
+    list(APPEND CMAKE_REQUIRED_INCLUDES ${OPENGL_INCLUDE_DIRS})
+  elseif(OPENGL_INCLUDE_DIR)
+    list(APPEND CMAKE_REQUIRED_INCLUDES ${OPENGL_INCLUDE_DIR})
+  endif()
+endmacro()
+
 # Requires:
 # - nada
 macro(CheckGLX)
   if(SDL_OPENGL)
+    cmake_push_check_state()
+    FindOpenGLHeaders()
     check_c_source_compiles("
         #include <GL/glx.h>
         int main(int argc, char** argv) { return 0; }" HAVE_OPENGL_GLX)
+    cmake_pop_check_state()
     if(HAVE_OPENGL_GLX AND NOT HAVE_ROCKCHIP)
       set(SDL_VIDEO_OPENGL_GLX 1)
     endif()
@@ -752,10 +881,13 @@ endmacro()
 # - nada
 macro(CheckOpenGL)
   if(SDL_OPENGL)
+    cmake_push_check_state()
+    FindOpenGLHeaders()
     check_c_source_compiles("
         #include <GL/gl.h>
         #include <GL/glext.h>
         int main(int argc, char** argv) { return 0; }" HAVE_OPENGL)
+    cmake_pop_check_state()
     if(HAVE_OPENGL)
       set(SDL_VIDEO_OPENGL 1)
       set(SDL_VIDEO_RENDER_OGL 1)
@@ -768,6 +900,7 @@ endmacro()
 macro(CheckOpenGLES)
   if(SDL_OPENGLES)
     cmake_push_check_state()
+    FindOpenGLHeaders()
     list(APPEND CMAKE_REQUIRED_INCLUDES "${SDL3_SOURCE_DIR}/src/video/khronos")
     check_c_source_compiles("
         #include <GLES/gl.h>
@@ -873,6 +1006,9 @@ macro(CheckPTHREAD)
       set(PTHREAD_LDFLAGS "-pthread")
     elseif(QNX)
       # pthread support is baked in
+    elseif(HURD)
+      set(PTHREAD_CFLAGS "-D_REENTRANT")
+      set(PTHREAD_LDFLAGS "-pthread")
     else()
       set(PTHREAD_CFLAGS "-D_REENTRANT")
       set(PTHREAD_LDFLAGS "-lpthread")
@@ -977,22 +1113,22 @@ macro(CheckUSBHID)
   cmake_push_check_state()
   check_library_exists(usbhid hid_init "" LIBUSBHID)
   if(LIBUSBHID)
-    check_include_file(usbhid.h HAVE_USBHID_H)
+    check_include_files("stdint.h;usbhid.h" HAVE_USBHID_H)
     if(HAVE_USBHID_H)
       set(USB_CFLAGS "-DHAVE_USBHID_H")
     endif()
 
-    check_include_file(libusbhid.h HAVE_LIBUSBHID_H)
+    check_include_files("stdint.h;libusbhid.h" HAVE_LIBUSBHID_H)
     if(HAVE_LIBUSBHID_H)
       string(APPEND USB_CFLAGS " -DHAVE_LIBUSBHID_H")
     endif()
     set(USB_LIBS ${USB_LIBS} usbhid)
   else()
-    check_include_file(usb.h HAVE_USB_H)
+    check_include_files("stdint.h;usb.h" HAVE_USB_H)
     if(HAVE_USB_H)
       set(USB_CFLAGS "-DHAVE_USB_H")
     endif()
-    check_include_file(libusb.h HAVE_LIBUSB_H)
+    check_include_files("stdint.h;libusb.h" HAVE_LIBUSB_H)
     if(HAVE_LIBUSB_H)
       string(APPEND USB_CFLAGS " -DHAVE_LIBUSB_H")
     endif()
@@ -1005,7 +1141,7 @@ macro(CheckUSBHID)
   string(APPEND CMAKE_REQUIRED_FLAGS " ${USB_CFLAGS}")
   list(APPEND CMAKE_REQUIRED_LIBRARIES ${USB_LIBS})
   check_c_source_compiles("
-       #include <sys/types.h>
+        #include <stdint.h>
         #if defined(HAVE_USB_H)
         #include <usb.h>
         #endif
@@ -1031,7 +1167,7 @@ macro(CheckUSBHID)
         }" HAVE_USBHID)
   if(HAVE_USBHID)
     check_c_source_compiles("
-          #include <sys/types.h>
+          #include <stdint.h>
           #if defined(HAVE_USB_H)
           #include <usb.h>
           #endif
@@ -1059,7 +1195,7 @@ macro(CheckUSBHID)
     endif()
 
     check_c_source_compiles("
-          #include <sys/types.h>
+          #include <stdint.h>
           #if defined(HAVE_USB_H)
           #include <usb.h>
           #endif
@@ -1108,6 +1244,14 @@ endmacro()
 
 # Check for HIDAPI support
 macro(CheckHIDAPI)
+  if(ANDROID)
+    enable_language(CXX)
+    sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/android/hid.cpp")
+  endif()
+  if(IOS OR TVOS)
+    sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/ios/hid.m")
+    set(SDL_FRAMEWORK_COREBLUETOOTH 1)
+  endif()
   if(SDL_HIDAPI)
     set(HAVE_HIDAPI ON)
     if(SDL_HIDAPI_LIBUSB)
@@ -1126,12 +1270,15 @@ macro(CheckHIDAPI)
         cmake_pop_check_state()
         if(HAVE_LIBUSB_H)
           set(HAVE_LIBUSB TRUE)
-          target_get_dynamic_library(dynamic_libusb LibUSB::LibUSB)
-          if(SDL_HIDAPI_LIBUSB_SHARED AND dynamic_libusb)
-            set(HAVE_HIDAPI_LIBUSB_SHARED ON)
-            set(SDL_LIBUSB_DYNAMIC "\"${dynamic_libusb}\"")
-            sdl_link_dependency(hidapi INCLUDES $<TARGET_PROPERTY:LibUSB::LibUSB,INTERFACE_INCLUDE_DIRECTORIES>)
-          else()
+          if(SDL_HIDAPI_LIBUSB_SHARED)
+            target_get_dynamic_library(dynamic_libusb LibUSB::LibUSB)
+            if(dynamic_libusb)
+              set(HAVE_HIDAPI_LIBUSB_SHARED ON)
+              set(SDL_LIBUSB_DYNAMIC "\"${dynamic_libusb}\"")
+              sdl_link_dependency(hidapi INCLUDES $<TARGET_PROPERTY:LibUSB::LibUSB,INTERFACE_INCLUDE_DIRECTORIES>)
+            endif()
+          endif()
+          if(NOT HAVE_HIDAPI_LIBUSB_SHARED)
             sdl_link_dependency(hidapi LIBS LibUSB::LibUSB PKG_CONFIG_SPECS "${LibUSB_PKG_CONFIG_SPEC}" CMAKE_MODULE LibUSB)
           endif()
         endif()
@@ -1140,14 +1287,6 @@ macro(CheckHIDAPI)
     endif()
 
     if(HAVE_HIDAPI)
-      if(ANDROID)
-        enable_language(CXX)
-        sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/android/hid.cpp")
-      endif()
-      if(IOS OR TVOS)
-        sdl_sources("${SDL3_SOURCE_DIR}/src/hidapi/ios/hid.m")
-        set(SDL_FRAMEWORK_COREBLUETOOTH 1)
-      endif()
       set(HAVE_SDL_HIDAPI TRUE)
 
       if(SDL_JOYSTICK AND SDL_HIDAPI_JOYSTICK)

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -208,7 +208,7 @@
 #define GIP_MOTOR_LEFT_IMPULSE (1u << 3)
 #define GIP_MOTOR_ALL 0xF
 
-/* Extended Comand constants */
+/* Extended Command constants */
 #define GIP_EXTCMD_GET_CAPABILITIES 0x00
 #define GIP_EXTCMD_GET_TELEMETRY_DATA 0x01
 #define GIP_EXTCMD_GET_SERIAL_NUMBER 0x04
@@ -317,6 +317,14 @@ MAKE_GUID(GUID_Wheel, 0x646979cf, 0x6b71, 0x4e96, 0x8d, 0xf9, 0x59, 0xe3, 0x98, 
  * MAKE_GUID(GUID_IProgrammableGamepad, 0x31c1034d, 0xb5b7, 0x4551, 0x98, 0x13, 0x87, 0x69, 0xd4, 0xa0, 0xe4, 0xf9);
  * MAKE_GUID(GUID_IVirtualDevice, 0xdfd26825, 0x110a, 0x4e94, 0xb9, 0x37, 0xb2, 0x7c, 0xe4, 0x7b, 0x25, 0x40);
  * MAKE_GUID(GUID_OnlineDevAuth, 0x632b1fd1, 0xa3e9, 0x44f9, 0x84, 0x20, 0x5c, 0xe3, 0x44, 0xa0, 0x64, 0x04);
+ *
+ * Seen on Elite Controller, Adaptive Controller: 9ebd00a3-b5e6-4c08-a33b-673126459ec4
+ * Seen on Adaptive Controller: ce1e58c5-221c-4bdb-9c24-bf3941601320
+ * Seen on Elite 2 Controller: f758dc66-022c-48b8-a4f6-457ba80e2a5b (IControllerProfileModeState)
+ * Seen on Elite 2 Controller: 31c1034d-b5b7-4551-9813-8769d4a0e4f9 (IProgrammableGamepad)
+ * Seen on Elite 2 Controller: 34ad9b1e-36ad-4fb5-8ac7-17234c9f546f (IExtendedDeviceFlags)
+ * Seen on Elite 2 Controller: 88e0b694-6bd9-4416-a560-e7fafdfa528f
+ * Seen on Elite 2 Controller: ea96c8c0-b216-448b-be80-7e5deb0698e2
  */
 
 static const int GIP_DataClassMtu[8] = { 64, 64, 64, 2048, 0, 0, 0, 0 };
@@ -789,29 +797,19 @@ static bool GIP_AttachmentIsController(GIP_Attachment *attachment)
 
 static void GIP_MetadataFree(GIP_Metadata *metadata)
 {
-    if (metadata->device.audio_formats) {
-        SDL_free(metadata->device.audio_formats);
-    }
+    SDL_free(metadata->device.audio_formats);
     if (metadata->device.preferred_types) {
         int i;
         for (i = 0; i < metadata->device.num_preferred_types; i++) {
-            if (metadata->device.preferred_types[i]) {
-                SDL_free(metadata->device.preferred_types[i]);
-            }
+            SDL_free(metadata->device.preferred_types[i]);
         }
         SDL_free(metadata->device.preferred_types);
     }
-    if (metadata->device.supported_interfaces) {
-        SDL_free(metadata->device.supported_interfaces);
-    }
-    if (metadata->device.hid_descriptor) {
-        SDL_free(metadata->device.hid_descriptor);
-    }
+    SDL_free(metadata->device.supported_interfaces);
+    SDL_free(metadata->device.hid_descriptor);
 
-    if (metadata->message_metadata) {
-        SDL_free(metadata->message_metadata);
-    }
-    SDL_memset(metadata, 0, sizeof(*metadata));
+    SDL_free(metadata->message_metadata);
+    SDL_zerop(metadata);
 }
 
 static bool GIP_ParseDeviceMetadata(GIP_Metadata *metadata, const Uint8 *bytes, int num_bytes, int *offset)
@@ -1241,7 +1239,7 @@ static bool GIP_SendInitSequence(GIP_Attachment *attachment)
     }
     if (attachment->attachment_type == GIP_TYPE_CHATPAD && !attachment->keyboard) {
         attachment->keyboard = (SDL_KeyboardID)(uintptr_t) attachment;
-        SDL_AddKeyboard(attachment->keyboard, "Xbox One Chatpad", true);
+        SDL_AddKeyboard(attachment->keyboard, "Xbox One Chatpad");
     }
     return true;
 }
@@ -1687,7 +1685,7 @@ static bool GIP_HandleCommandGuideButtonStatus(
         return false;
     }
     if (bytes[1] == VK_LWIN) {
-        SDL_SendJoystickButton(timestamp, joystick, SDL_GAMEPAD_BUTTON_GUIDE, (bytes[0] & 0x01) != 0);
+        SDL_SendJoystickButton(timestamp, joystick, SDL_GAMEPAD_BUTTON_GUIDE, (bytes[0] & 0x03) != 0);
     }
 
     return true;
@@ -2327,7 +2325,7 @@ static bool GIP_HandleSystemMessage(
         if (header->message_type == GIP_CMD_HID_REPORT && num_bytes == 8) {
             if (!attachment->keyboard) {
                 attachment->keyboard = (SDL_KeyboardID)(uintptr_t) attachment;
-                SDL_AddKeyboard(attachment->keyboard, "Xbox One Chatpad", true);
+                SDL_AddKeyboard(attachment->keyboard, "Xbox One Chatpad");
             }
             attachment->attachment_type = GIP_TYPE_CHATPAD;
             attachment->metadata.device.in_system_messages[0] |= (1u << GIP_CMD_HID_REPORT);
@@ -2688,6 +2686,8 @@ static GIP_Attachment * HIDAPI_DriverGIP_FindAttachment(SDL_HIDAPI_Device *devic
     GIP_Device *ctx = (GIP_Device *)device->context;
     int i;
 
+    SDL_AssertJoysticksLocked();
+
     for (i = 0; i < MAX_ATTACHMENTS; i++) {
         if (ctx->attachments[i] && ctx->attachments[i]->joystick == joystick->instance_id) {
             return ctx->attachments[i];
@@ -2923,7 +2923,7 @@ static void HIDAPI_DriverGIP_FreeDevice(SDL_HIDAPI_Device *device)
             attachment->fragment_data = NULL;
         }
         if (attachment->keyboard) {
-            SDL_RemoveKeyboard(attachment->keyboard, true);
+            SDL_RemoveKeyboard(attachment->keyboard);
         }
         GIP_MetadataFree(&attachment->metadata);
         SDL_free(attachment);

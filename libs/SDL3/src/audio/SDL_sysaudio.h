@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -183,8 +183,9 @@ typedef struct SDL_AudioDriver
     const char *name;  // The name of this audio driver
     const char *desc;  // The description of this audio driver
     SDL_AudioDriverImpl impl; // the backend's interface
-    SDL_RWLock *device_hash_lock;  // A rwlock that protects `device_hash`
-    SDL_HashTable *device_hash;  // the collection of currently-available audio devices (recording, playback, logical and physical!)
+    SDL_RWLock *subsystem_rwlock;  // A rwlock that protects several things in the audio subsystem (device hashtables, etc).
+    SDL_HashTable *device_hash_physical;  // the collection of currently-available audio devices (recording and playback), for mapping SDL_AudioDeviceID to an SDL_AudioDevice*.
+    SDL_HashTable *device_hash_logical;  // the collection of currently-available audio devices (recording and playback), for mapping SDL_AudioDeviceID to an SDL_LogicalAudioDevice*.
     SDL_AudioStream *existing_streams;  // a list of all existing SDL_AudioStreams.
     SDL_AudioDeviceID default_playback_device_id;
     SDL_AudioDeviceID default_recording_device_id;
@@ -263,13 +264,6 @@ struct SDL_LogicalAudioDevice
 
     // true if device was opened with SDL_OpenAudioDeviceStream (so it forbids binding changes, etc).
     bool simplified;
-
-    // If non-NULL, callback into the app that alerts it to start/end of device iteration.
-    SDL_AudioIterationCallback iteration_start;
-    SDL_AudioIterationCallback iteration_end;
-
-    // App-supplied pointer for iteration callbacks.
-    void *iteration_userdata;
 
     // If non-NULL, callback into the app that lets them access the final postmix buffer.
     SDL_AudioPostmixCallback postmix;

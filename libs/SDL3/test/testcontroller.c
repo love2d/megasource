@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -53,62 +53,59 @@ struct Quaternion
 
 static Quaternion quat_identity = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-Quaternion QuaternionFromEuler(float roll, float pitch, float yaw)
+Quaternion QuaternionFromEuler(float pitch, float yaw, float roll)
 {
-    Quaternion q;
+    float cx = SDL_cosf(pitch * 0.5f);
+    float sx = SDL_sinf(pitch * 0.5f);
     float cy = SDL_cosf(yaw * 0.5f);
     float sy = SDL_sinf(yaw * 0.5f);
-    float cp = SDL_cosf(pitch * 0.5f);
-    float sp = SDL_sinf(pitch * 0.5f);
-    float cr = SDL_cosf(roll * 0.5f);
-    float sr = SDL_sinf(roll * 0.5f);
+    float cz = SDL_cosf(roll * 0.5f);
+    float sz = SDL_sinf(roll * 0.5f);
 
-    q.w = cr * cp * cy + sr * sp * sy;
-    q.x = sr * cp * cy - cr * sp * sy;
-    q.y = cr * sp * cy + sr * cp * sy;
-    q.z = cr * cp * sy - sr * sp * cy;
+    Quaternion q;
+    q.w = cx * cy * cz + sx * sy * sz;
+    q.x = sx * cy * cz - cx * sy * sz;
+    q.y = cx * sy * cz + sx * cy * sz;
+    q.z = cx * cy * sz - sx * sy * cz;
 
     return q;
 }
 
-static void EulerFromQuaternion(Quaternion q, float *roll, float *pitch, float *yaw)
+#define RAD_TO_DEG (180.0f / SDL_PI_F)
+
+/* Decomposes quaternion into Yaw (Y), Pitch (X), Roll (Z) using Y-X-Z order in a left-handed system */
+void QuaternionToYXZ(Quaternion q, float *pitch, float *yaw, float *roll)
 {
-    float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
-    float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
-    float roll_rad = SDL_atan2f(sinr_cosp, cosr_cosp);
+    /* Precalculate repeated expressions */
+    float qxx = q.x * q.x;
+    float qyy = q.y * q.y;
+    float qzz = q.z * q.z;
 
-    float sinp = 2.0f * (q.w * q.y - q.z * q.x);
-    float pitch_rad;
-    if (SDL_fabsf(sinp) >= 1.0f) {
-        pitch_rad = SDL_copysignf(SDL_PI_F / 2.0f, sinp);
-    } else {
-        pitch_rad = SDL_asinf(sinp);
-    }
+    float qxy = q.x * q.y;
+    float qxz = q.x * q.z;
+    float qyz = q.y * q.z;
+    float qwx = q.w * q.x;
+    float qwy = q.w * q.y;
+    float qwz = q.w * q.z;
 
-    float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
-    float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
-    float yaw_rad = SDL_atan2f(siny_cosp, cosy_cosp);
-
-    if (roll)
-        *roll = roll_rad;
-    if (pitch)
-        *pitch = pitch_rad;
-    if (yaw)
-        *yaw = yaw_rad;
-}
-
-static void EulerDegreesFromQuaternion(Quaternion q, float *pitch, float *yaw, float *roll)
-{
-    float pitch_rad, yaw_rad, roll_rad;
-    EulerFromQuaternion(q, &pitch_rad, &yaw_rad, &roll_rad);
-    if (pitch) {
-        *pitch = pitch_rad * (180.0f / SDL_PI_F);
-    }
+    /* Yaw (around Y) */
     if (yaw) {
-        *yaw = yaw_rad * (180.0f / SDL_PI_F);
+        *yaw = SDL_atan2f(2.0f * (qwy + qxz), 1.0f - 2.0f * (qyy + qzz)) * RAD_TO_DEG;
     }
+
+    /* Pitch (around X) */
+    float sinp = 2.0f * (qwx - qyz);
+    if (pitch) {
+        if (SDL_fabsf(sinp) >= 1.0f) {
+            *pitch = SDL_copysignf(90.0f, sinp); /* Clamp to avoid domain error */
+        } else {
+            *pitch = SDL_asinf(sinp) * RAD_TO_DEG;
+        }
+    }
+
+    /* Roll (around Z) */
     if (roll) {
-        *roll = roll_rad * (180.0f / SDL_PI_F);
+        *roll = SDL_atan2f(2.0f * (qwz + qxy), 1.0f - 2.0f * (qxx + qzz)) * RAD_TO_DEG;
     }
 }
 
@@ -159,23 +156,39 @@ typedef struct
     float gyro_data[3]; /* Degrees per second, i.e. 100.0f means 100 degrees per second */
 
     float last_accel_data[3];/* Needed to detect motion (and inhibit drift calibration) */
-    float accelerometer_length_squared;
+    float accelerometer_length_squared; /* The current length squared from last packet to this packet */
+    float accelerometer_tolerance_squared; /* In phase one of calibration we calculate this as the largest accelerometer_length_squared over the time period */
+
     float gyro_drift_accumulator[3];
-    bool is_calibrating_drift; /* Starts on, but can be turned back on by the user to restart the drift calibration. */
+
+    EGyroCalibrationPhase calibration_phase;      /* [ GYRO_CALIBRATION_PHASE_OFF, GYRO_CALIBRATION_PHASE_NOISE_PROFILING, GYRO_CALIBRATION_PHASE_DRIFT_PROFILING,GYRO_CALIBRATION_PHASE_COMPLETE ] */
+    Uint64 calibration_phase_start_time_ticks_ns; /* Set each time a calibration phase begins so that we can a real time number for evaluation of drift. Previously we would use a fixed number of packets but given that gyro polling rates vary wildly this made the duration very different. */
+
     int gyro_drift_sample_count;
     float gyro_drift_solution[3]; /* Non zero if calibration is complete. */
 
     Quaternion integrated_rotation; /* Used to help test whether the time stamps and gyro degrees per second are set up correctly by the HID implementation */
 } IMUState;
 
-/* Reset the Drift calculation state */
-void StartGyroDriftCalibration(IMUState *imustate)
+/* First stage of calibration - get the noise profile of the accelerometer */
+void BeginNoiseCalibrationPhase(IMUState *imustate)
 {
-    imustate->is_calibrating_drift = true;
+    imustate->accelerometer_tolerance_squared = ACCELEROMETER_NOISE_THRESHOLD;
+    imustate->calibration_phase = GYRO_CALIBRATION_PHASE_NOISE_PROFILING;
+    imustate->calibration_phase_start_time_ticks_ns = SDL_GetTicksNS();
+}
+
+/* Reset the Drift calculation state */
+void BeginDriftCalibrationPhase(IMUState *imustate)
+{
+    imustate->calibration_phase = GYRO_CALIBRATION_PHASE_DRIFT_PROFILING;
+    imustate->calibration_phase_start_time_ticks_ns = SDL_GetTicksNS();
     imustate->gyro_drift_sample_count = 0;
     SDL_zeroa(imustate->gyro_drift_solution);
     SDL_zeroa(imustate->gyro_drift_accumulator);
 }
+
+/* Initial/full reset of state */
 void ResetIMUState(IMUState *imustate)
 {
     imustate->gyro_packet_number = 0;
@@ -183,10 +196,13 @@ void ResetIMUState(IMUState *imustate)
     imustate->starting_time_stamp_ns = SDL_GetTicksNS();
     imustate->integrated_rotation = quat_identity;
     imustate->accelerometer_length_squared = 0.0f;
+    imustate->accelerometer_tolerance_squared = ACCELEROMETER_NOISE_THRESHOLD;
+    imustate->calibration_phase = GYRO_CALIBRATION_PHASE_OFF;
+    imustate->calibration_phase_start_time_ticks_ns = SDL_GetTicksNS();
     imustate->integrated_rotation = quat_identity;
     SDL_zeroa(imustate->last_accel_data);
     SDL_zeroa(imustate->gyro_drift_solution);
-    StartGyroDriftCalibration(imustate);
+    SDL_zeroa(imustate->gyro_drift_accumulator);
 }
 
 void ResetGyroOrientation(IMUState *imustate)
@@ -194,8 +210,39 @@ void ResetGyroOrientation(IMUState *imustate)
     imustate->integrated_rotation = quat_identity;
 }
 
-/* More samples = more accurate drift correction, but also more time to calibrate.*/
-#define SDL_GAMEPAD_IMU_MIN_GYRO_DRIFT_SAMPLE_COUNT 1024
+/* More time = more accurate drift correction*/
+#define SDL_GAMEPAD_IMU_NOISE_SETTLING_PERIOD_NS            ( SDL_NS_PER_SECOND / 2)
+#define SDL_GAMEPAD_IMU_NOISE_EVALUATION_PERIOD_NS            (4 * SDL_NS_PER_SECOND)
+#define SDL_GAMEPAD_IMU_NOISE_PROFILING_PHASE_DURATION_NS   (SDL_GAMEPAD_IMU_NOISE_SETTLING_PERIOD_NS + SDL_GAMEPAD_IMU_NOISE_EVALUATION_PERIOD_NS)
+#define SDL_GAMEPAD_IMU_CALIBRATION_PHASE_DURATION_NS       (5 * SDL_NS_PER_SECOND)
+
+/*
+ * Find the maximum accelerometer noise over the duration of the GYRO_CALIBRATION_PHASE_NOISE_PROFILING phase.
+ */
+void CalibrationPhase_NoiseProfiling(IMUState *imustate)
+{
+    /* If we have really large movement (i.e. greater than a fraction of G), then we want to start noise evaluation over. The frontend will warn the user to put down the controller. */
+    if (imustate->accelerometer_length_squared > ACCELEROMETER_MAX_NOISE_G_SQ) {
+        BeginNoiseCalibrationPhase(imustate);
+        return;
+    }
+
+    Uint64 now = SDL_GetTicksNS();
+    Uint64 delta_ns = now - imustate->calibration_phase_start_time_ticks_ns;
+
+    /* Nuanced behavior - give the evaluation system some time to settle after placing the controller down before _actually_ evaluating, as the accelerometer could still be "ringing" after the user has placed it down, resulting in exaggerated tolerances */
+    if (delta_ns > SDL_GAMEPAD_IMU_NOISE_SETTLING_PERIOD_NS) {
+        /* Get the largest noise spike in the period of evaluation */
+        if (imustate->accelerometer_length_squared > imustate->accelerometer_tolerance_squared) {
+            imustate->accelerometer_tolerance_squared = imustate->accelerometer_length_squared;
+        }
+    }
+
+    /* Switch phase if we go over the time limit */
+    if (delta_ns >= SDL_GAMEPAD_IMU_NOISE_PROFILING_PHASE_DURATION_NS) {
+        BeginDriftCalibrationPhase(imustate);
+    }
+}
 
 /*
  * Average drift _per packet_ as opposed to _per second_
@@ -203,36 +250,22 @@ void ResetGyroOrientation(IMUState *imustate)
  */
 void FinalizeDriftSolution(IMUState *imustate)
 {
-    if (imustate->gyro_drift_sample_count >= SDL_GAMEPAD_IMU_MIN_GYRO_DRIFT_SAMPLE_COUNT) {
+    if (imustate->gyro_drift_sample_count >= 0) {
         imustate->gyro_drift_solution[0] = imustate->gyro_drift_accumulator[0] / (float)imustate->gyro_drift_sample_count;
         imustate->gyro_drift_solution[1] = imustate->gyro_drift_accumulator[1] / (float)imustate->gyro_drift_sample_count;
         imustate->gyro_drift_solution[2] = imustate->gyro_drift_accumulator[2] / (float)imustate->gyro_drift_sample_count;
     }
 
-    imustate->is_calibrating_drift = false;
+    imustate->calibration_phase = GYRO_CALIBRATION_PHASE_COMPLETE;
     ResetGyroOrientation(imustate);
 }
 
-/* Sample gyro packet in order to calculate drift*/
-void SampleGyroPacketForDrift( IMUState *imustate )
+void CalibrationPhase_DriftProfiling(IMUState *imustate)
 {
-    if ( !imustate->is_calibrating_drift )
-        return;
-
-    /* Get the length squared difference of the last accelerometer data vs. the new one */
-    float accelerometer_difference[3];
-    accelerometer_difference[0] = imustate->accel_data[0] - imustate->last_accel_data[0];
-    accelerometer_difference[1] = imustate->accel_data[1] - imustate->last_accel_data[1];
-    accelerometer_difference[2] = imustate->accel_data[2] - imustate->last_accel_data[2];
-    SDL_memcpy(imustate->last_accel_data, imustate->accel_data, sizeof(imustate->last_accel_data));
-
-    imustate->accelerometer_length_squared = accelerometer_difference[0] * accelerometer_difference[0] + accelerometer_difference[1] * accelerometer_difference[1] + accelerometer_difference[2] * accelerometer_difference[2];
-
     /* Ideal threshold will vary considerably depending on IMU. PS5 needs a low value (0.05f). Nintendo Switch needs a higher value (0.15f). */
-    const float flAccelerometerMovementThreshold = ACCELEROMETER_NOISE_THRESHOLD;
-    if (imustate->accelerometer_length_squared > flAccelerometerMovementThreshold * flAccelerometerMovementThreshold) {
+    if (imustate->accelerometer_length_squared > imustate->accelerometer_tolerance_squared) {
         /* Reset the drift calibration if the accelerometer has moved significantly */
-        StartGyroDriftCalibration(imustate);
+        BeginDriftCalibrationPhase(imustate);
     } else {
         /* Sensor is stationary enough to evaluate for drift.*/
         ++imustate->gyro_drift_sample_count;
@@ -241,10 +274,31 @@ void SampleGyroPacketForDrift( IMUState *imustate )
         imustate->gyro_drift_accumulator[1] += imustate->gyro_data[1];
         imustate->gyro_drift_accumulator[2] += imustate->gyro_data[2];
 
-        if (imustate->gyro_drift_sample_count >= SDL_GAMEPAD_IMU_MIN_GYRO_DRIFT_SAMPLE_COUNT) {
+        /* Finish phase if we go over the time limit */
+        Uint64 now = SDL_GetTicksNS();
+        Uint64 delta_ns = now - imustate->calibration_phase_start_time_ticks_ns;
+        if (delta_ns >= SDL_GAMEPAD_IMU_CALIBRATION_PHASE_DURATION_NS) {
             FinalizeDriftSolution(imustate);
         }
     }
+}
+
+/* Sample gyro packet in order to calculate drift*/
+void SampleGyroPacketForDrift(IMUState *imustate)
+{
+    /* Get the length squared difference of the last accelerometer data vs. the new one */
+    float accelerometer_difference[3];
+    accelerometer_difference[0] = imustate->accel_data[0] - imustate->last_accel_data[0];
+    accelerometer_difference[1] = imustate->accel_data[1] - imustate->last_accel_data[1];
+    accelerometer_difference[2] = imustate->accel_data[2] - imustate->last_accel_data[2];
+    SDL_memcpy(imustate->last_accel_data, imustate->accel_data, sizeof(imustate->last_accel_data));
+    imustate->accelerometer_length_squared = accelerometer_difference[0] * accelerometer_difference[0] + accelerometer_difference[1] * accelerometer_difference[1] + accelerometer_difference[2] * accelerometer_difference[2];
+
+    if (imustate->calibration_phase == GYRO_CALIBRATION_PHASE_NOISE_PROFILING)
+        CalibrationPhase_NoiseProfiling(imustate);
+
+    if (imustate->calibration_phase == GYRO_CALIBRATION_PHASE_DRIFT_PROFILING)
+        CalibrationPhase_DriftProfiling(imustate);
 }
 
 void ApplyDriftSolution(float *gyro_data, const float *drift_solution)
@@ -1183,12 +1237,8 @@ static void DelController(SDL_JoystickID id)
         CyclePS5TriggerEffect(&controllers[i]);
     }
     SDL_assert(controllers[i].gamepad == NULL);
-    if (controllers[i].axis_state) {
-        SDL_free(controllers[i].axis_state);
-    }
-    if (controllers[i].imu_state) {
-        SDL_free(controllers[i].imu_state);
-    }
+    SDL_free(controllers[i].axis_state);
+    SDL_free(controllers[i].imu_state);
     if (controllers[i].joystick) {
         SDL_CloseJoystick(controllers[i].joystick);
     }
@@ -1375,8 +1425,17 @@ static void HandleGamepadGyroEvent(SDL_Event *event)
     SDL_memcpy(controller->imu_state->gyro_data, event->gsensor.data, sizeof(controller->imu_state->gyro_data));
 }
 
+/* Two strategies for evaluating polling rate - one based on a fixed packet count, and one using a fixed time window.
+ * Smaller values in either will give you a more responsive polling rate estimate, but this may fluctuate more.
+ * Larger values in either will give you a more stable average but they will require more time to evaluate.
+ * Generally, wired connections tend to give much more stable
+ */
+/* #define SDL_USE_FIXED_PACKET_COUNT_FOR_ESTIMATION */
 #define SDL_GAMEPAD_IMU_MIN_POLLING_RATE_ESTIMATION_COUNT 2048
-static void EstimatePacketRate()
+#define SDL_GAMEPAD_IMU_MIN_POLLING_RATE_ESTIMATION_TIME_NS (SDL_NS_PER_SECOND * 2)
+
+
+static void EstimatePacketRate(void)
 {
     Uint64 now_ns = SDL_GetTicksNS();
     if (controller->imu_state->imu_packet_counter == 0) {
@@ -1384,17 +1443,22 @@ static void EstimatePacketRate()
     }
 
     /* Require a significant sample size before averaging rate. */
+#ifdef SDL_USE_FIXED_PACKET_COUNT_FOR_ESTIMATION
     if (controller->imu_state->imu_packet_counter >= SDL_GAMEPAD_IMU_MIN_POLLING_RATE_ESTIMATION_COUNT) {
         Uint64 deltatime_ns = now_ns - controller->imu_state->starting_time_stamp_ns;
-        controller->imu_state->imu_estimated_sensor_rate = (Uint16)((controller->imu_state->imu_packet_counter * 1000000000ULL) / deltatime_ns);
-    }
-
-    /* Flush sampled data after a brief period so that the imu_estimated_sensor_rate value can be read.*/
-    if (controller->imu_state->imu_packet_counter >= SDL_GAMEPAD_IMU_MIN_POLLING_RATE_ESTIMATION_COUNT * 2) {
-        controller->imu_state->starting_time_stamp_ns = now_ns;
+        controller->imu_state->imu_estimated_sensor_rate = (Uint16)((controller->imu_state->imu_packet_counter * SDL_NS_PER_SECOND) / deltatime_ns);
         controller->imu_state->imu_packet_counter = 0;
     }
-    ++controller->imu_state->imu_packet_counter;
+#else
+    Uint64 deltatime_ns = now_ns - controller->imu_state->starting_time_stamp_ns;
+    if (deltatime_ns >= SDL_GAMEPAD_IMU_MIN_POLLING_RATE_ESTIMATION_TIME_NS) {
+        controller->imu_state->imu_estimated_sensor_rate = (Uint16)((controller->imu_state->imu_packet_counter * SDL_NS_PER_SECOND) / deltatime_ns);
+        controller->imu_state->imu_packet_counter = 0;
+    }
+#endif
+    else {
+        ++controller->imu_state->imu_packet_counter;
+    }
 }
 
 static void UpdateGamepadOrientation( Uint64 delta_time_ns )
@@ -1409,13 +1473,11 @@ static void UpdateGamepadOrientation( Uint64 delta_time_ns )
 
 static void HandleGamepadSensorEvent( SDL_Event* event )
 {
-    if (!controller) {
+    if (!controller)
         return;
-    }
 
-    if (controller->id != event->gsensor.which) {
+    if (controller->id != event->gsensor.which)
         return;
-    }
 
     if (event->gsensor.sensor == SDL_SENSOR_GYRO) {
         HandleGamepadGyroEvent(event);
@@ -1428,15 +1490,25 @@ static void HandleGamepadSensorEvent( SDL_Event* event )
     accelerometer and gyro events are received before progressing.
     */
     if ( controller->imu_state->accelerometer_packet_number == controller->imu_state->gyro_packet_number ) {
-
         EstimatePacketRate();
         Uint64 sensorTimeStampDelta_ns = event->gsensor.sensor_timestamp - controller->imu_state->last_sensor_time_stamp_ns ;
         UpdateGamepadOrientation(sensorTimeStampDelta_ns);
 
         float display_euler_angles[3];
-        EulerDegreesFromQuaternion(controller->imu_state->integrated_rotation, &display_euler_angles[0], &display_euler_angles[1], &display_euler_angles[2]);
+        QuaternionToYXZ(controller->imu_state->integrated_rotation, &display_euler_angles[0], &display_euler_angles[1], &display_euler_angles[2]);
 
-        float drift_calibration_progress_frac = controller->imu_state->gyro_drift_sample_count / (float)SDL_GAMEPAD_IMU_MIN_GYRO_DRIFT_SAMPLE_COUNT;
+        /* Show how far we are through the current phase. When off, just default to zero progress */
+        Uint64 now = SDL_GetTicksNS();
+        Uint64 duration = 0;
+        if (controller->imu_state->calibration_phase == GYRO_CALIBRATION_PHASE_NOISE_PROFILING) {
+            duration = SDL_GAMEPAD_IMU_NOISE_PROFILING_PHASE_DURATION_NS;
+        } else if (controller->imu_state->calibration_phase == GYRO_CALIBRATION_PHASE_DRIFT_PROFILING) {
+            duration = SDL_GAMEPAD_IMU_CALIBRATION_PHASE_DURATION_NS;
+        }
+
+        Uint64 delta_ns = now - controller->imu_state->calibration_phase_start_time_ticks_ns;
+        float drift_calibration_progress_fraction = duration > 0.0f ? ((float)delta_ns / (float)duration) : 0.0f;
+
         int reported_polling_rate_hz = sensorTimeStampDelta_ns > 0 ? (int)(SDL_NS_PER_SECOND / sensorTimeStampDelta_ns) : 0;
 
         /* Send the results to the frontend */
@@ -1446,8 +1518,10 @@ static void HandleGamepadSensorEvent( SDL_Event* event )
             &controller->imu_state->integrated_rotation,
             reported_polling_rate_hz,
             controller->imu_state->imu_estimated_sensor_rate,
-            drift_calibration_progress_frac,
-            controller->imu_state->accelerometer_length_squared
+            controller->imu_state->calibration_phase,
+            drift_calibration_progress_fraction,
+            controller->imu_state->accelerometer_length_squared,
+            controller->imu_state->accelerometer_tolerance_squared
         );
 
         /* Also show the gyro correction next to the gyro speed - this is useful in turntable tests as you can use a turntable to calibrate for drift, and that drift correction is functionally the same as the turn table speed (ignoring drift) */
@@ -1513,7 +1587,10 @@ static bool SDLCALL VirtualGamepadSetLED(void *userdata, Uint8 red, Uint8 green,
 static void OpenVirtualGamepad(void)
 {
     SDL_VirtualJoystickTouchpadDesc virtual_touchpad = { 1, { 0, 0, 0 } };
-    SDL_VirtualJoystickSensorDesc virtual_sensor = { SDL_SENSOR_ACCEL, 0.0f };
+    SDL_VirtualJoystickSensorDesc virtual_sensors[] = {
+        { SDL_SENSOR_ACCEL, 0.0f },
+        { SDL_SENSOR_GYRO, 0.0f }
+    };
     SDL_VirtualJoystickDesc desc;
     SDL_JoystickID virtual_id;
 
@@ -1527,8 +1604,8 @@ static void OpenVirtualGamepad(void)
     desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
     desc.ntouchpads = 1;
     desc.touchpads = &virtual_touchpad;
-    desc.nsensors = 1;
-    desc.sensors = &virtual_sensor;
+    desc.nsensors = SDL_arraysize(virtual_sensors);
+    desc.sensors = virtual_sensors;
     desc.SetPlayerIndex = VirtualGamepadSetPlayerIndex;
     desc.Rumble = VirtualGamepadRumble;
     desc.RumbleTriggers = VirtualGamepadRumbleTriggers;
@@ -2073,7 +2150,6 @@ SDL_AppResult SDLCALL SDL_AppEvent(void *appstate, SDL_Event *event)
                 event->gsensor.data[1],
                 event->gsensor.data[2],
                 event->gsensor.sensor_timestamp);
-
 #endif /* VERBOSE_SENSORS */
         HandleGamepadSensorEvent(event);
         break;
@@ -2135,10 +2211,10 @@ SDL_AppResult SDLCALL SDL_AppEvent(void *appstate, SDL_Event *event)
         }
 
         if (display_mode == CONTROLLER_MODE_TESTING) {
-            if (GamepadButtonContains(GetGyroResetButton(gyro_elements), event->button.x, event->button.y)) {
+            if (controller && GamepadButtonContains(GetGyroResetButton(gyro_elements), event->button.x, event->button.y)) {
                 ResetGyroOrientation(controller->imu_state);
-            } else if (GamepadButtonContains(GetGyroCalibrateButton(gyro_elements), event->button.x, event->button.y)) {
-                StartGyroDriftCalibration(controller->imu_state);
+            } else if (controller && GamepadButtonContains(GetGyroCalibrateButton(gyro_elements), event->button.x, event->button.y)) {
+                BeginNoiseCalibrationPhase(controller->imu_state);
             } else if (GamepadButtonContains(setup_mapping_button, event->button.x, event->button.y)) {
                 SetDisplayMode(CONTROLLER_MODE_BINDING);
             }
@@ -2289,10 +2365,13 @@ SDL_AppResult SDLCALL SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDLCALL SDL_AppIterate(void *appstate)
 {
-    /* If we have a virtual controller, send a virtual accelerometer sensor reading */
+    /* If we have a virtual controller, send virtual sensor readings */
     if (virtual_joystick) {
-        float data[3] = { 0.0f, SDL_STANDARD_GRAVITY, 0.0f };
-        SDL_SendJoystickVirtualSensorData(virtual_joystick, SDL_SENSOR_ACCEL, SDL_GetTicksNS(), data, SDL_arraysize(data));
+        float accel_data[3] = { 0.0f, SDL_STANDARD_GRAVITY, 0.0f };
+        float gyro_data[3] = { 0.01f, -0.01f, 0.0f };
+        Uint64 sensor_timestamp = SDL_GetTicksNS();
+        SDL_SendJoystickVirtualSensorData(virtual_joystick, SDL_SENSOR_ACCEL, sensor_timestamp, accel_data, SDL_arraysize(accel_data));
+        SDL_SendJoystickVirtualSensorData(virtual_joystick, SDL_SENSOR_GYRO, sensor_timestamp, gyro_data, SDL_arraysize(gyro_data));
     }
 
     /* Wait 30 ms for joystick events to stop coming in,

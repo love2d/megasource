@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -142,10 +142,10 @@ static bool GAMEINPUT_InternalRemoveByIndex(WIN_GameInputData *data, int idx)
         if (device) {
             if (device->registered) {
                 if (device->info->supportedInput & GameInputKindMouse) {
-                    SDL_RemoveMouse(device->instance_id, true);
+                    SDL_RemoveMouse(device->instance_id);
                 }
                 if (device->info->supportedInput & GameInputKindKeyboard) {
-                    SDL_RemoveKeyboard(device->instance_id, true);
+                    SDL_RemoveKeyboard(device->instance_id);
                 }
                 if (device->last_mouse_reading) {
                     device->last_mouse_reading->Release();
@@ -446,10 +446,10 @@ void WIN_UpdateGameInput(SDL_VideoDevice *_this)
 
             if (!device->registered) {
                 if (device->info->supportedInput & GameInputKindMouse) {
-                    SDL_AddMouse(device->instance_id, device->name, true);
+                    SDL_AddMouse(device->instance_id, device->name);
                 }
                 if (device->info->supportedInput & GameInputKindKeyboard) {
-                    SDL_AddKeyboard(device->instance_id, device->name, true);
+                    SDL_AddKeyboard(device->instance_id, device->name);
                 }
                 device->registered = true;
             }
@@ -580,11 +580,6 @@ void WIN_QuitGameInput(SDL_VideoDevice *_this)
             GAMEINPUT_InternalRemoveByIndex(data, 0);
         }
 
-        data->pGameInput->Release();
-        data->pGameInput = NULL;
-    }
-
-    if (data->pGameInput) {
         SDL_QuitGameInput();
         data->pGameInput = NULL;
     }

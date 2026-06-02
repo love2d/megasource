@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -324,18 +324,18 @@ static const GUID *SDLFmtToMFVidFmtGuid(SDL_PixelFormat format)
 
 // mf.dll ...
 static HMODULE libmf = NULL;
-typedef HRESULT(WINAPI *pfnMFEnumDeviceSources)(IMFAttributes *,IMFActivate ***,UINT32 *);
-typedef HRESULT(WINAPI *pfnMFCreateDeviceSource)(IMFAttributes  *, IMFMediaSource **);
+typedef HRESULT (WINAPI *pfnMFEnumDeviceSources)(IMFAttributes *,IMFActivate ***,UINT32 *);
+typedef HRESULT (WINAPI *pfnMFCreateDeviceSource)(IMFAttributes  *, IMFMediaSource **);
 static pfnMFEnumDeviceSources pMFEnumDeviceSources = NULL;
 static pfnMFCreateDeviceSource pMFCreateDeviceSource = NULL;
 
 // mfplat.dll ...
 static HMODULE libmfplat = NULL;
-typedef HRESULT(WINAPI *pfnMFStartup)(ULONG, DWORD);
-typedef HRESULT(WINAPI *pfnMFShutdown)(void);
-typedef HRESULT(WINAPI *pfnMFCreateAttributes)(IMFAttributes **, UINT32);
-typedef HRESULT(WINAPI *pfnMFCreateMediaType)(IMFMediaType **);
-typedef HRESULT(WINAPI *pfnMFGetStrideForBitmapInfoHeader)(DWORD, DWORD, LONG *);
+typedef HRESULT (WINAPI *pfnMFStartup)(ULONG, DWORD);
+typedef HRESULT (WINAPI *pfnMFShutdown)(void);
+typedef HRESULT (WINAPI *pfnMFCreateAttributes)(IMFAttributes **, UINT32);
+typedef HRESULT (WINAPI *pfnMFCreateMediaType)(IMFMediaType **);
+typedef HRESULT (WINAPI *pfnMFGetStrideForBitmapInfoHeader)(DWORD, DWORD, LONG *);
 
 static pfnMFStartup pMFStartup = NULL;
 static pfnMFShutdown pMFShutdown = NULL;
@@ -345,7 +345,7 @@ static pfnMFGetStrideForBitmapInfoHeader pMFGetStrideForBitmapInfoHeader = NULL;
 
 // mfreadwrite.dll ...
 static HMODULE libmfreadwrite = NULL;
-typedef HRESULT(WINAPI *pfnMFCreateSourceReaderFromMediaSource)(IMFMediaSource *, IMFAttributes *, IMFSourceReader **);
+typedef HRESULT (WINAPI *pfnMFCreateSourceReaderFromMediaSource)(IMFMediaSource *, IMFAttributes *, IMFSourceReader **);
 static pfnMFCreateSourceReaderFromMediaSource pMFCreateSourceReaderFromMediaSource = NULL;
 
 
@@ -430,7 +430,7 @@ static void SDLCALL CleanupIMFMediaBuffer(void *userdata, void *value)
     SDL_free(objs);
 }
 
-static SDL_CameraFrameResult MEDIAFOUNDATION_AcquireFrame(SDL_Camera *device, SDL_Surface *frame, Uint64 *timestampNS)
+static SDL_CameraFrameResult MEDIAFOUNDATION_AcquireFrame(SDL_Camera *device, SDL_Surface *frame, Uint64 *timestampNS, float *rotation)
 {
     SDL_assert(device->hidden->current_sample != NULL);
 
@@ -562,7 +562,7 @@ static SDL_CameraFrameResult MEDIAFOUNDATION_CopyFrame(SDL_Surface *frame, const
     return SDL_CAMERA_FRAME_READY;
 }
 
-static SDL_CameraFrameResult MEDIAFOUNDATION_AcquireFrame(SDL_Camera *device, SDL_Surface *frame, Uint64 *timestampNS)
+static SDL_CameraFrameResult MEDIAFOUNDATION_AcquireFrame(SDL_Camera *device, SDL_Surface *frame, Uint64 *timestampNS, float *rotation)
 {
     SDL_assert(device->hidden->current_sample != NULL);
 

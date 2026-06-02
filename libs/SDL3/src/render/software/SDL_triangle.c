@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -149,19 +149,6 @@ static void bounding_rect_fixedpoint(const SDL_Point *a, const SDL_Point *b, con
     r->h = (max_y - min_y) >> FP_BITS;
 }
 
-// bounding rect of three points
-static void bounding_rect(const SDL_Point *a, const SDL_Point *b, const SDL_Point *c, SDL_Rect *r)
-{
-    int min_x = SDL_min(a->x, SDL_min(b->x, c->x));
-    int max_x = SDL_max(a->x, SDL_max(b->x, c->x));
-    int min_y = SDL_min(a->y, SDL_min(b->y, c->y));
-    int max_y = SDL_max(a->y, SDL_max(b->y, c->y));
-    r->x = min_x;
-    r->y = min_y;
-    r->w = (max_x - min_x);
-    r->h = (max_y - min_y);
-}
-
 /* Triangle rendering, using Barycentric coordinates (w0, w1, w2)
  *
  * The cross product isn't computed from scratch at each iteration,
@@ -186,13 +173,25 @@ static void bounding_rect(const SDL_Point *a, const SDL_Point *b, const SDL_Poin
 #define TRIANGLE_GET_TEXTCOORD                                                          \
     int srcx = (int)(((Sint64)w0 * s2s0_x + (Sint64)w1 * s2s1_x + s2_x_area.x) / area); \
     int srcy = (int)(((Sint64)w0 * s2s0_y + (Sint64)w1 * s2s1_y + s2_x_area.y) / area); \
-    if (texture_address_mode_u == SDL_TEXTURE_ADDRESS_WRAP) {                           \
+    if (texture_address_mode_u == SDL_TEXTURE_ADDRESS_CLAMP) {                          \
+        if (srcx < 0) {                                                                 \
+            srcx = 0;                                                                   \
+        } else if (srcx >= src_surface->w) {                                            \
+            srcx = src_surface->w - 1;                                                  \
+        }                                                                               \
+    } else if (texture_address_mode_u == SDL_TEXTURE_ADDRESS_WRAP) {                    \
         srcx %= src_surface->w;                                                         \
         if (srcx < 0) {                                                                 \
             srcx += (src_surface->w - 1);                                               \
         }                                                                               \
     }                                                                                   \
-    if (texture_address_mode_v == SDL_TEXTURE_ADDRESS_WRAP) {                           \
+    if (texture_address_mode_v == SDL_TEXTURE_ADDRESS_CLAMP) {                          \
+        if (srcy < 0) {                                                                 \
+            srcy = 0;                                                                   \
+        } else if (srcy >= src_surface->h) {                                            \
+            srcy = src_surface->h - 1;                                                  \
+        }                                                                               \
+    } else if (texture_address_mode_v == SDL_TEXTURE_ADDRESS_WRAP) {                    \
         srcy %= src_surface->h;                                                         \
         if (srcy < 0) {                                                                 \
             srcy += (src_surface->h - 1);                                               \
@@ -503,10 +502,10 @@ bool SDL_SW_BlitTriangle(
 
     bool has_modulation;
 
-    if (!SDL_SurfaceValid(src)) {
+    CHECK_PARAM(!SDL_SurfaceValid(src)) {
         return SDL_InvalidParamError("src");
     }
-    if (!SDL_SurfaceValid(dst)) {
+    CHECK_PARAM(!SDL_SurfaceValid(dst)) {
         return SDL_InvalidParamError("dst");
     }
 
@@ -542,41 +541,6 @@ bool SDL_SW_BlitTriangle(
     bounding_rect_fixedpoint(d0, d1, d2, &dstrect);
 
     SDL_GetSurfaceBlendMode(src, &blend);
-
-    // TRIANGLE_GET_TEXTCOORD interpolates up to the max values included, so reduce by 1
-    if (texture_address_mode_u == SDL_TEXTURE_ADDRESS_CLAMP ||
-        texture_address_mode_v == SDL_TEXTURE_ADDRESS_CLAMP) {
-        SDL_Rect srcrect;
-        bounding_rect(s0, s1, s2, &srcrect);
-        if (texture_address_mode_u == SDL_TEXTURE_ADDRESS_CLAMP) {
-            int maxx = srcrect.x + srcrect.w;
-            if (srcrect.w > 0) {
-                if (s0->x == maxx) {
-                    s0->x--;
-                }
-                if (s1->x == maxx) {
-                    s1->x--;
-                }
-                if (s2->x == maxx) {
-                    s2->x--;
-                }
-            }
-        }
-        if (texture_address_mode_v == SDL_TEXTURE_ADDRESS_CLAMP) {
-            int maxy = srcrect.y + srcrect.h;
-            if (srcrect.h > 0) {
-                if (s0->y == maxy) {
-                    s0->y--;
-                }
-                if (s1->y == maxy) {
-                    s1->y--;
-                }
-                if (s2->y == maxy) {
-                    s2->y--;
-                }
-            }
-        }
-    }
 
     if (is_uniform) {
         // SDL_GetSurfaceColorMod(src, &r, &g, &b);
@@ -779,12 +743,16 @@ end:
 
 #define FORMAT_ALPHA                0
 #define FORMAT_NO_ALPHA             -1
+#define FORMAT_INDEX8               -2
 #define FORMAT_2101010              1
+#define FORMAT_INDEXED(format)      format == FORMAT_INDEX8
 #define FORMAT_HAS_ALPHA(format)    format == 0
 #define FORMAT_HAS_NO_ALPHA(format) format < 0
 static int detect_format(const SDL_PixelFormatDetails *pf)
 {
-    if (pf->format == SDL_PIXELFORMAT_ARGB2101010) {
+    if (SDL_ISPIXELFORMAT_INDEXED(pf->format)) {
+        return FORMAT_INDEX8;
+    } if (pf->format == SDL_PIXELFORMAT_ARGB2101010) {
         return FORMAT_2101010;
     } else if (pf->Amask) {
         return FORMAT_ALPHA;
@@ -802,6 +770,7 @@ static void SDL_BlitTriangle_Slow(SDL_BlitInfo *info,
                                   SDL_TextureAddressMode texture_address_mode_v)
 {
     SDL_Surface *src_surface = info->src_surface;
+    SDL_Palette *palette = src_surface->palette;
     const int flags = info->flags;
     Uint32 modulateR = info->r;
     Uint32 modulateG = info->g;
@@ -832,7 +801,14 @@ static void SDL_BlitTriangle_Slow(SDL_BlitInfo *info,
         Uint8 *dst = dptr;
         TRIANGLE_GET_TEXTCOORD
         src = (info->src + (srcy * info->src_pitch) + (srcx * srcbpp));
-        if (FORMAT_HAS_ALPHA(srcfmt_val)) {
+        if (FORMAT_INDEXED(srcfmt_val)) {
+            srcpixel = *src;
+            const SDL_Color *color = &palette->colors[srcpixel];
+            srcR = color->r;
+            srcG = color->g;
+            srcB = color->b;
+            srcA = color->a;
+        } else if (FORMAT_HAS_ALPHA(srcfmt_val)) {
             DISEMBLE_RGBA(src, srcbpp, src_fmt, srcpixel, srcR, srcG, srcB, srcA);
         } else if (FORMAT_HAS_NO_ALPHA(srcfmt_val)) {
             DISEMBLE_RGB(src, srcbpp, src_fmt, srcpixel, srcR, srcG, srcB);

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -35,6 +35,7 @@
 #include "SDL_waylandwindow.h"
 #include "SDL_waylandmouse.h"
 #include "SDL_waylandclipboard.h"
+#include "SDL_waylandkeyboard.h"
 
 #include "pointer-constraints-unstable-v1-client-protocol.h"
 #include "relative-pointer-unstable-v1-client-protocol.h"
@@ -44,6 +45,9 @@
 #include "tablet-v2-client-protocol.h"
 #include "primary-selection-unstable-v1-client-protocol.h"
 #include "input-timestamps-unstable-v1-client-protocol.h"
+#include "pointer-gestures-unstable-v1-client-protocol.h"
+#include "cursor-shape-v1-client-protocol.h"
+#include "viewporter-client-protocol.h"
 
 #ifdef HAVE_LIBDECOR_H
 #include <libdecor.h>
@@ -65,8 +69,6 @@
 #include <unistd.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <xkbcommon/xkbcommon.h>
-#include "cursor-shape-v1-client-protocol.h"
-#include "viewporter-client-protocol.h"
 
 // Weston uses a ratio of 10 units per scroll tick
 #define WAYLAND_WHEEL_AXIS_UNIT 10
@@ -86,6 +88,10 @@
 
 // Focus clickthrough timeout
 #define WAYLAND_FOCUS_CLICK_TIMEOUT_NS SDL_MS_TO_NS(10)
+
+// Timer rollover detection thresholds
+#define WAYLAND_TIMER_ROLLOVER_INTERVAL_LOW  (SDL_MAX_UINT32 / 16U)
+#define WAYLAND_TIMER_ROLLOVER_INTERVAL_HIGH (WAYLAND_TIMER_ROLLOVER_INTERVAL_LOW * 15U)
 
 // Scoped function declarations
 static void Wayland_SeatUpdateKeyboardGrab(SDL_WaylandSeat *seat);
@@ -116,7 +122,7 @@ static void Wayland_SeatAddTouch(SDL_WaylandSeat *seat, SDL_TouchID id, wl_fixed
 static void Wayland_SeatCancelTouch(SDL_WaylandSeat *seat, SDL_WaylandTouchPoint *tp)
 {
     if (tp->surface) {
-        SDL_WindowData *window_data = (SDL_WindowData *)wl_surface_get_user_data(tp->surface);
+        SDL_WindowData *window_data = Wayland_GetWindowDataForOwnedSurface(tp->surface);
 
         if (window_data) {
             const float x = (float)(wl_fixed_to_double(tp->fx) / window_data->current.logical_width);
@@ -215,14 +221,27 @@ static Uint64 Wayland_EventTimestampMSToNS(Uint32 wl_timestamp_ms)
 {
     static Uint64 timestamp_offset = 0;
     static Uint32 last = 0;
+    Uint64 timestamp = SDL_MS_TO_NS(wl_timestamp_ms) + timestamp_offset;
 
-    // Handle 32-bit timer rollover.
-    if (wl_timestamp_ms < last) {
-        timestamp_offset += SDL_MS_TO_NS(SDL_UINT64_C(0x100000000));
+    if (wl_timestamp_ms >= last) {
+        if (timestamp_offset && last < WAYLAND_TIMER_ROLLOVER_INTERVAL_LOW && wl_timestamp_ms > WAYLAND_TIMER_ROLLOVER_INTERVAL_HIGH) {
+            // A time that crossed backwards across zero was received. Subtract the increased time base offset.
+            timestamp -= SDL_MS_TO_NS(SDL_UINT64_C(0x100000000));
+        } else {
+            last = wl_timestamp_ms;
+        }
+    } else {
+        /* Only increment the base time offset if the timer actually crossed forward across 0,
+         * and not if this is just a timestamp from a slightly older event.
+         */
+        if (wl_timestamp_ms < WAYLAND_TIMER_ROLLOVER_INTERVAL_LOW && last > WAYLAND_TIMER_ROLLOVER_INTERVAL_HIGH) {
+            timestamp_offset += SDL_MS_TO_NS(SDL_UINT64_C(0x100000000));
+            timestamp += SDL_MS_TO_NS(SDL_UINT64_C(0x100000000));
+            last = wl_timestamp_ms;
+        }
     }
-    last = wl_timestamp_ms;
 
-    return SDL_MS_TO_NS(wl_timestamp_ms) + timestamp_offset;
+    return timestamp;
 }
 
 /* Even if high-res timestamps are available, the millisecond timestamps are still processed
@@ -237,14 +256,14 @@ static Uint64 Wayland_GetKeyboardTimestamp(SDL_WaylandSeat *seat, Uint32 wl_time
 
 static Uint64 Wayland_GetPointerTimestamp(SDL_WaylandSeat *seat, Uint32 wl_timestamp_ms)
 {
-    const Uint64 adjustedTimestampMS = Wayland_EventTimestampMSToNS(wl_timestamp_ms);
-    return Wayland_AdjustEventTimestampBase(seat->pointer.timestamps ? seat->pointer.highres_timestamp_ns : adjustedTimestampMS);
+    const Uint64 adjustedTimestampNS = Wayland_EventTimestampMSToNS(wl_timestamp_ms);
+    return Wayland_AdjustEventTimestampBase(seat->pointer.timestamps ? seat->pointer.highres_timestamp_ns : adjustedTimestampNS);
 }
 
 Uint64 Wayland_GetTouchTimestamp(SDL_WaylandSeat *seat, Uint32 wl_timestamp_ms)
 {
-    const Uint64 adjustedTimestampMS = Wayland_EventTimestampMSToNS(wl_timestamp_ms);
-    return Wayland_AdjustEventTimestampBase(seat->touch.timestamps ? seat->touch.highres_timestamp_ns : adjustedTimestampMS);
+    const Uint64 adjustedTimestampNS = Wayland_EventTimestampMSToNS(wl_timestamp_ms);
+    return Wayland_AdjustEventTimestampBase(seat->touch.timestamps ? seat->touch.highres_timestamp_ns : adjustedTimestampNS);
 }
 
 static void input_timestamp_listener(void *data, struct zwp_input_timestamps_v1 *zwp_input_timestamps_v1,
@@ -287,11 +306,83 @@ void Wayland_DisplayInitInputTimestampManager(SDL_VideoData *display)
     }
 }
 
+static void handle_pinch_begin(void *data, struct zwp_pointer_gesture_pinch_v1 *zwp_pointer_gesture_pinch_v1, uint32_t serial, uint32_t time, struct wl_surface *surface, uint32_t fingers)
+{
+    if (!surface) {
+        return;
+    }
+
+    SDL_WindowData *wind = Wayland_GetWindowDataForOwnedSurface(surface);
+    if (wind) {
+        SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+        seat->pointer.gesture_focus = wind;
+
+        const Uint64 timestamp = Wayland_GetPointerTimestamp(seat, time);
+        SDL_SendPinch(SDL_EVENT_PINCH_BEGIN, timestamp, wind->sdlwindow, 0.0f);
+    }
+}
+
+static void handle_pinch_update(void *data, struct zwp_pointer_gesture_pinch_v1 *zwp_pointer_gesture_pinch_v1, uint32_t time,
+                                wl_fixed_t dx, wl_fixed_t dy, wl_fixed_t scale, wl_fixed_t rotation)
+{
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+
+    if (seat->pointer.gesture_focus) {
+        const Uint64 timestamp = Wayland_GetPointerTimestamp(seat, time);
+        const float s = (float)wl_fixed_to_double(scale);
+        SDL_SendPinch(SDL_EVENT_PINCH_UPDATE, timestamp, seat->pointer.gesture_focus->sdlwindow, s);
+    }
+}
+
+static void handle_pinch_end(void *data, struct zwp_pointer_gesture_pinch_v1 *zwp_pointer_gesture_pinch_v1, uint32_t serial, uint32_t time, int32_t cancelled)
+{
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+
+    if (seat->pointer.gesture_focus) {
+        const Uint64 timestamp = Wayland_GetPointerTimestamp(seat, time);
+        SDL_SendPinch(SDL_EVENT_PINCH_END, timestamp, seat->pointer.gesture_focus->sdlwindow, 0.0f);
+
+        seat->pointer.gesture_focus = NULL;
+    }
+}
+
+static const struct zwp_pointer_gesture_pinch_v1_listener gesture_pinch_listener = {
+    handle_pinch_begin,
+    handle_pinch_update,
+    handle_pinch_end
+};
+
+static void Wayland_SeatCreatePointerGestures(SDL_WaylandSeat *seat)
+{
+    if (seat->display->zwp_pointer_gestures) {
+        if (seat->pointer.wl_pointer && !seat->pointer.gesture_pinch) {
+            seat->pointer.gesture_pinch = zwp_pointer_gestures_v1_get_pinch_gesture(seat->display->zwp_pointer_gestures, seat->pointer.wl_pointer);
+            zwp_pointer_gesture_pinch_v1_set_user_data(seat->pointer.gesture_pinch, seat);
+            zwp_pointer_gesture_pinch_v1_add_listener(seat->pointer.gesture_pinch, &gesture_pinch_listener, seat);
+        }
+    }
+}
+
+void Wayland_DisplayInitPointerGestureManager(SDL_VideoData *display)
+{
+    SDL_WaylandSeat *seat;
+    wl_list_for_each (seat, &display->seat_list, link) {
+        Wayland_SeatCreatePointerGestures(seat);
+    }
+}
+
 static void Wayland_SeatCreateCursorShape(SDL_WaylandSeat *seat)
 {
     if (seat->display->cursor_shape_manager) {
-        if (seat->pointer.wl_pointer && !seat->pointer.cursor_shape) {
-            seat->pointer.cursor_shape = wp_cursor_shape_manager_v1_get_pointer(seat->display->cursor_shape_manager, seat->pointer.wl_pointer);
+        if (seat->pointer.wl_pointer && !seat->pointer.cursor_state.cursor_shape) {
+            seat->pointer.cursor_state.cursor_shape = wp_cursor_shape_manager_v1_get_pointer(seat->display->cursor_shape_manager, seat->pointer.wl_pointer);
+        }
+
+        SDL_WaylandPenTool *tool;
+        wl_list_for_each(tool, &seat->tablet.tool_list, link) {
+            if (!tool->cursor_state.cursor_shape) {
+                tool->cursor_state.cursor_shape = wp_cursor_shape_manager_v1_get_tablet_tool_v2(seat->display->cursor_shape_manager, tool->wltool);
+            }
         }
     }
 }
@@ -301,6 +392,18 @@ void Wayland_DisplayInitCursorShapeManager(SDL_VideoData *display)
     SDL_WaylandSeat *seat;
     wl_list_for_each (seat, &display->seat_list, link) {
         Wayland_SeatCreateCursorShape(seat);
+    }
+}
+
+static void Wayland_SeatSetKeymap(SDL_WaylandSeat *seat)
+{
+    const bool send_event = !seat->display->initializing;
+
+    if (seat->keyboard.sdl_keymap &&
+        seat->keyboard.xkb.current_layout < seat->keyboard.xkb.num_layouts &&
+        seat->keyboard.sdl_keymap[seat->keyboard.xkb.current_layout] != SDL_GetCurrentKeymap(true)) {
+        SDL_SetKeymap(seat->keyboard.sdl_keymap[seat->keyboard.xkb.current_layout], send_event);
+        SDL_SetModState(seat->keyboard.pressed_modifiers | seat->keyboard.locked_modifiers);
     }
 }
 
@@ -314,7 +417,7 @@ static bool keyboard_repeat_handle(SDL_WaylandKeyboardRepeat *repeat_info, Uint6
             const Uint64 timestamp = repeat_info->base_time_ns + repeat_info->next_repeat_ns;
             SDL_SendKeyboardKeyIgnoreModifiers(Wayland_AdjustEventTimestampBase(timestamp), repeat_info->keyboard_id, repeat_info->key, repeat_info->scancode, true);
         }
-        if (repeat_info->text[0]) {
+        if (repeat_info->text[0] && !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_ALT))) {
             SDL_SendKeyboardText(repeat_info->text);
         }
         repeat_info->next_repeat_ns += SDL_NS_PER_SECOND / (Uint64)repeat_info->repeat_rate;
@@ -392,139 +495,114 @@ void Wayland_SendWakeupEvent(SDL_VideoDevice *_this, SDL_Window *window)
 {
     SDL_VideoData *d = _this->internal;
 
-    /* Queue a sync event to unblock the event queue fd if it's empty and being waited on.
-     * TODO: Maybe use a pipe to avoid the compositor roundtrip?
-     */
+    // Queue a sync event to unblock the main event queue if it's being waited on.
     struct wl_callback *cb = wl_display_sync(d->display);
     wl_callback_add_listener(cb, &sync_listener, NULL);
     WAYLAND_wl_display_flush(d->display);
-}
-
-static int dispatch_queued_events(SDL_VideoData *viddata)
-{
-    int rc;
-
-    /*
-     * NOTE: When reconnection is implemented, check if libdecor needs to be
-     *       involved in the reconnection process.
-     */
-#ifdef HAVE_LIBDECOR_H
-    if (viddata->shell.libdecor) {
-        libdecor_dispatch(viddata->shell.libdecor, 0);
-    }
-#endif
-
-    rc = WAYLAND_wl_display_dispatch_pending(viddata->display);
-    return rc >= 0 ? 1 : rc;
 }
 
 int Wayland_WaitEventTimeout(SDL_VideoDevice *_this, Sint64 timeoutNS)
 {
     SDL_VideoData *d = _this->internal;
     SDL_WaylandSeat *seat;
-    bool key_repeat_active = false;
-
-    WAYLAND_wl_display_flush(d->display);
+    Uint64 start = SDL_GetTicksNS();
+    const int display_fd = WAYLAND_wl_display_get_fd(d->display);
+    int ret;
+    bool poll_alarm_set = false;
 
 #ifdef SDL_USE_IME
     SDL_Window *keyboard_focus = SDL_GetKeyboardFocus();
     if (!d->text_input_manager && keyboard_focus && SDL_TextInputActive(keyboard_focus)) {
-        SDL_IME_PumpEvents();
+        // If a DBus IME is active with no text input protocol, periodically wake to poll it.
+        if (timeoutNS < 0 || SDL_MS_TO_NS(200) <= timeoutNS) {
+            timeoutNS = SDL_MS_TO_NS(200);
+            poll_alarm_set = true;
+        }
     }
-#endif
-
-#ifdef SDL_USE_LIBDBUS
-    SDL_DBus_PumpEvents();
 #endif
 
     // If key repeat is active, we'll need to cap our maximum wait time to handle repeats
     wl_list_for_each (seat, &d->seat_list, link) {
         if (keyboard_repeat_is_set(&seat->keyboard.repeat)) {
-            if (seat->keyboard.sdl_keymap != SDL_GetCurrentKeymap(true)) {
-                SDL_SetKeymap(seat->keyboard.sdl_keymap, true);
-                SDL_SetModState(seat->keyboard.pressed_modifiers | seat->keyboard.locked_modifiers);
-            }
-
-            const Uint64 elapsed = SDL_GetTicksNS() - seat->keyboard.repeat.sdl_press_time_ns;
-            if (keyboard_repeat_handle(&seat->keyboard.repeat, elapsed)) {
-                // A repeat key event was already due
-                return 1;
-            } else {
-                const Uint64 next_repeat_wait_time = (seat->keyboard.repeat.next_repeat_ns - elapsed) + 1;
-                if (timeoutNS >= 0) {
-                    timeoutNS = SDL_min(timeoutNS, next_repeat_wait_time);
-                } else {
-                    timeoutNS = next_repeat_wait_time;
-                }
-                key_repeat_active = true;
+            const Uint64 elapsed = start - seat->keyboard.repeat.sdl_press_time_ns;
+            const Uint64 next_repeat_wait_time = (seat->keyboard.repeat.next_repeat_ns - elapsed) + 1;
+            if (timeoutNS < 0 || next_repeat_wait_time <= timeoutNS) {
+                timeoutNS = next_repeat_wait_time;
+                poll_alarm_set = true;
             }
         }
     }
 
-    /* wl_display_prepare_read() will return -1 if the default queue is not empty.
-     * If the default queue is empty, it will prepare us for our SDL_IOReady() call. */
     if (WAYLAND_wl_display_prepare_read(d->display) == 0) {
-        // Use SDL_IOR_NO_RETRY to ensure SIGINT will break us out of our wait
-        int err = SDL_IOReady(WAYLAND_wl_display_get_fd(d->display), SDL_IOR_READ | SDL_IOR_NO_RETRY, timeoutNS);
-        if (err > 0) {
-            // There are new events available to read
-            WAYLAND_wl_display_read_events(d->display);
-            return dispatch_queued_events(d);
-        } else if (err == 0) {
-            int ret = 0;
+        if (timeoutNS > 0) {
+            const Uint64 now = SDL_GetTicksNS();
+            const Uint64 elapsed = now - start;
+            start = now;
+            timeoutNS = elapsed <= timeoutNS ? timeoutNS - elapsed : 0;
+        }
 
-            // No events available within the timeout
-            WAYLAND_wl_display_cancel_read(d->display);
+        ret = WAYLAND_wl_display_flush(d->display);
 
-            // If key repeat is active, we might have woken up to generate a key event
-            if (key_repeat_active) {
-                wl_list_for_each (seat, &d->seat_list, link) {
-                    if (seat->keyboard.sdl_keymap != SDL_GetCurrentKeymap(true)) {
-                        SDL_SetKeymap(seat->keyboard.sdl_keymap, true);
-                        SDL_SetModState(seat->keyboard.pressed_modifiers | seat->keyboard.locked_modifiers);
-                    }
+        if (ret == -1 && errno == EAGAIN) {
+            // Unable to write to the socket; poll until the socket can be written to, it times out, or is interrupted.
+            ret = SDL_IOReady(display_fd, SDL_IOR_WRITE | SDL_IOR_NO_RETRY, timeoutNS);
 
-                    const Uint64 elapsed = SDL_GetTicksNS() - seat->keyboard.repeat.sdl_press_time_ns;
-                    if (keyboard_repeat_handle(&seat->keyboard.repeat, elapsed)) {
-                        ++ret;
-                    }
-                }
-            }
-
-            return ret;
-        } else {
-            // Error returned from poll()/select()
-            WAYLAND_wl_display_cancel_read(d->display);
-
-            if (errno == EINTR) {
-                /* If the wait was interrupted by a signal, we may have generated a
-                 * SDL_EVENT_QUIT event. Let the caller know to call SDL_PumpEvents(). */
-                return 1;
-            } else {
-                return err;
+            if (ret <= 0) {
+                // The poll operation timed out or experienced an error, so see if there are any events to read without waiting.
+                timeoutNS = 0;
             }
         }
-    } else {
-        // We already had pending events
-        return dispatch_queued_events(d);
+
+        if (ret < 0) {
+            // Pump events on an interrupt or broken pipe to handle the error.
+            WAYLAND_wl_display_cancel_read(d->display);
+            return errno == EINTR || errno == EPIPE ? 1 : ret;
+        }
+
+        if (timeoutNS > 0) {
+            const Uint64 now = SDL_GetTicksNS();
+            const Uint64 elapsed = now - start;
+            start = now;
+            timeoutNS = elapsed <= timeoutNS ? timeoutNS - elapsed : 0;
+        }
+
+        // Use SDL_IOR_NO_RETRY to catch EINTR.
+        ret = SDL_IOReady(display_fd, SDL_IOR_READ | SDL_IOR_NO_RETRY, timeoutNS);
+        if (ret <= 0) {
+            // Timeout or error, cancel the read.
+            WAYLAND_wl_display_cancel_read(d->display);
+
+            // The poll timed out with no data to read, but signal the caller to pump events if polling is required.
+            if (ret == 0) {
+                return poll_alarm_set ? 1 : 0;
+            } else {
+                // Pump events on an interrupt or broken pipe to handle the error.
+                return errno == EINTR || errno == EPIPE ? 1 : ret;
+            }
+        }
+
+        ret = WAYLAND_wl_display_read_events(d->display);
+        if (ret == -1) {
+            return ret;
+        }
     }
+
+    // Signal to the caller that there might be an event available.
+    return 1;
 }
 
 void Wayland_PumpEvents(SDL_VideoDevice *_this)
 {
     SDL_VideoData *d = _this->internal;
     SDL_WaylandSeat *seat;
-    int err;
+    const int display_fd = WAYLAND_wl_display_get_fd(d->display);
+    int ret = 0;
 
 #ifdef SDL_USE_IME
     SDL_Window *keyboard_focus = SDL_GetKeyboardFocus();
     if (!d->text_input_manager && keyboard_focus && SDL_TextInputActive(keyboard_focus)) {
         SDL_IME_PumpEvents();
     }
-#endif
-
-#ifdef SDL_USE_LIBDBUS
-    SDL_DBus_PumpEvents();
 #endif
 
 #ifdef HAVE_LIBDECOR_H
@@ -533,75 +611,86 @@ void Wayland_PumpEvents(SDL_VideoDevice *_this)
     }
 #endif
 
-    WAYLAND_wl_display_flush(d->display);
+    /* If the queue isn't empty, dispatch any old events, and try to prepare for reading again.
+     * If preparing to read returns -1 on the second try, wl_display_read_events() enqueued new
+     * events at some point between dispatching the old events and preparing for the read,
+     * probably from another thread, which means that the events in the queue are current.
+     */
+    ret = WAYLAND_wl_display_prepare_read(d->display);
+    if (ret == -1) {
+        ret = WAYLAND_wl_display_dispatch_pending(d->display);
+        if (ret < 0) {
+            goto connection_error;
+        }
 
-    /* wl_display_prepare_read() will return -1 if the default queue is not empty.
-     * If the default queue is empty, it will prepare us for our SDL_IOReady() call. */
-    if (WAYLAND_wl_display_prepare_read(d->display) == 0) {
-        if (SDL_IOReady(WAYLAND_wl_display_get_fd(d->display), SDL_IOR_READ, 0) > 0) {
-            WAYLAND_wl_display_read_events(d->display);
+        ret = WAYLAND_wl_display_prepare_read(d->display);
+    }
+
+    if (ret == 0) {
+        ret = WAYLAND_wl_display_flush(d->display);
+
+        if (ret == -1 && errno == EAGAIN) {
+            // Unable to write to the socket; wait a brief time to see if it becomes writable.
+            ret = SDL_IOReady(display_fd, SDL_IOR_WRITE, SDL_MS_TO_NS(4));
+            if (ret > 0) {
+                ret = WAYLAND_wl_display_flush(d->display);
+            }
+        }
+
+        // If the compositor closed the socket, just jump to the error handler.
+        if (ret < 0 && errno == EPIPE) {
+            WAYLAND_wl_display_cancel_read(d->display);
+            goto connection_error;
+        }
+
+        ret = SDL_IOReady(display_fd, SDL_IOR_READ, 0);
+        if (ret > 0) {
+            ret = WAYLAND_wl_display_read_events(d->display);
+            if (ret == 0) {
+                ret = WAYLAND_wl_display_dispatch_pending(d->display);
+            }
         } else {
             WAYLAND_wl_display_cancel_read(d->display);
         }
+
+    } else {
+        ret = WAYLAND_wl_display_dispatch_pending(d->display);
     }
 
-    // Dispatch any pre-existing pending events or new events we may have read
-    err = WAYLAND_wl_display_dispatch_pending(d->display);
+    if (ret >= 0) {
+        // Synthesize key repeat events.
+        wl_list_for_each (seat, &d->seat_list, link) {
+            if (keyboard_repeat_is_set(&seat->keyboard.repeat)) {
+                Wayland_SeatSetKeymap(seat);
 
-    wl_list_for_each (seat, &d->seat_list, link) {
-        if (keyboard_repeat_is_set(&seat->keyboard.repeat)) {
-            if (seat->keyboard.sdl_keymap != SDL_GetCurrentKeymap(true)) {
-                SDL_SetKeymap(seat->keyboard.sdl_keymap, true);
-                SDL_SetModState(seat->keyboard.pressed_modifiers | seat->keyboard.locked_modifiers);
+                const Uint64 elapsed = SDL_GetTicksNS() - seat->keyboard.repeat.sdl_press_time_ns;
+                keyboard_repeat_handle(&seat->keyboard.repeat, elapsed);
             }
-
-            const Uint64 elapsed = SDL_GetTicksNS() - seat->keyboard.repeat.sdl_press_time_ns;
-            keyboard_repeat_handle(&seat->keyboard.repeat, elapsed);
         }
     }
 
-    if (err < 0 && !d->display_disconnected) {
-        /* Something has failed with the Wayland connection -- for example,
-         * the compositor may have shut down and closed its end of the socket,
-         * or there is a library-specific error.
-         *
-         * Try to recover once, then quit.
-         */
-        if (!Wayland_VideoReconnect(_this)) {
-            d->display_disconnected = 1;
-            SDL_LogError(SDL_LOG_CATEGORY_VIDEO, "Wayland display connection closed by server (fatal)");
-
-            /* Only send a single quit message, as application shutdown might call
-             * SDL_PumpEvents
-             */
-            SDL_SendQuit();
-        }
+connection_error:
+    if (ret < 0) {
+        Wayland_HandleDisplayDisconnected(_this);
     }
 }
 
-static void pointer_handle_motion_common(SDL_WaylandSeat *seat, Uint64 nsTimestamp, wl_fixed_t sx_w, wl_fixed_t sy_w)
+static void pointer_dispatch_absolute_motion(SDL_WaylandSeat *seat)
 {
     SDL_WindowData *window_data = seat->pointer.focus;
     SDL_Window *window = window_data ? window_data->sdlwindow : NULL;
 
     if (window_data) {
-        const float sx = (float)(wl_fixed_to_double(sx_w) * window_data->pointer_scale.x);
-        const float sy = (float)(wl_fixed_to_double(sy_w) * window_data->pointer_scale.y);
-        SDL_SendMouseMotion(nsTimestamp, window_data->sdlwindow, seat->pointer.sdl_id, false, sx, sy);
+        const float sx = (float)(wl_fixed_to_double(seat->pointer.pending_frame.absolute.sx) * window_data->pointer_scale.x);
+        const float sy = (float)(wl_fixed_to_double(seat->pointer.pending_frame.absolute.sy) * window_data->pointer_scale.y);
+        SDL_SendMouseMotion(seat->pointer.pending_frame.timestamp_ns, window_data->sdlwindow, seat->pointer.sdl_id, false, sx, sy);
 
         seat->pointer.last_motion.x = (int)SDL_floorf(sx);
         seat->pointer.last_motion.y = (int)SDL_floorf(sy);
 
-        /* Pointer confinement regions are created only when the pointer actually enters the region via
-         * a motion event received from the compositor.
-         */
-        if (!SDL_RectEmpty(&window->mouse_rect) && !seat->pointer.confined_pointer) {
-            SDL_Rect scaled_mouse_rect;
-            Wayland_GetScaledMouseRect(window, &scaled_mouse_rect);
-
-            if (SDL_PointInRect(&seat->pointer.last_motion, &scaled_mouse_rect)) {
-                Wayland_SeatUpdatePointerGrab(seat);
-            }
+        // If the pointer should be confined, but wasn't for some reason, keep trying until it is.
+        if (!SDL_RectEmpty(&window->mouse_rect) && !seat->pointer.is_confined) {
+            Wayland_SeatUpdatePointerGrab(seat);
         }
 
         if (window->hit_test) {
@@ -675,17 +764,33 @@ static void pointer_handle_motion_common(SDL_WaylandSeat *seat, Uint64 nsTimesta
 
             if (rc != window_data->hit_test_result) {
                 window_data->hit_test_result = rc;
-                Wayland_SeatUpdateCursor(seat);
+                Wayland_SeatUpdatePointerCursor(seat);
             }
         }
     }
 }
 
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer,
-                                  uint32_t time, wl_fixed_t sx_w, wl_fixed_t sy_w)
+                                  uint32_t time, wl_fixed_t sx, wl_fixed_t sy)
 {
     SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
-    pointer_handle_motion_common(seat, Wayland_GetPointerTimestamp(seat, time), sx_w, sy_w);
+
+    seat->pointer.pending_frame.have_absolute = true;
+    seat->pointer.pending_frame.absolute.sx = sx;
+    seat->pointer.pending_frame.absolute.sy = sy;
+
+    /* The relative pointer timestamp is higher resolution than the default millisecond timestamp,
+     * but lower than the highres timestamp. Use the best timer available for this frame, but still
+     * process the pending millisecond timestamp to update the offset value for other events.
+     */
+    const Uint64 timestamp = Wayland_GetPointerTimestamp(seat, time);
+    if (!seat->pointer.pending_frame.have_relative || seat->pointer.timestamps) {
+        seat->pointer.pending_frame.timestamp_ns = timestamp;
+    }
+
+    if (wl_pointer_get_version(seat->pointer.wl_pointer) < WL_POINTER_FRAME_SINCE_VERSION) {
+        pointer_dispatch_absolute_motion(seat);
+    }
 }
 
 static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
@@ -713,23 +818,36 @@ static void pointer_handle_enter(void *data, struct wl_pointer *pointer,
      * event with no following motion event, but with the new coordinates
      * as part of the enter event.
      *
-     * FIXME: This causes a movement event with an anomalous timestamp when
-     *        the cursor enters the window.
+     * If another event with a real timestamp is part of this frame, use it.
+     * Otherwise, set it to 0 to use the current system timer.
      */
-    pointer_handle_motion_common(seat, 0, sx_w, sy_w);
+    if (!seat->pointer.pending_frame.have_absolute &&
+        !seat->pointer.pending_frame.have_relative &&
+        !seat->pointer.pending_frame.have_axis) {
+        seat->pointer.pending_frame.timestamp_ns = 0;
+    }
+    seat->pointer.pending_frame.absolute.sx = sx_w;
+    seat->pointer.pending_frame.absolute.sy = sy_w;
 
-    // Update the pointer grab state.
-    Wayland_SeatUpdatePointerGrab(seat);
+    seat->pointer.pending_frame.have_absolute = true;
+    seat->pointer.pending_frame.have_enter = true;
 
-    /* If the cursor was changed while our window didn't have pointer
-     * focus, we might need to trigger another call to
-     * wl_pointer_set_cursor() for the new cursor to be displayed.
-     *
-     * This will also update the cursor if a second pointer entered a
-     * window that already has focus, as the focus change sequence
-     * won't be run.
-     */
-    Wayland_SeatUpdateCursor(seat);
+    if (wl_pointer_get_version(seat->pointer.wl_pointer) < WL_POINTER_FRAME_SINCE_VERSION) {
+        pointer_dispatch_absolute_motion(seat);
+
+        // Update the pointer grab state.
+        Wayland_SeatUpdatePointerGrab(seat);
+
+        /* If the cursor was changed while our window didn't have pointer
+         * focus, we might need to trigger another call to
+         * wl_pointer_set_cursor() for the new cursor to be displayed.
+         *
+         * This will also update the cursor if a second pointer entered a
+         * window that already has focus, as the focus change sequence
+         * won't be run.
+         */
+        Wayland_SeatUpdatePointerCursor(seat);
+    }
 }
 
 static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
@@ -751,12 +869,12 @@ static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
 
     SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
     seat->pointer.focus = NULL;
-    seat->pointer.buttons_pressed = 0;
-    SDL_SendMouseButton(0, window->sdlwindow, seat->pointer.sdl_id, SDL_BUTTON_LEFT, false);
-    SDL_SendMouseButton(0, window->sdlwindow, seat->pointer.sdl_id, SDL_BUTTON_RIGHT, false);
-    SDL_SendMouseButton(0, window->sdlwindow, seat->pointer.sdl_id, SDL_BUTTON_MIDDLE, false);
-    SDL_SendMouseButton(0, window->sdlwindow, seat->pointer.sdl_id, SDL_BUTTON_X1, false);
-    SDL_SendMouseButton(0, window->sdlwindow, seat->pointer.sdl_id, SDL_BUTTON_X2, false);
+    for (int i = 1; seat->pointer.buttons_pressed; ++i) {
+        if (seat->pointer.buttons_pressed & SDL_BUTTON_MASK(i)) {
+            SDL_SendMouseButton(0, window->sdlwindow, seat->pointer.sdl_id, i, false);
+            seat->pointer.buttons_pressed &= ~SDL_BUTTON_MASK(i);
+        }
+    }
 
     /* A pointer leave event may be emitted if the compositor hides the pointer in response to receiving a touch event.
      * Don't relinquish focus if the surface has active touches, as the compositor is just transitioning from mouse to touch mode.
@@ -768,12 +886,12 @@ static void pointer_handle_leave(void *data, struct wl_pointer *pointer,
     }
 
     Wayland_SeatUpdatePointerGrab(seat);
-    Wayland_SeatUpdateCursor(seat);
+    Wayland_SeatUpdatePointerCursor(seat);
 }
 
 static bool Wayland_ProcessHitTest(SDL_WaylandSeat *seat, Uint32 serial)
 {
-    // Locked in relative mode, do nothing.
+    // Pointer is immobilized, do nothing.
     if (seat->pointer.locked_pointer) {
         return false;
     }
@@ -872,14 +990,9 @@ static void pointer_handle_button_common(SDL_WaylandSeat *seat, uint32_t serial,
     case BTN_RIGHT:
         sdl_button = SDL_BUTTON_RIGHT;
         break;
-    case BTN_SIDE:
-        sdl_button = SDL_BUTTON_X1;
-        break;
-    case BTN_EXTRA:
-        sdl_button = SDL_BUTTON_X2;
-        break;
     default:
-        return;
+        sdl_button = SDL_BUTTON_X1 + (button - BTN_SIDE);
+        break;
     }
 
     if (window) {
@@ -969,65 +1082,67 @@ static void pointer_handle_axis_common(SDL_WaylandSeat *seat, enum SDL_WaylandAx
     const enum wl_pointer_axis a = axis;
 
     if (seat->pointer.focus) {
+        seat->pointer.pending_frame.have_axis = true;
+
         switch (a) {
         case WL_POINTER_AXIS_VERTICAL_SCROLL:
             switch (type) {
-            case AXIS_EVENT_VALUE120:
+            case SDL_WAYLAND_AXIS_EVENT_VALUE120:
                 /*
                  * High resolution scroll event. The spec doesn't state that axis_value120
                  * events are limited to one per frame, so the values are accumulated.
                  */
-                if (seat->pointer.current_axis_info.y_axis_type != AXIS_EVENT_VALUE120) {
-                    seat->pointer.current_axis_info.y_axis_type = AXIS_EVENT_VALUE120;
-                    seat->pointer.current_axis_info.y = 0.0f;
+                if (seat->pointer.pending_frame.axis.y_axis_type != SDL_WAYLAND_AXIS_EVENT_VALUE120) {
+                    seat->pointer.pending_frame.axis.y_axis_type = SDL_WAYLAND_AXIS_EVENT_VALUE120;
+                    seat->pointer.pending_frame.axis.y = 0.0f;
                 }
-                seat->pointer.current_axis_info.y += 0 - (float)wl_fixed_to_double(value);
+                seat->pointer.pending_frame.axis.y += 0 - (float)wl_fixed_to_double(value);
                 break;
-            case AXIS_EVENT_DISCRETE:
+            case SDL_WAYLAND_AXIS_EVENT_DISCRETE:
                 /*
                  * This is a discrete axis event, so we process it and set the
                  * flag to ignore future continuous axis events in this frame.
                  */
-                if (seat->pointer.current_axis_info.y_axis_type != AXIS_EVENT_DISCRETE) {
-                    seat->pointer.current_axis_info.y_axis_type = AXIS_EVENT_DISCRETE;
-                    seat->pointer.current_axis_info.y = 0 - (float)wl_fixed_to_double(value);
+                if (seat->pointer.pending_frame.axis.y_axis_type != SDL_WAYLAND_AXIS_EVENT_DISCRETE) {
+                    seat->pointer.pending_frame.axis.y_axis_type = SDL_WAYLAND_AXIS_EVENT_DISCRETE;
+                    seat->pointer.pending_frame.axis.y = 0 - (float)wl_fixed_to_double(value);
                 }
                 break;
-            case AXIS_EVENT_CONTINUOUS:
+            case SDL_WAYLAND_AXIS_EVENT_CONTINUOUS:
                 // Only process continuous events if no discrete events have been received.
-                if (seat->pointer.current_axis_info.y_axis_type == AXIS_EVENT_CONTINUOUS) {
-                    seat->pointer.current_axis_info.y = 0 - (float)wl_fixed_to_double(value);
+                if (seat->pointer.pending_frame.axis.y_axis_type == SDL_WAYLAND_AXIS_EVENT_CONTINUOUS) {
+                    seat->pointer.pending_frame.axis.y = 0 - (float)wl_fixed_to_double(value);
                 }
                 break;
             }
             break;
         case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
             switch (type) {
-            case AXIS_EVENT_VALUE120:
+            case SDL_WAYLAND_AXIS_EVENT_VALUE120:
                 /*
                  * High resolution scroll event. The spec doesn't state that axis_value120
                  * events are limited to one per frame, so the values are accumulated.
                  */
-                if (seat->pointer.current_axis_info.x_axis_type != AXIS_EVENT_VALUE120) {
-                    seat->pointer.current_axis_info.x_axis_type = AXIS_EVENT_VALUE120;
-                    seat->pointer.current_axis_info.x = 0.0f;
+                if (seat->pointer.pending_frame.axis.x_axis_type != SDL_WAYLAND_AXIS_EVENT_VALUE120) {
+                    seat->pointer.pending_frame.axis.x_axis_type = SDL_WAYLAND_AXIS_EVENT_VALUE120;
+                    seat->pointer.pending_frame.axis.x = 0.0f;
                 }
-                seat->pointer.current_axis_info.x += (float)wl_fixed_to_double(value);
+                seat->pointer.pending_frame.axis.x += (float)wl_fixed_to_double(value);
                 break;
-            case AXIS_EVENT_DISCRETE:
+            case SDL_WAYLAND_AXIS_EVENT_DISCRETE:
                 /*
                  * This is a discrete axis event, so we process it and set the
                  * flag to ignore future continuous axis events in this frame.
                  */
-                if (seat->pointer.current_axis_info.x_axis_type != AXIS_EVENT_DISCRETE) {
-                    seat->pointer.current_axis_info.x_axis_type = AXIS_EVENT_DISCRETE;
-                    seat->pointer.current_axis_info.x = (float)wl_fixed_to_double(value);
+                if (seat->pointer.pending_frame.axis.x_axis_type != SDL_WAYLAND_AXIS_EVENT_DISCRETE) {
+                    seat->pointer.pending_frame.axis.x_axis_type = SDL_WAYLAND_AXIS_EVENT_DISCRETE;
+                    seat->pointer.pending_frame.axis.x = (float)wl_fixed_to_double(value);
                 }
                 break;
-            case AXIS_EVENT_CONTINUOUS:
+            case SDL_WAYLAND_AXIS_EVENT_CONTINUOUS:
                 // Only process continuous events if no discrete events have been received.
-                if (seat->pointer.current_axis_info.x_axis_type == AXIS_EVENT_CONTINUOUS) {
-                    seat->pointer.current_axis_info.x = (float)wl_fixed_to_double(value);
+                if (seat->pointer.pending_frame.axis.x_axis_type == SDL_WAYLAND_AXIS_EVENT_CONTINUOUS) {
+                    seat->pointer.pending_frame.axis.x = (float)wl_fixed_to_double(value);
                 }
                 break;
             }
@@ -1043,8 +1158,8 @@ static void pointer_handle_axis(void *data, struct wl_pointer *pointer,
     const Uint64 nsTimestamp = Wayland_GetPointerTimestamp(seat, time);
 
     if (wl_seat_get_version(seat->wl_seat) >= WL_POINTER_FRAME_SINCE_VERSION) {
-        seat->pointer.current_axis_info.timestamp_ns = nsTimestamp;
-        pointer_handle_axis_common(seat, AXIS_EVENT_CONTINUOUS, axis, value);
+        seat->pointer.pending_frame.timestamp_ns = nsTimestamp;
+        pointer_handle_axis_common(seat, SDL_WAYLAND_AXIS_EVENT_CONTINUOUS, axis, value);
     } else {
         pointer_handle_axis_common_v1(seat, nsTimestamp, axis, value);
     }
@@ -1054,63 +1169,108 @@ static void pointer_handle_axis_relative_direction(void *data, struct wl_pointer
                                                    uint32_t axis, uint32_t axis_relative_direction)
 {
     SDL_WaylandSeat *seat = data;
-    if (axis != WL_POINTER_AXIS_VERTICAL_SCROLL) {
-        return;
-    }
+
     switch (axis_relative_direction) {
     case WL_POINTER_AXIS_RELATIVE_DIRECTION_IDENTICAL:
-        seat->pointer.current_axis_info.direction = SDL_MOUSEWHEEL_NORMAL;
+        seat->pointer.pending_frame.axis.direction = SDL_MOUSEWHEEL_NORMAL;
         break;
     case WL_POINTER_AXIS_RELATIVE_DIRECTION_INVERTED:
-        seat->pointer.current_axis_info.direction = SDL_MOUSEWHEEL_FLIPPED;
+        seat->pointer.pending_frame.axis.direction = SDL_MOUSEWHEEL_FLIPPED;
         break;
     }
 }
 
-static void pointer_handle_frame(void *data, struct wl_pointer *pointer)
+static void pointer_dispatch_relative_motion(SDL_WaylandSeat *seat)
 {
-    SDL_WaylandSeat *seat = data;
     SDL_WindowData *window = seat->pointer.focus;
-    float x, y;
-    SDL_MouseWheelDirection direction = seat->pointer.current_axis_info.direction;
 
-    switch (seat->pointer.current_axis_info.x_axis_type) {
-    case AXIS_EVENT_CONTINUOUS:
-        x = seat->pointer.current_axis_info.x / WAYLAND_WHEEL_AXIS_UNIT;
+    if (window) {
+        SDL_Mouse *mouse = SDL_GetMouse();
+        double dx;
+        double dy;
+        if (mouse->InputTransform || !mouse->enable_relative_system_scale) {
+            dx = wl_fixed_to_double(seat->pointer.pending_frame.relative.dx_unaccel);
+            dy = wl_fixed_to_double(seat->pointer.pending_frame.relative.dy_unaccel);
+        } else {
+            dx = wl_fixed_to_double(seat->pointer.pending_frame.relative.dx) * window->pointer_scale.x;
+            dy = wl_fixed_to_double(seat->pointer.pending_frame.relative.dy) * window->pointer_scale.y;
+        }
+
+        SDL_SendMouseMotion(seat->pointer.pending_frame.timestamp_ns, window->sdlwindow, seat->pointer.sdl_id, true, (float)dx, (float)dy);
+    }
+}
+
+static void pointer_dispatch_axis(SDL_WaylandSeat *seat)
+{
+    float x, y;
+    SDL_MouseWheelDirection direction = seat->pointer.pending_frame.axis.direction;
+
+    switch (seat->pointer.pending_frame.axis.x_axis_type) {
+    case SDL_WAYLAND_AXIS_EVENT_CONTINUOUS:
+        x = seat->pointer.pending_frame.axis.x / WAYLAND_WHEEL_AXIS_UNIT;
         break;
-    case AXIS_EVENT_DISCRETE:
-        x = seat->pointer.current_axis_info.x;
+    case SDL_WAYLAND_AXIS_EVENT_DISCRETE:
+        x = seat->pointer.pending_frame.axis.x;
         break;
-    case AXIS_EVENT_VALUE120:
-        x = seat->pointer.current_axis_info.x / 120.0f;
+    case SDL_WAYLAND_AXIS_EVENT_VALUE120:
+        x = seat->pointer.pending_frame.axis.x / 120.0f;
         break;
     default:
         x = 0.0f;
         break;
     }
 
-    switch (seat->pointer.current_axis_info.y_axis_type) {
-    case AXIS_EVENT_CONTINUOUS:
-        y = seat->pointer.current_axis_info.y / WAYLAND_WHEEL_AXIS_UNIT;
+    switch (seat->pointer.pending_frame.axis.y_axis_type) {
+    case SDL_WAYLAND_AXIS_EVENT_CONTINUOUS:
+        y = seat->pointer.pending_frame.axis.y / WAYLAND_WHEEL_AXIS_UNIT;
         break;
-    case AXIS_EVENT_DISCRETE:
-        y = seat->pointer.current_axis_info.y;
+    case SDL_WAYLAND_AXIS_EVENT_DISCRETE:
+        y = seat->pointer.pending_frame.axis.y;
         break;
-    case AXIS_EVENT_VALUE120:
-        y = seat->pointer.current_axis_info.y / 120.0f;
+    case SDL_WAYLAND_AXIS_EVENT_VALUE120:
+        y = seat->pointer.pending_frame.axis.y / 120.0f;
         break;
     default:
         y = 0.0f;
         break;
     }
 
-    // clear pointer.current_axis_info for next frame
-    SDL_memset(&seat->pointer.current_axis_info, 0, sizeof(seat->pointer.current_axis_info));
+    SDL_SendMouseWheel(seat->pointer.pending_frame.timestamp_ns,
+                       seat->pointer.focus->sdlwindow, seat->pointer.sdl_id, x, y, direction);
+}
 
-    if (x != 0.0f || y != 0.0f) {
-        SDL_SendMouseWheel(seat->pointer.current_axis_info.timestamp_ns,
-                           window->sdlwindow, seat->pointer.sdl_id, x, y, direction);
+static void pointer_handle_frame(void *data, struct wl_pointer *pointer)
+{
+    SDL_WaylandSeat *seat = data;
+
+    if (seat->pointer.pending_frame.have_absolute) {
+        pointer_dispatch_absolute_motion(seat);
+
+        if (seat->pointer.pending_frame.have_enter) {
+            // Update the pointer grab state.
+            Wayland_SeatUpdatePointerGrab(seat);
+
+            /* If the cursor was changed while our window didn't have pointer
+             * focus, we might need to trigger another call to
+             * wl_pointer_set_cursor() for the new cursor to be displayed.
+             *
+             * This will also update the cursor if a second pointer entered a
+             * window that already has focus, as the focus change sequence
+             * won't be run.
+             */
+            Wayland_SeatUpdatePointerCursor(seat);
+        }
     }
+
+    if (seat->pointer.pending_frame.have_relative) {
+        pointer_dispatch_relative_motion(seat);
+    }
+
+    if (seat->pointer.pending_frame.have_axis) {
+        pointer_dispatch_axis(seat);
+    }
+
+    SDL_zero(seat->pointer.pending_frame);
 }
 
 static void pointer_handle_axis_source(void *data, struct wl_pointer *pointer,
@@ -1130,7 +1290,7 @@ static void pointer_handle_axis_discrete(void *data, struct wl_pointer *pointer,
 {
     SDL_WaylandSeat *seat = data;
 
-    pointer_handle_axis_common(seat, AXIS_EVENT_DISCRETE, axis, wl_fixed_from_int(discrete));
+    pointer_handle_axis_common(seat, SDL_WAYLAND_AXIS_EVENT_DISCRETE, axis, wl_fixed_from_int(discrete));
 }
 
 static void pointer_handle_axis_value120(void *data, struct wl_pointer *pointer,
@@ -1138,7 +1298,7 @@ static void pointer_handle_axis_value120(void *data, struct wl_pointer *pointer,
 {
     SDL_WaylandSeat *seat = data;
 
-    pointer_handle_axis_common(seat, AXIS_EVENT_VALUE120, axis, wl_fixed_from_int(value120));
+    pointer_handle_axis_common(seat, SDL_WAYLAND_AXIS_EVENT_VALUE120, axis, wl_fixed_from_int(value120));
 }
 
 static const struct wl_pointer_listener pointer_listener = {
@@ -1159,43 +1319,40 @@ static void relative_pointer_handle_relative_motion(void *data,
                                                     struct zwp_relative_pointer_v1 *pointer,
                                                     uint32_t time_hi,
                                                     uint32_t time_lo,
-                                                    wl_fixed_t dx_w,
-                                                    wl_fixed_t dy_w,
-                                                    wl_fixed_t dx_unaccel_w,
-                                                    wl_fixed_t dy_unaccel_w)
+                                                    wl_fixed_t dx,
+                                                    wl_fixed_t dy,
+                                                    wl_fixed_t dx_unaccel,
+                                                    wl_fixed_t dy_unaccel)
 {
     SDL_WaylandSeat *seat = data;
-    SDL_WindowData *window = seat->pointer.focus;
-    SDL_Mouse *mouse = SDL_GetMouse();
 
     // Relative pointer event times are in microsecond granularity.
-    const Uint64 timestamp = Wayland_AdjustEventTimestampBase(SDL_US_TO_NS(((Uint64)time_hi << 32) | (Uint64)time_lo));
+    seat->pointer.pending_frame.have_relative = true;
+    seat->pointer.pending_frame.relative.dx = dx;
+    seat->pointer.pending_frame.relative.dy = dy;
+    seat->pointer.pending_frame.relative.dx_unaccel = dx_unaccel;
+    seat->pointer.pending_frame.relative.dy_unaccel = dy_unaccel;
+    seat->pointer.pending_frame.timestamp_ns = Wayland_AdjustEventTimestampBase(SDL_US_TO_NS(((Uint64)time_hi << 32) | (Uint64)time_lo));
 
-    double dx;
-    double dy;
-    if (mouse->InputTransform || !mouse->enable_relative_system_scale) {
-        dx = wl_fixed_to_double(dx_unaccel_w);
-        dy = wl_fixed_to_double(dy_unaccel_w);
-    } else {
-        dx = wl_fixed_to_double(dx_w) * window->pointer_scale.x;
-        dy = wl_fixed_to_double(dy_w) * window->pointer_scale.y;
+    if (wl_pointer_get_version(seat->pointer.wl_pointer) < WL_POINTER_FRAME_SINCE_VERSION) {
+        pointer_dispatch_relative_motion(seat);
     }
-
-    SDL_SendMouseMotion(timestamp, window->sdlwindow, seat->pointer.sdl_id, true, (float)dx, (float)dy);
 }
 
 static const struct zwp_relative_pointer_v1_listener relative_pointer_listener = {
     relative_pointer_handle_relative_motion,
 };
 
-static void locked_pointer_locked(void *data,
-                                  struct zwp_locked_pointer_v1 *locked_pointer)
+static void locked_pointer_locked(void *data, struct zwp_locked_pointer_v1 *locked_pointer)
 {
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+    seat->pointer.is_confined = true;
 }
 
-static void locked_pointer_unlocked(void *data,
-                                    struct zwp_locked_pointer_v1 *locked_pointer)
+static void locked_pointer_unlocked(void *data, struct zwp_locked_pointer_v1 *locked_pointer)
 {
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+    seat->pointer.is_confined = false;
 }
 
 static const struct zwp_locked_pointer_v1_listener locked_pointer_listener = {
@@ -1203,14 +1360,16 @@ static const struct zwp_locked_pointer_v1_listener locked_pointer_listener = {
     locked_pointer_unlocked,
 };
 
-static void confined_pointer_confined(void *data,
-                                      struct zwp_confined_pointer_v1 *confined_pointer)
+static void confined_pointer_confined(void *data, struct zwp_confined_pointer_v1 *confined_pointer)
 {
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+    seat->pointer.is_confined = true;
 }
 
-static void confined_pointer_unconfined(void *data,
-                                        struct zwp_confined_pointer_v1 *confined_pointer)
+static void confined_pointer_unconfined(void *data, struct zwp_confined_pointer_v1 *confined_pointer)
 {
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+    seat->pointer.is_confined = false;
 }
 
 static const struct zwp_confined_pointer_v1_listener confined_pointer_listener = {
@@ -1266,7 +1425,7 @@ static void touch_handler_up(void *data, struct wl_touch *touch, uint32_t serial
     Wayland_SeatRemoveTouch(seat, id, &fx, &fy, &surface);
 
     if (surface) {
-        SDL_WindowData *window_data = (SDL_WindowData *)wl_surface_get_user_data(surface);
+        SDL_WindowData *window_data = Wayland_GetWindowDataForOwnedSurface(surface);
 
         if (window_data) {
             const float x = (float)wl_fixed_to_double(fx) / window_data->current.logical_width;
@@ -1297,7 +1456,7 @@ static void touch_handler_motion(void *data, struct wl_touch *touch, uint32_t ti
     Wayland_SeatUpdateTouch(seat, id, fx, fy, &surface);
 
     if (surface) {
-        SDL_WindowData *window_data = (SDL_WindowData *)wl_surface_get_user_data(surface);
+        SDL_WindowData *window_data = Wayland_GetWindowDataForOwnedSurface(surface);
 
         if (window_data) {
             const float x = (float)wl_fixed_to_double(fx) / window_data->current.logical_width;
@@ -1342,108 +1501,133 @@ static const struct wl_touch_listener touch_listener = {
     touch_handler_orientation // Version 6
 };
 
-typedef struct Wayland_KeymapBuilderState
+// Fallback for xkb_keymap_key_get_mods_for_level(), which is only available from 1.0.0, while the SDL minimum is 0.5.0.
+#if !SDL_XKBCOMMON_CHECK_VERSION(1, 0, 0)
+static size_t xkb_legacy_get_mods_for_level(SDL_WaylandSeat *seat, xkb_keycode_t key, xkb_layout_index_t layout, xkb_level_index_t level, xkb_mod_mask_t *masks_out, size_t masks_size)
 {
-    SDL_Keymap *keymap;
-    struct xkb_state *state;
-    SDL_Keymod modstate;
-} Wayland_KeymapBuilderState;
-
-static void Wayland_keymap_iter(struct xkb_keymap *keymap, xkb_keycode_t key, void *data)
-{
-    Wayland_KeymapBuilderState *sdlKeymap = (Wayland_KeymapBuilderState *)data;
-    const xkb_keysym_t *syms;
-    const SDL_Scancode scancode = SDL_GetScancodeFromTable(SDL_SCANCODE_TABLE_XFREE86_2, (key - 8));
-    if (scancode == SDL_SCANCODE_UNKNOWN) {
-        return;
+    if (!masks_out || !masks_size) {
+        return 0;
     }
 
-    if (WAYLAND_xkb_state_key_get_syms(sdlKeymap->state, key, &syms) > 0) {
-        SDL_Keycode keycode = SDL_GetKeyCodeFromKeySym(syms[0], key, sdlKeymap->modstate);
+    // Level 0 is always unmodified, so early out.
+    if (level == 0) {
+        *masks_out = 0;
+        return 1;
+    }
 
-        if (!keycode) {
-            switch (scancode) {
-            case SDL_SCANCODE_RETURN:
-                keycode = SDLK_RETURN;
-                break;
-            case SDL_SCANCODE_ESCAPE:
-                keycode = SDLK_ESCAPE;
-                break;
-            case SDL_SCANCODE_BACKSPACE:
-                keycode = SDLK_BACKSPACE;
-                break;
-            case SDL_SCANCODE_DELETE:
-                keycode = SDLK_DELETE;
-                break;
-            default:
-                keycode = SDL_SCANCODE_TO_KEYCODE(scancode);
+    size_t mask_idx = 0;
+    const xkb_mod_mask_t keymod_masks[] = {
+        0,
+        seat->keyboard.xkb.shift_mask,
+        seat->keyboard.xkb.caps_mask,
+        seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask,
+        seat->keyboard.xkb.level3_mask,
+        seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.shift_mask,
+        seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.caps_mask,
+        seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask,
+        seat->keyboard.xkb.level5_mask,
+        seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.shift_mask,
+        seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.caps_mask,
+        seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask
+    };
+    const xkb_mod_mask_t pressed_mod_mask = seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.level5_mask;
+    const xkb_mod_mask_t locked_mod_mask = seat->keyboard.xkb.caps_mask;
+
+    for (size_t i = 0; i < SDL_arraysize(keymod_masks); ++i) {
+        WAYLAND_xkb_state_update_mask(seat->keyboard.xkb.state, keymod_masks[i] & pressed_mod_mask, 0, keymod_masks[i] & locked_mod_mask, 0, 0, layout);
+        if (WAYLAND_xkb_state_key_get_level(seat->keyboard.xkb.state, key, layout) == level) {
+            masks_out[mask_idx] = keymod_masks[i];
+
+            if (++mask_idx == masks_size) {
                 break;
             }
         }
-
-        SDL_SetKeymapEntry(sdlKeymap->keymap, scancode, sdlKeymap->modstate, keycode);
     }
+
+    return mask_idx;
 }
+#endif
 
-static void Wayland_UpdateKeymap(SDL_WaylandSeat *seat)
+static void Wayland_KeymapIterator(struct xkb_keymap *keymap, xkb_keycode_t key, void *data)
 {
-    struct Keymod_masks
-    {
-        SDL_Keymod sdl_mask;
-        xkb_mod_mask_t xkb_mask;
-    } const keymod_masks[] = {
-        { SDL_KMOD_NONE, 0 },
-        { SDL_KMOD_SHIFT, seat->keyboard.xkb.shift_mask },
-        { SDL_KMOD_CAPS, seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_SHIFT | SDL_KMOD_CAPS, seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_MODE, seat->keyboard.xkb.level3_mask },
-        { SDL_KMOD_MODE | SDL_KMOD_SHIFT, seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.shift_mask },
-        { SDL_KMOD_MODE | SDL_KMOD_CAPS, seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_MODE | SDL_KMOD_SHIFT | SDL_KMOD_CAPS, seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_LEVEL5, seat->keyboard.xkb.level5_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_SHIFT, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.shift_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_CAPS, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_SHIFT | SDL_KMOD_CAPS, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_MODE, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.level3_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_MODE | SDL_KMOD_SHIFT, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.shift_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_MODE | SDL_KMOD_CAPS, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.caps_mask },
-        { SDL_KMOD_LEVEL5 | SDL_KMOD_MODE | SDL_KMOD_SHIFT | SDL_KMOD_CAPS, seat->keyboard.xkb.level5_mask | seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.caps_mask },
-    };
+    SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
+    const xkb_keysym_t *syms;
+    SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
 
+    // Only the shift, alt, level 3, level 5 and caps lock modifiers affect SDL keymaps.
+    const xkb_mod_mask_t xkb_valid_mod_mask = seat->keyboard.xkb.shift_mask |
+                                              seat->keyboard.xkb.alt_mask |
+                                              seat->keyboard.xkb.level3_mask |
+                                              seat->keyboard.xkb.level5_mask |
+                                              seat->keyboard.xkb.caps_mask;
+
+    // Look up the scancode for hardware keyboards. Virtual keyboards get the scancode from the keysym.
     if (!seat->keyboard.is_virtual) {
-        Wayland_KeymapBuilderState keymap;
-
-        keymap.keymap = SDL_CreateKeymap(false);
-        if (!keymap.keymap) {
+        scancode = SDL_GetScancodeFromTable(SDL_SCANCODE_TABLE_XFREE86_2, (key - 8));
+        if (scancode == SDL_SCANCODE_UNKNOWN) {
             return;
         }
+    }
 
-        keymap.state = WAYLAND_xkb_state_new(seat->keyboard.xkb.keymap);
-        if (!keymap.state) {
-            SDL_SetError("failed to create XKB state");
-            SDL_DestroyKeymap(keymap.keymap);
-            return;
+    for (xkb_layout_index_t layout = 0; layout < seat->keyboard.xkb.num_layouts; ++layout) {
+        const xkb_level_index_t num_levels = WAYLAND_xkb_keymap_num_levels_for_key(seat->keyboard.xkb.keymap, key, layout);
+        for (xkb_level_index_t level = 0; level < num_levels; ++level) {
+            if (WAYLAND_xkb_keymap_key_get_syms_by_level(seat->keyboard.xkb.keymap, key, layout, level, &syms) > 0) {
+                /* If the keyboard is virtual or the key didn't have a corresponding hardware scancode, try to
+                 * look it up from the keysym. If there is still no corresponding scancode, skip this mapping
+                 * for now, as it will be dynamically added with a reserved scancode on first use.
+                 */
+                if (scancode == SDL_SCANCODE_UNKNOWN) {
+                    scancode = SDL_GetScancodeFromKeySym(syms[0], key);
+                    if (scancode == SDL_SCANCODE_UNKNOWN) {
+                        continue;
+                    }
+                }
+
+                xkb_mod_mask_t xkb_mod_masks[16];
+#if SDL_XKBCOMMON_CHECK_VERSION(1, 0, 0)
+                const size_t num_masks = WAYLAND_xkb_keymap_key_get_mods_for_level(seat->keyboard.xkb.keymap, key, layout, level, xkb_mod_masks, SDL_arraysize(xkb_mod_masks));
+#else
+                const size_t num_masks = xkb_legacy_get_mods_for_level(seat, key, layout, level, xkb_mod_masks, SDL_arraysize(xkb_mod_masks));
+#endif
+                for (size_t mask = 0; mask < num_masks; ++mask) {
+                    // Ignore this modifier set if it uses unsupported modifier types.
+                    if ((xkb_mod_masks[mask] | xkb_valid_mod_mask) != xkb_valid_mod_mask) {
+                        continue;
+                    }
+
+                    const SDL_Keymod sdl_mod = (xkb_mod_masks[mask] & seat->keyboard.xkb.shift_mask ? SDL_KMOD_SHIFT : 0) |
+                                               (xkb_mod_masks[mask] & seat->keyboard.xkb.alt_mask ? SDL_KMOD_ALT : 0) |
+                                               (xkb_mod_masks[mask] & seat->keyboard.xkb.level3_mask ? SDL_KMOD_MODE : 0) |
+                                               (xkb_mod_masks[mask] & seat->keyboard.xkb.level5_mask ? SDL_KMOD_LEVEL5 : 0) |
+                                               (xkb_mod_masks[mask] & seat->keyboard.xkb.caps_mask ? SDL_KMOD_CAPS : 0);
+
+                    SDL_Keycode keycode = SDL_GetKeyCodeFromKeySym(syms[0], key, sdl_mod);
+
+                    if (!keycode) {
+                        switch (scancode) {
+                        case SDL_SCANCODE_RETURN:
+                            keycode = SDLK_RETURN;
+                            break;
+                        case SDL_SCANCODE_ESCAPE:
+                            keycode = SDLK_ESCAPE;
+                            break;
+                        case SDL_SCANCODE_BACKSPACE:
+                            keycode = SDLK_BACKSPACE;
+                            break;
+                        case SDL_SCANCODE_DELETE:
+                            keycode = SDLK_DELETE;
+                            break;
+                        default:
+                            keycode = SDL_SCANCODE_TO_KEYCODE(scancode);
+                            break;
+                        }
+                    }
+
+                    SDL_SetKeymapEntry(seat->keyboard.sdl_keymap[layout], scancode, sdl_mod, keycode);
+                }
+            }
         }
-
-        for (int i = 0; i < SDL_arraysize(keymod_masks); ++i) {
-            keymap.modstate = keymod_masks[i].sdl_mask;
-            WAYLAND_xkb_state_update_mask(keymap.state,
-                                          keymod_masks[i].xkb_mask & (seat->keyboard.xkb.shift_mask | seat->keyboard.xkb.level3_mask | seat->keyboard.xkb.level5_mask), 0, keymod_masks[i].xkb_mask & seat->keyboard.xkb.caps_mask,
-                                          0, 0, seat->keyboard.xkb.current_layout);
-            WAYLAND_xkb_keymap_key_for_each(seat->keyboard.xkb.keymap,
-                                            Wayland_keymap_iter,
-                                            &keymap);
-        }
-
-        WAYLAND_xkb_state_unref(keymap.state);
-        SDL_SetKeymap(keymap.keymap, true);
-        SDL_DestroyKeymap(seat->keyboard.sdl_keymap);
-        seat->keyboard.sdl_keymap = keymap.keymap;
-    } else {
-        // Virtual keyboards use the default keymap.
-        SDL_SetKeymap(NULL, true);
-        SDL_DestroyKeymap(seat->keyboard.sdl_keymap);
-        seat->keyboard.sdl_keymap = NULL;
     }
 }
 
@@ -1452,7 +1636,6 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
 {
     SDL_WaylandSeat *seat = data;
     char *map_str;
-    const char *locale;
 
     if (!data) {
         close(fd);
@@ -1478,9 +1661,9 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
         seat->keyboard.xkb.keymap = NULL;
     }
     seat->keyboard.xkb.keymap = WAYLAND_xkb_keymap_new_from_string(seat->display->xkb_context,
-                                                           map_str,
-                                                           XKB_KEYMAP_FORMAT_TEXT_V1,
-                                                           0);
+                                                                   map_str,
+                                                                   XKB_KEYMAP_FORMAT_TEXT_V1,
+                                                                   0);
     munmap(map_str, size);
     close(fd);
 
@@ -1488,6 +1671,14 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
         SDL_SetError("failed to compile keymap");
         return;
     }
+
+    // Clear the old layouts.
+    for (xkb_layout_index_t i = 0; i < seat->keyboard.xkb.num_layouts; ++i) {
+        SDL_DestroyKeymap(seat->keyboard.sdl_keymap[i]);
+    }
+    SDL_free(seat->keyboard.sdl_keymap);
+    seat->keyboard.sdl_keymap = NULL;
+    seat->keyboard.xkb.num_layouts = 0;
 
 #if SDL_XKBCOMMON_CHECK_VERSION(1, 10, 0)
     seat->keyboard.xkb.shift_mask = WAYLAND_xkb_keymap_mod_get_mask(seat->keyboard.xkb.keymap, XKB_MOD_NAME_SHIFT);
@@ -1534,9 +1725,33 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
      */
     seat->keyboard.is_virtual = WAYLAND_xkb_keymap_layout_get_name(seat->keyboard.xkb.keymap, 0) == NULL;
 
-    // Update the keymap if changed.
-    if (seat->keyboard.xkb.current_layout != XKB_LAYOUT_INVALID) {
-        Wayland_UpdateKeymap(seat);
+    // Allocate and populate the new layout maps.
+    seat->keyboard.xkb.num_layouts = WAYLAND_xkb_keymap_num_layouts(seat->keyboard.xkb.keymap);
+    if (seat->keyboard.xkb.num_layouts) {
+        seat->keyboard.sdl_keymap = SDL_calloc(seat->keyboard.xkb.num_layouts, sizeof(SDL_Keymap *));
+        if (!seat->keyboard.sdl_keymap) {
+            return;
+        }
+
+        for (xkb_layout_index_t i = 0; i < seat->keyboard.xkb.num_layouts; ++i) {
+            seat->keyboard.sdl_keymap[i] = SDL_CreateKeymap(false);
+            if (!seat->keyboard.sdl_keymap[i]) {
+                for (xkb_layout_index_t j = 0; j < i; ++j) {
+                    SDL_DestroyKeymap(seat->keyboard.sdl_keymap[j]);
+                }
+                SDL_free(seat->keyboard.sdl_keymap);
+                seat->keyboard.sdl_keymap = NULL;
+                return;
+            }
+        }
+
+        WAYLAND_xkb_keymap_key_for_each(seat->keyboard.xkb.keymap, Wayland_KeymapIterator, seat);
+
+        // Restore any previously set modifier/layout information, if valid.
+        WAYLAND_xkb_state_update_mask(seat->keyboard.xkb.state,
+                                      seat->keyboard.xkb.wl_pressed_modifiers, seat->keyboard.xkb.wl_latched_modifiers, seat->keyboard.xkb.wl_locked_modifiers,
+                                      0, 0, seat->keyboard.xkb.current_layout < seat->keyboard.xkb.num_layouts ? seat->keyboard.xkb.current_layout : 0);
+        Wayland_SeatSetKeymap(seat);
     }
 
     /*
@@ -1545,7 +1760,7 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
      */
 
     // Look up the preferred locale, falling back to "C" as default
-    locale = SDL_getenv("LC_ALL");
+    const char *locale = SDL_getenv("LC_ALL");
     if (!locale) {
         locale = SDL_getenv("LC_CTYPE");
         if (!locale) {
@@ -1556,26 +1771,38 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
         }
     }
 
-    // Set up XKB compose table
-    if (seat->keyboard.xkb.compose_table != NULL) {
-        WAYLAND_xkb_compose_table_unref(seat->keyboard.xkb.compose_table);
-        seat->keyboard.xkb.compose_table = NULL;
-    }
-    seat->keyboard.xkb.compose_table = WAYLAND_xkb_compose_table_new_from_locale(seat->display->xkb_context,
-                                                                         locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
-    if (seat->keyboard.xkb.compose_table) {
-        // Set up XKB compose state
-        if (seat->keyboard.xkb.compose_state != NULL) {
-            WAYLAND_xkb_compose_state_unref(seat->keyboard.xkb.compose_state);
-            seat->keyboard.xkb.compose_state = NULL;
-        }
-        seat->keyboard.xkb.compose_state = WAYLAND_xkb_compose_state_new(seat->keyboard.xkb.compose_table,
-                                                                 XKB_COMPOSE_STATE_NO_FLAGS);
-        if (!seat->keyboard.xkb.compose_state) {
-            SDL_SetError("could not create XKB compose state");
+    /* Set up the XKB compose table.
+     *
+     * This is a very slow operation, so it is only done during initialization,
+     * or if the locale envvar changed during runtime.
+     */
+    if (!seat->keyboard.current_locale || SDL_strcmp(seat->keyboard.current_locale, locale) != 0) {
+        // Cache the current locale for later comparison.
+        SDL_free(seat->keyboard.current_locale);
+        seat->keyboard.current_locale = SDL_strdup(locale);
+
+        if (seat->keyboard.xkb.compose_table != NULL) {
             WAYLAND_xkb_compose_table_unref(seat->keyboard.xkb.compose_table);
             seat->keyboard.xkb.compose_table = NULL;
         }
+        seat->keyboard.xkb.compose_table = WAYLAND_xkb_compose_table_new_from_locale(seat->display->xkb_context,
+                                                                                     locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
+        if (seat->keyboard.xkb.compose_table) {
+            // Set up XKB compose state
+            if (seat->keyboard.xkb.compose_state != NULL) {
+                WAYLAND_xkb_compose_state_unref(seat->keyboard.xkb.compose_state);
+                seat->keyboard.xkb.compose_state = NULL;
+            }
+            seat->keyboard.xkb.compose_state = WAYLAND_xkb_compose_state_new(seat->keyboard.xkb.compose_table,
+                                                                             XKB_COMPOSE_STATE_NO_FLAGS);
+            if (!seat->keyboard.xkb.compose_state) {
+                SDL_SetError("could not create XKB compose state");
+                WAYLAND_xkb_compose_table_unref(seat->keyboard.xkb.compose_table);
+                seat->keyboard.xkb.compose_table = NULL;
+            }
+        }
+    } else if (seat->keyboard.xkb.compose_state) {
+        WAYLAND_xkb_compose_state_reset(seat->keyboard.xkb.compose_state);
     }
 }
 
@@ -1583,16 +1810,20 @@ static void keyboard_handle_keymap(void *data, struct wl_keyboard *keyboard,
  * Virtual keyboards can have arbitrary layouts, arbitrary scancodes/keycodes, etc...
  * Key presses from these devices must be looked up by their keysym value.
  */
-static SDL_Scancode Wayland_GetScancodeForKey(SDL_WaylandSeat *seat, uint32_t key)
+static SDL_Scancode Wayland_GetScancodeForKey(SDL_WaylandSeat *seat, uint32_t key, const xkb_keysym_t **syms)
 {
     SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
 
     if (!seat->keyboard.is_virtual) {
         scancode = SDL_GetScancodeFromTable(SDL_SCANCODE_TABLE_XFREE86_2, key);
-    } else {
-        const xkb_keysym_t *syms;
-        if (WAYLAND_xkb_keymap_key_get_syms_by_level(seat->keyboard.xkb.keymap, key + 8, seat->keyboard.xkb.current_layout, 0, &syms) > 0) {
-            scancode = SDL_GetScancodeFromKeySym(syms[0], key);
+    }
+    if (scancode == SDL_SCANCODE_UNKNOWN) {
+        const xkb_keysym_t *keysym;
+        if (WAYLAND_xkb_state_key_get_syms(seat->keyboard.xkb.state, key + 8, &keysym) > 0) {
+            scancode = SDL_GetScancodeFromKeySym(keysym[0], key + 8);
+            if (syms) {
+                *syms = keysym;
+            }
         }
     }
 
@@ -1663,7 +1894,9 @@ static void Wayland_ReconcileModifiers(SDL_WaylandSeat *seat, bool key_pressed)
      * The modifier will remain active until the latch/lock is released by
      * the system.
      */
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.shift_mask) {
+    const xkb_mod_mask_t xkb_locked_modifiers = seat->keyboard.xkb.wl_latched_modifiers | seat->keyboard.xkb.wl_locked_modifiers;
+
+    if (xkb_locked_modifiers & seat->keyboard.xkb.shift_mask) {
         if (seat->keyboard.pressed_modifiers & SDL_KMOD_SHIFT) {
             seat->keyboard.locked_modifiers &= ~SDL_KMOD_SHIFT;
             seat->keyboard.locked_modifiers |= (seat->keyboard.pressed_modifiers & SDL_KMOD_SHIFT);
@@ -1674,7 +1907,7 @@ static void Wayland_ReconcileModifiers(SDL_WaylandSeat *seat, bool key_pressed)
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_SHIFT;
     }
 
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.ctrl_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.ctrl_mask) {
         if (seat->keyboard.pressed_modifiers & SDL_KMOD_CTRL) {
             seat->keyboard.locked_modifiers &= ~SDL_KMOD_CTRL;
             seat->keyboard.locked_modifiers |= (seat->keyboard.pressed_modifiers & SDL_KMOD_CTRL);
@@ -1685,7 +1918,7 @@ static void Wayland_ReconcileModifiers(SDL_WaylandSeat *seat, bool key_pressed)
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_CTRL;
     }
 
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.alt_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.alt_mask) {
         if (seat->keyboard.pressed_modifiers & SDL_KMOD_ALT) {
             seat->keyboard.locked_modifiers &= ~SDL_KMOD_ALT;
             seat->keyboard.locked_modifiers |= (seat->keyboard.pressed_modifiers & SDL_KMOD_ALT);
@@ -1696,7 +1929,7 @@ static void Wayland_ReconcileModifiers(SDL_WaylandSeat *seat, bool key_pressed)
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_ALT;
     }
 
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.gui_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.gui_mask) {
         if (seat->keyboard.pressed_modifiers & SDL_KMOD_GUI) {
             seat->keyboard.locked_modifiers &= ~SDL_KMOD_GUI;
             seat->keyboard.locked_modifiers |= (seat->keyboard.pressed_modifiers & SDL_KMOD_GUI);
@@ -1707,26 +1940,26 @@ static void Wayland_ReconcileModifiers(SDL_WaylandSeat *seat, bool key_pressed)
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_GUI;
     }
 
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.level3_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.level3_mask) {
         seat->keyboard.locked_modifiers |= SDL_KMOD_MODE;
     } else {
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_MODE;
     }
 
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.level5_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.level5_mask) {
         seat->keyboard.locked_modifiers |= SDL_KMOD_LEVEL5;
     } else {
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_LEVEL5;
     }
 
     // Capslock and Numlock can only be locked, not pressed.
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.caps_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.caps_mask) {
         seat->keyboard.locked_modifiers |= SDL_KMOD_CAPS;
     } else {
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_CAPS;
     }
 
-    if (seat->keyboard.xkb.wl_locked_modifiers & seat->keyboard.xkb.num_mask) {
+    if (xkb_locked_modifiers & seat->keyboard.xkb.num_mask) {
         seat->keyboard.locked_modifiers |= SDL_KMOD_NUM;
     } else {
         seat->keyboard.locked_modifiers &= ~SDL_KMOD_NUM;
@@ -1819,7 +2052,7 @@ static void keyboard_handle_enter(void *data, struct wl_keyboard *keyboard,
     Wayland_DisplayUpdatePointerGrabs(seat->display, window);
 
     // Update text input and IME focus.
-    Wayland_UpdateTextInput(seat->display);
+    Wayland_SeatUpdateTextInput(seat);
 
 #ifdef SDL_USE_IME
     if (!seat->text_input.zwp_text_input) {
@@ -1830,30 +2063,30 @@ static void keyboard_handle_enter(void *data, struct wl_keyboard *keyboard,
     Uint64 timestamp = SDL_GetTicksNS();
     window->last_focus_event_time_ns = timestamp;
 
-    if (SDL_GetCurrentKeymap(true) != seat->keyboard.sdl_keymap) {
-        SDL_SetKeymap(seat->keyboard.sdl_keymap, true);
-    }
+    Wayland_SeatSetKeymap(seat);
 
     wl_array_for_each (key, keys) {
-        const SDL_Scancode scancode = Wayland_GetScancodeForKey(seat, *key);
-        const SDL_Keycode keycode = SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
+        const SDL_Scancode scancode = Wayland_GetScancodeForKey(seat, *key, NULL);
+        if (scancode != SDL_SCANCODE_UNKNOWN) {
+            const SDL_Keycode keycode = SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
 
-        switch (keycode) {
-        case SDLK_LSHIFT:
-        case SDLK_RSHIFT:
-        case SDLK_LCTRL:
-        case SDLK_RCTRL:
-        case SDLK_LALT:
-        case SDLK_RALT:
-        case SDLK_LGUI:
-        case SDLK_RGUI:
-        case SDLK_MODE:
-        case SDLK_LEVEL5_SHIFT:
-            Wayland_HandleModifierKeys(seat, scancode, true);
-            SDL_SendKeyboardKeyIgnoreModifiers(timestamp, seat->keyboard.sdl_id, *key, scancode, true);
-            break;
-        default:
-            break;
+            switch (keycode) {
+            case SDLK_LSHIFT:
+            case SDLK_RSHIFT:
+            case SDLK_LCTRL:
+            case SDLK_RCTRL:
+            case SDLK_LALT:
+            case SDLK_RALT:
+            case SDLK_LGUI:
+            case SDLK_RGUI:
+            case SDLK_MODE:
+            case SDLK_LEVEL5_SHIFT:
+                Wayland_HandleModifierKeys(seat, scancode, true);
+                SDL_SendKeyboardKeyIgnoreModifiers(timestamp, seat->keyboard.sdl_id, *key, scancode, true);
+                break;
+            default:
+                break;
+            }
         }
     }
 }
@@ -1901,7 +2134,7 @@ static void keyboard_handle_leave(void *data, struct wl_keyboard *keyboard,
     seat->keyboard.pressed_modifiers = SDL_KMOD_NONE;
 
     // Update text input and IME focus.
-    Wayland_UpdateTextInput(seat->display);
+    Wayland_SeatUpdateTextInput(seat);
 
 #ifdef SDL_USE_IME
     if (!seat->text_input.zwp_text_input && !window->keyboard_focus_count) {
@@ -1980,10 +2213,17 @@ static void keyboard_handle_key(void *data, struct wl_keyboard *keyboard,
 
     Wayland_UpdateImplicitGrabSerial(seat, serial);
 
-    if (seat->keyboard.sdl_keymap != SDL_GetCurrentKeymap(true)) {
-        SDL_SetKeymap(seat->keyboard.sdl_keymap, true);
-        SDL_SetModState(seat->keyboard.pressed_modifiers | seat->keyboard.locked_modifiers);
+    if (state == WL_KEYBOARD_KEY_STATE_REPEATED) {
+        // If this key shouldn't be repeated, just return.
+        if (seat->keyboard.xkb.keymap && !WAYLAND_xkb_keymap_key_repeats(seat->keyboard.xkb.keymap, key + 8)) {
+            return;
+        }
+
+        // SDL automatically handles key tracking and repeat status, so just map 'repeated' to 'pressed'.
+        state = WL_KEYBOARD_KEY_STATE_PRESSED;
     }
+
+    Wayland_SeatSetKeymap(seat);
 
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         SDL_Window *keyboard_focus = SDL_GetKeyboardFocus();
@@ -2004,16 +2244,35 @@ static void keyboard_handle_key(void *data, struct wl_keyboard *keyboard,
         keyboard_input_get_text(text, seat, key, false, &handled_by_ime);
     }
 
-    const SDL_Scancode scancode = Wayland_GetScancodeForKey(seat, key);
+    const xkb_keysym_t *syms = NULL;
+    SDL_Scancode scancode = Wayland_GetScancodeForKey(seat, key, &syms);
     Wayland_HandleModifierKeys(seat, scancode, state == WL_KEYBOARD_KEY_STATE_PRESSED);
+
+    // If we have a key with unknown scancode, check if the keysym corresponds to a valid Unicode value, and assign it a reserved scancode.
+    if (scancode == SDL_SCANCODE_UNKNOWN && syms && seat->keyboard.sdl_keymap) {
+        const SDL_Keycode keycode = (SDL_Keycode)SDL_KeySymToUcs4(syms[0]);
+        if (keycode != SDLK_UNKNOWN) {
+            SDL_Keymod modstate = SDL_KMOD_NONE;
+
+            // Check if this keycode already exists in the keymap.
+            scancode = SDL_GetKeymapScancode(seat->keyboard.sdl_keymap[seat->keyboard.xkb.current_layout], keycode, &modstate);
+
+            // Make sure we have this keycode in our keymap
+            if (scancode == SDL_SCANCODE_UNKNOWN && keycode < SDLK_SCANCODE_MASK) {
+                scancode = SDL_GetKeymapNextReservedScancode(seat->keyboard.sdl_keymap[seat->keyboard.xkb.current_layout]);
+                SDL_SetKeymapEntry(seat->keyboard.sdl_keymap[seat->keyboard.xkb.current_layout], scancode, modstate, keycode);
+            }
+        }
+    }
 
     SDL_SendKeyboardKeyIgnoreModifiers(timestamp_ns, seat->keyboard.sdl_id, key, scancode, state == WL_KEYBOARD_KEY_STATE_PRESSED);
 
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        if (handled_by_ime) {
+            has_text = false;
+        }
         if (has_text && !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_ALT))) {
-            if (!handled_by_ime) {
-                SDL_SendKeyboardText(text);
-            }
+            SDL_SendKeyboardText(text);
         }
         if (seat->keyboard.xkb.keymap && WAYLAND_xkb_keymap_key_repeats(seat->keyboard.xkb.keymap, key + 8)) {
             keyboard_repeat_set(&seat->keyboard.repeat, seat->keyboard.sdl_id, key, time, timestamp_ns, scancode, has_text, text);
@@ -2027,20 +2286,23 @@ static void keyboard_handle_modifiers(void *data, struct wl_keyboard *keyboard,
                                       uint32_t group)
 {
     SDL_WaylandSeat *seat = data;
+    const uint32_t previous_layout = seat->keyboard.xkb.current_layout;
 
-    if (seat->keyboard.xkb.state == NULL) {
-        /* if we get a modifier notification before the keymap, there's nothing we can do with the information
-        */
+    seat->keyboard.xkb.wl_pressed_modifiers = mods_depressed;
+    seat->keyboard.xkb.wl_latched_modifiers = mods_latched;
+    seat->keyboard.xkb.wl_locked_modifiers = mods_locked;
+    seat->keyboard.xkb.current_layout = group;
+
+    Wayland_ReconcileModifiers(seat, false);
+
+    // If we get a modifier notification before the keymap, there's no further state to update yet.
+    if (!seat->keyboard.xkb.state) {
         return;
     }
 
-    WAYLAND_xkb_state_update_mask(seat->keyboard.xkb.state, mods_depressed, mods_latched,
-                                  mods_locked, 0, 0, group);
-
-    seat->keyboard.xkb.wl_pressed_modifiers = mods_depressed;
-    seat->keyboard.xkb.wl_locked_modifiers = mods_latched | mods_locked;
-
-    Wayland_ReconcileModifiers(seat, false);
+    WAYLAND_xkb_state_update_mask(seat->keyboard.xkb.state,
+                                  mods_depressed, mods_latched, mods_locked,
+                                  0, 0, group);
 
     // If a key is repeating, update the text to apply the modifier.
     if (keyboard_repeat_is_set(&seat->keyboard.repeat)) {
@@ -2052,13 +2314,14 @@ static void keyboard_handle_modifiers(void *data, struct wl_keyboard *keyboard,
         }
     }
 
-    if (group == seat->keyboard.xkb.current_layout) {
-        return;
-    }
+    if (group != previous_layout) {
+        Wayland_SeatSetKeymap(seat);
 
-    // The layout changed, remap and fire an event. Virtual keyboards use the default keymap.
-    seat->keyboard.xkb.current_layout = group;
-    Wayland_UpdateKeymap(seat);
+        if (seat->keyboard.xkb.compose_state) {
+            // Reset the compose state so composite and dead keys don't carry over.
+            WAYLAND_xkb_compose_state_reset(seat->keyboard.xkb.compose_state);
+        }
+    }
 }
 
 static void keyboard_handle_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
@@ -2079,14 +2342,21 @@ static const struct wl_keyboard_listener keyboard_listener = {
     keyboard_handle_repeat_info, // Version 4
 };
 
-static void Wayland_SeatDestroyPointer(SDL_WaylandSeat *seat, bool send_event)
+static void Wayland_SeatDestroyPointer(SDL_WaylandSeat *seat)
 {
+    Wayland_CursorStateRelease(&seat->pointer.cursor_state);
+
+    // End any active gestures.
+    if (seat->pointer.gesture_focus) {
+        SDL_SendPinch(SDL_EVENT_PINCH_END, 0, seat->pointer.gesture_focus->sdlwindow, 0.0f);
+    }
+
     // Make sure focus is removed from a surface before the pointer is destroyed.
     if (seat->pointer.focus) {
         pointer_handle_leave(seat, seat->pointer.wl_pointer, 0, seat->pointer.focus->surface);
     }
 
-    SDL_RemoveMouse(seat->pointer.sdl_id, send_event);
+    SDL_RemoveMouse(seat->pointer.sdl_id);
 
     if (seat->pointer.confined_pointer) {
         zwp_confined_pointer_v1_destroy(seat->pointer.confined_pointer);
@@ -2104,20 +2374,8 @@ static void Wayland_SeatDestroyPointer(SDL_WaylandSeat *seat, bool send_event)
         zwp_input_timestamps_v1_destroy(seat->pointer.timestamps);
     }
 
-    if (seat->pointer.cursor_state.frame_callback) {
-        wl_callback_destroy(seat->pointer.cursor_state.frame_callback);
-    }
-
-    if (seat->pointer.cursor_state.surface) {
-        wl_surface_destroy(seat->pointer.cursor_state.surface);
-    }
-
-    if (seat->pointer.cursor_state.viewport) {
-        wp_viewport_destroy(seat->pointer.cursor_state.viewport);
-    }
-
-    if (seat->pointer.cursor_shape) {
-        wp_cursor_shape_device_v1_destroy(seat->pointer.cursor_shape);
+    if (seat->pointer.gesture_pinch) {
+        zwp_pointer_gesture_pinch_v1_destroy(seat->pointer.gesture_pinch);
     }
 
     if (seat->pointer.wl_pointer) {
@@ -2131,20 +2389,25 @@ static void Wayland_SeatDestroyPointer(SDL_WaylandSeat *seat, bool send_event)
     SDL_zero(seat->pointer);
 }
 
-static void Wayland_SeatDestroyKeyboard(SDL_WaylandSeat *seat, bool send_event)
+static void Wayland_SeatDestroyKeyboard(SDL_WaylandSeat *seat)
 {
     // Make sure focus is removed from a surface before the keyboard is destroyed.
     if (seat->keyboard.focus) {
         keyboard_handle_leave(seat, seat->keyboard.wl_keyboard, 0, seat->keyboard.focus->surface);
     }
 
-    SDL_RemoveKeyboard(seat->keyboard.sdl_id, send_event);
+    SDL_RemoveKeyboard(seat->keyboard.sdl_id);
 
     if (seat->keyboard.sdl_keymap) {
-        if (seat->keyboard.sdl_keymap == SDL_GetCurrentKeymap(true)) {
-            SDL_SetKeymap(NULL, false);
+        if (seat->keyboard.xkb.current_layout < seat->keyboard.xkb.num_layouts &&
+            seat->keyboard.sdl_keymap[seat->keyboard.xkb.current_layout] == SDL_GetCurrentKeymap(true)) {
+            SDL_SetModState(SDL_KMOD_NONE);
         }
-        SDL_DestroyKeymap(seat->keyboard.sdl_keymap);
+        for (xkb_layout_index_t i = 0; i < seat->keyboard.xkb.num_layouts; ++i) {
+            SDL_DestroyKeymap(seat->keyboard.sdl_keymap[i]);
+        }
+        SDL_free(seat->keyboard.sdl_keymap);
+        seat->keyboard.sdl_keymap = NULL;
     }
 
     if (seat->keyboard.key_inhibitor) {
@@ -2162,6 +2425,8 @@ static void Wayland_SeatDestroyKeyboard(SDL_WaylandSeat *seat, bool send_event)
             wl_keyboard_destroy(seat->keyboard.wl_keyboard);
         }
     }
+
+    SDL_free(seat->keyboard.current_locale);
 
     if (seat->keyboard.xkb.compose_state) {
         WAYLAND_xkb_compose_state_unref(seat->keyboard.xkb.compose_state);
@@ -2214,12 +2479,15 @@ static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat, enum w
 
     if ((capabilities & WL_SEAT_CAPABILITY_POINTER) && !seat->pointer.wl_pointer) {
         seat->pointer.wl_pointer = wl_seat_get_pointer(wl_seat);
-        SDL_memset(&seat->pointer.current_axis_info, 0, sizeof(seat->pointer.current_axis_info));
+        SDL_zero(seat->pointer.pending_frame.axis);
 
         Wayland_SeatCreateCursorShape(seat);
 
         wl_pointer_set_user_data(seat->pointer.wl_pointer, seat);
         wl_pointer_add_listener(seat->pointer.wl_pointer, &pointer_listener, seat);
+
+        // Pointer gestures
+        Wayland_SeatCreatePointerGestures(seat);
 
         seat->pointer.sdl_id = SDL_GetNextObjectID();
 
@@ -2229,9 +2497,9 @@ static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat, enum w
             SDL_snprintf(name_fmt, sizeof(name_fmt), "%s %" SDL_PRIu32, WAYLAND_DEFAULT_POINTER_NAME, seat->pointer.sdl_id);
         }
 
-        SDL_AddMouse(seat->pointer.sdl_id, name_fmt, !seat->display->initializing);
+        SDL_AddMouse(seat->pointer.sdl_id, name_fmt);
     } else if (!(capabilities & WL_SEAT_CAPABILITY_POINTER) && seat->pointer.wl_pointer) {
-        Wayland_SeatDestroyPointer(seat, true);
+        Wayland_SeatDestroyPointer(seat);
     }
 
     if ((capabilities & WL_SEAT_CAPABILITY_TOUCH) && !seat->touch.wl_touch) {
@@ -2263,9 +2531,9 @@ static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat, enum w
             SDL_snprintf(name_fmt, sizeof(name_fmt), "%s %" SDL_PRIu32, WAYLAND_DEFAULT_KEYBOARD_NAME, seat->keyboard.sdl_id);
         }
 
-        SDL_AddKeyboard(seat->keyboard.sdl_id, name_fmt, !seat->display->initializing);
+        SDL_AddKeyboard(seat->keyboard.sdl_id, name_fmt);
     } else if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && seat->keyboard.wl_keyboard) {
-        Wayland_SeatDestroyKeyboard(seat, true);
+        Wayland_SeatDestroyKeyboard(seat);
     }
 
     Wayland_SeatRegisterInputTimestampListeners(seat);
@@ -2274,25 +2542,9 @@ static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat, enum w
 static void seat_handle_name(void *data, struct wl_seat *wl_seat, const char *name)
 {
     SDL_WaylandSeat *seat = (SDL_WaylandSeat *)data;
-    char name_fmt[256];
 
     if (name && *name != '\0') {
         seat->name = SDL_strdup(name);
-
-        if (seat->keyboard.wl_keyboard) {
-            SDL_snprintf(name_fmt, sizeof(name_fmt), "%s (%s)", WAYLAND_DEFAULT_KEYBOARD_NAME, seat->name);
-            SDL_SetKeyboardName(seat->keyboard.sdl_id, name_fmt);
-        }
-
-        if (seat->pointer.wl_pointer) {
-            SDL_snprintf(name_fmt, sizeof(name_fmt), "%s (%s)", WAYLAND_DEFAULT_POINTER_NAME, seat->name);
-            SDL_SetMouseName(seat->pointer.sdl_id, name_fmt);
-        }
-
-        if (seat->touch.wl_touch) {
-            SDL_snprintf(name_fmt, sizeof(name_fmt), "%s (%s)", WAYLAND_DEFAULT_TOUCH_NAME, seat->name);
-            SDL_SetTouchName((SDL_TouchID)(uintptr_t)seat->touch.wl_touch, name_fmt);
-        }
     }
 }
 
@@ -2498,15 +2750,18 @@ static void data_device_handle_enter(void *data, struct wl_data_device *wl_data_
                                      wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *id)
 {
     SDL_WaylandDataDevice *data_device = data;
+    SDL_WindowData *window = surface ? Wayland_GetWindowDataForOwnedSurface(surface) : NULL;
     data_device->has_mime_file = false;
     data_device->has_mime_text = false;
-    uint32_t dnd_action = WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE;
 
     data_device->drag_serial = serial;
 
+    // Save the drag offer so it can be freed later.
     if (id) {
         data_device->drag_offer = wl_data_offer_get_user_data(id);
+    }
 
+    if (data_device->drag_offer && window && window->accepts_drag_and_drop) {
         // TODO: SDL Support more mime types
 #ifdef SDL_USE_LIBDBUS
         if (Wayland_data_offer_has_mime(data_device->drag_offer, FILE_PORTAL_MIME)) {
@@ -2522,7 +2777,7 @@ static void data_device_handle_enter(void *data, struct wl_data_device *wl_data_
         }
 
         size_t mime_count = 0;
-        const char **text_mime_types = Wayland_GetTextMimeTypes(SDL_GetVideoDevice(), &mime_count);
+        const char *const *text_mime_types = Wayland_GetTextMimeTypes(SDL_GetVideoDevice(), &mime_count);
         for (size_t i = 0; i < mime_count; ++i) {
             if (Wayland_data_offer_has_mime(data_device->drag_offer, text_mime_types[i])) {
                 data_device->has_mime_text = true;
@@ -2532,48 +2787,46 @@ static void data_device_handle_enter(void *data, struct wl_data_device *wl_data_
             }
         }
 
-        // SDL only supports "copy" style drag and drop
         if (data_device->has_mime_file || data_device->has_mime_text) {
-            dnd_action = WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY;
-        } else {
-            // drag_mime is NULL this will decline the offer
-            wl_data_offer_accept(id, serial, NULL);
-        }
-        if (wl_data_offer_get_version(data_device->drag_offer->offer) >=
-            WL_DATA_OFFER_SET_ACTIONS_SINCE_VERSION) {
-            wl_data_offer_set_actions(data_device->drag_offer->offer,
-                                      dnd_action, dnd_action);
-        }
-
-        // find the current window
-        if (surface) {
-            SDL_WindowData *window = Wayland_GetWindowDataForOwnedSurface(surface);
-            if (window) {
-                data_device->dnd_window = window->sdlwindow;
-                const float dx = (float)wl_fixed_to_double(x);
-                const float dy = (float)wl_fixed_to_double(y);
-                SDL_SendDropPosition(data_device->dnd_window, dx, dy);
-                SDL_LogTrace(SDL_LOG_CATEGORY_INPUT,
-                             ". In wl_data_device_listener . data_device_handle_enter on data_offer 0x%08x at %d x %d into window %d for serial %d",
-                             WAYLAND_wl_proxy_get_id((struct wl_proxy *)id),
-                             wl_fixed_to_int(x), wl_fixed_to_int(y), SDL_GetWindowID(data_device->dnd_window), serial);
-            } else {
-                data_device->dnd_window = NULL;
-                SDL_LogTrace(SDL_LOG_CATEGORY_INPUT,
-                             ". In wl_data_device_listener . data_device_handle_enter on data_offer 0x%08x at %d x %d for serial %d",
-                             WAYLAND_wl_proxy_get_id((struct wl_proxy *)id),
-                             wl_fixed_to_int(x), wl_fixed_to_int(y), serial);
+            // SDL only supports "copy" style drag and drop
+            if (wl_data_offer_get_version(data_device->drag_offer->offer) >= WL_DATA_OFFER_SET_ACTIONS_SINCE_VERSION) {
+                wl_data_offer_set_actions(data_device->drag_offer->offer, WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY);
             }
+
+            // Set the destination window and send the initial position.
+            data_device->dnd_window = window->sdlwindow;
+            const float dx = (float)(wl_fixed_to_double(x) * data_device->dnd_window->internal->pointer_scale.x);
+            const float dy = (float)(wl_fixed_to_double(y) * data_device->dnd_window->internal->pointer_scale.y);
+            SDL_SendDropPosition(data_device->dnd_window, dx, dy);
+            SDL_LogTrace(SDL_LOG_CATEGORY_INPUT,
+                         ". In wl_data_device_listener . data_device_handle_enter on data_offer 0x%08x at %d x %d into window %d for serial %d",
+                         WAYLAND_wl_proxy_get_id((struct wl_proxy *)id),
+                         wl_fixed_to_int(x), wl_fixed_to_int(y), SDL_GetWindowID(data_device->dnd_window), serial);
         } else {
+            // Decline the offer.
+            wl_data_offer_accept(id, serial, NULL);
+            if (wl_data_offer_get_version(data_device->drag_offer->offer) >= WL_DATA_OFFER_SET_ACTIONS_SINCE_VERSION) {
+                wl_data_offer_set_actions(data_device->drag_offer->offer, WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE, WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE);
+            }
+
             SDL_LogTrace(SDL_LOG_CATEGORY_INPUT,
                          ". In wl_data_device_listener . data_device_handle_enter on data_offer 0x%08x at %d x %d for serial %d",
-                         WAYLAND_wl_proxy_get_id((struct wl_proxy *)id),
-                         wl_fixed_to_int(x), wl_fixed_to_int(y), serial);
+                         WAYLAND_wl_proxy_get_id((struct wl_proxy *)id), wl_fixed_to_int(x), wl_fixed_to_int(y), serial);
         }
     } else {
+        data_device->dnd_window = NULL;
+
+        // Decline the offer.
+        if (id) {
+            wl_data_offer_accept(id, serial, NULL);
+            if (wl_data_offer_get_version(data_device->drag_offer->offer) >= WL_DATA_OFFER_SET_ACTIONS_SINCE_VERSION) {
+                wl_data_offer_set_actions(data_device->drag_offer->offer, WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE, WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE);
+            }
+        }
         SDL_LogTrace(SDL_LOG_CATEGORY_INPUT,
                      ". In wl_data_device_listener . data_device_handle_enter on data_offer 0x%08x at %d x %d for serial %d",
-                     -1, wl_fixed_to_int(x), wl_fixed_to_int(y), serial);
+                     id ? WAYLAND_wl_proxy_get_id((struct wl_proxy *)id) : -1,
+                     wl_fixed_to_int(x), wl_fixed_to_int(y), serial);
     }
 }
 
@@ -2611,8 +2864,8 @@ static void data_device_handle_motion(void *data, struct wl_data_device *wl_data
     SDL_WaylandDataDevice *data_device = data;
 
     if (data_device->drag_offer && data_device->dnd_window && (data_device->has_mime_file || data_device->has_mime_text)) {
-        const float dx = (float)wl_fixed_to_double(x);
-        const float dy = (float)wl_fixed_to_double(y);
+        const float dx = (float)(wl_fixed_to_double(x) * data_device->dnd_window->internal->pointer_scale.x);
+        const float dy = (float)(wl_fixed_to_double(y) * data_device->dnd_window->internal->pointer_scale.y);
 
         /* XXX: Send the filename here if the event system ever starts passing it though.
          *      Any future implementation should cache the filenames, as otherwise this could
@@ -2645,8 +2898,7 @@ static void data_device_handle_drop(void *data, struct wl_data_device *wl_data_d
         bool drop_handled = false;
 #ifdef SDL_USE_LIBDBUS
         if (Wayland_data_offer_has_mime(data_device->drag_offer, FILE_PORTAL_MIME)) {
-            void *buffer = Wayland_data_offer_receive(data_device->drag_offer,
-                                                      FILE_PORTAL_MIME, &length);
+            void *buffer = Wayland_data_offer_receive(data_device->drag_offer, FILE_PORTAL_MIME, &length, false);
             if (buffer) {
                 SDL_DBusContext *dbus = SDL_DBus_GetContext();
                 if (dbus) {
@@ -2672,7 +2924,7 @@ static void data_device_handle_drop(void *data, struct wl_data_device *wl_data_d
          * non paths that are not visible to the application
          */
         if (!drop_handled) {
-            void *buffer = Wayland_data_offer_receive(data_device->drag_offer, data_device->mime_type, &length);
+            void *buffer = Wayland_data_offer_receive(data_device->drag_offer, data_device->mime_type, &length, false);
             if (data_device->has_mime_file) {
                 if (buffer) {
                     char *saveptr = NULL;
@@ -2977,22 +3229,8 @@ static void Wayland_SeatCreateTextInput(SDL_WaylandSeat *seat)
     }
 }
 
-void Wayland_DisplayCreateTextInputManager(SDL_VideoData *d, uint32_t id)
+void Wayland_DisplayInitTextInputManager(SDL_VideoData *d, uint32_t id)
 {
-#ifdef HAVE_FCITX
-    const char *im_module = SDL_getenv("SDL_IM_MODULE");
-    if (im_module && SDL_strcmp(im_module, "fcitx") == 0) {
-        /* Override the Wayland text-input protocol when Fcitx is enabled, like how GTK_IM_MODULE does.
-         *
-         * The Fcitx wiki discourages enabling it under Wayland via SDL_IM_MODULE, so its presence must
-         * be intentional, and this workaround is needed for fixing key repeat detection.
-         */
-        return;
-    }
-#endif
-
-    d->text_input_manager = wl_registry_bind(d->registry, id, &zwp_text_input_manager_v3_interface, 1);
-
     SDL_WaylandSeat *seat;
     wl_list_for_each(seat, &d->seat_list, link) {
         Wayland_SeatCreateTextInput(seat);
@@ -3000,23 +3238,6 @@ void Wayland_DisplayCreateTextInputManager(SDL_VideoData *d, uint32_t id)
 }
 
 // Pen/Tablet support...
-
-typedef struct SDL_WaylandPenTool  // a stylus, etc, on a tablet.
-{
-    SDL_PenID instance_id;
-    SDL_PenInfo info;
-    SDL_Window *tool_focus;
-    struct zwp_tablet_tool_v2 *wltool;
-    float x;
-    float y;
-    bool frame_motion_set;
-    float frame_axes[SDL_PEN_AXIS_COUNT];
-    Uint32 frame_axes_set;
-    int frame_pen_down;
-    int frame_buttons[3];
-    struct wl_list link;
-} SDL_WaylandPenTool;
-
 static void tablet_tool_handle_type(void *data, struct zwp_tablet_tool_v2 *tool, uint32_t type)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
@@ -3060,15 +3281,23 @@ static void tablet_tool_handle_capability(void *data, struct zwp_tablet_tool_v2 
 
 static void tablet_tool_handle_done(void *data, struct zwp_tablet_tool_v2 *tool)
 {
+    SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
+    if (sdltool->info.subtype != SDL_PEN_TYPE_UNKNOWN) {   // don't tell SDL about it if we don't know its role.
+        SDL_Window *window = sdltool->focus ? sdltool->focus->sdlwindow : NULL;
+        sdltool->instance_id = SDL_AddPenDevice(0, NULL, window, &sdltool->info, sdltool, false);
+    }
 }
 
 static void tablet_tool_handle_removed(void *data, struct zwp_tablet_tool_v2 *tool)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
     if (sdltool->instance_id) {
-        SDL_RemovePenDevice(0, sdltool->instance_id);
+        SDL_Window *window = sdltool->focus ? sdltool->focus->sdlwindow : NULL;
+        SDL_RemovePenDevice(0, window, sdltool->instance_id);
     }
-    zwp_tablet_tool_v2_destroy(tool);
+
+    Wayland_CursorStateRelease(&sdltool->cursor_state);
+    zwp_tablet_tool_v2_destroy(sdltool->wltool);
     WAYLAND_wl_list_remove(&sdltool->link);
     SDL_free(sdltool);
 }
@@ -3077,79 +3306,72 @@ static void tablet_tool_handle_proximity_in(void *data, struct zwp_tablet_tool_v
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
     SDL_WindowData *windowdata = surface ? Wayland_GetWindowDataForOwnedSurface(surface) : NULL;
-    sdltool->tool_focus = windowdata ? windowdata->sdlwindow : NULL;
+    sdltool->focus = windowdata;
+    sdltool->proximity_serial = serial;
+    sdltool->frame.have_proximity = true;
+    sdltool->frame.in_proximity = true;
 
-    SDL_assert(sdltool->instance_id == 0);  // shouldn't be added at this point.
-    if (sdltool->info.subtype != SDL_PEN_TYPE_UNKNOWN) {   // don't tell SDL about it if we don't know its role.
-        sdltool->instance_id = SDL_AddPenDevice(0, NULL, &sdltool->info, sdltool);
-    }
-
-    // According to the docs, this should be followed by a motion event, where we'll send our SDL events.
+    // According to the docs, this should be followed by a frame event, where we'll send our SDL events.
 }
 
 static void tablet_tool_handle_proximity_out(void *data, struct zwp_tablet_tool_v2 *tool)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->tool_focus = NULL;
-
-    if (sdltool->instance_id) {
-        SDL_RemovePenDevice(0, sdltool->instance_id);
-        sdltool->instance_id = 0;
-    }
+    sdltool->frame.have_proximity = true;
+    sdltool->frame.in_proximity = false;
 }
 
 static void tablet_tool_handle_down(void *data, struct zwp_tablet_tool_v2 *tool, uint32_t serial)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->frame_pen_down = 1;
+    sdltool->frame.tool_state = WAYLAND_TABLET_TOOL_STATE_DOWN;
 }
 
 static void tablet_tool_handle_up(void *data, struct zwp_tablet_tool_v2 *tool)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->frame_pen_down = 0;
+    sdltool->frame.tool_state = WAYLAND_TABLET_TOOL_STATE_UP;
 }
 
 static void tablet_tool_handle_motion(void *data, struct zwp_tablet_tool_v2 *tool, wl_fixed_t sx_w, wl_fixed_t sy_w)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    SDL_Window *window = sdltool->tool_focus;
-    if (window) {
-        const SDL_WindowData *windowdata = window->internal;
-        sdltool->x = (float)(wl_fixed_to_double(sx_w) * windowdata->pointer_scale.x);
-        sdltool->y = (float)(wl_fixed_to_double(sy_w) * windowdata->pointer_scale.y);
-        sdltool->frame_motion_set = true;
+    SDL_WindowData *windowdata = sdltool->focus;
+    if (windowdata) {
+        sdltool->frame.x = (float)(wl_fixed_to_double(sx_w) * windowdata->pointer_scale.x);
+        sdltool->frame.y = (float)(wl_fixed_to_double(sy_w) * windowdata->pointer_scale.y);
+        sdltool->frame.have_motion = true;
     }
 }
 
 static void tablet_tool_handle_pressure(void *data, struct zwp_tablet_tool_v2 *tool, uint32_t pressure)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->frame_axes[SDL_PEN_AXIS_PRESSURE] = ((float) pressure) / 65535.0f;
-    sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_PRESSURE);
+    sdltool->frame.axes[SDL_PEN_AXIS_PRESSURE] = ((float) pressure) / 65535.0f;
+    sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_PRESSURE);
     if (pressure) {
-        sdltool->frame_axes[SDL_PEN_AXIS_DISTANCE] = 0.0f;
-        sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_DISTANCE);
+        sdltool->frame.axes[SDL_PEN_AXIS_DISTANCE] = 0.0f;
+        sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_DISTANCE);
     }
 }
 
 static void tablet_tool_handle_distance(void *data, struct zwp_tablet_tool_v2 *tool, uint32_t distance)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->frame_axes[SDL_PEN_AXIS_DISTANCE] = ((float) distance) / 65535.0f;
-    sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_DISTANCE);
+    sdltool->frame.axes[SDL_PEN_AXIS_DISTANCE] = ((float) distance) / 65535.0f;
+    sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_DISTANCE);
     if (distance) {
-        sdltool->frame_axes[SDL_PEN_AXIS_PRESSURE] = 0.0f;
-        sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_PRESSURE);
+        sdltool->frame.axes[SDL_PEN_AXIS_PRESSURE] = 0.0f;
+        sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_PRESSURE);
     }
 }
 
 static void tablet_tool_handle_tilt(void *data, struct zwp_tablet_tool_v2 *tool, wl_fixed_t xtilt, wl_fixed_t ytilt)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->frame_axes[SDL_PEN_AXIS_XTILT] = (float)(wl_fixed_to_double(xtilt));
-    sdltool->frame_axes[SDL_PEN_AXIS_YTILT] = (float)(wl_fixed_to_double(ytilt));
-    sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_XTILT) | (1u << SDL_PEN_AXIS_YTILT);
+    sdltool->frame.axes[SDL_PEN_AXIS_XTILT] = (float)(wl_fixed_to_double(xtilt));
+    sdltool->frame.axes[SDL_PEN_AXIS_YTILT] = (float)(wl_fixed_to_double(ytilt));
+    sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_XTILT) | (1u << SDL_PEN_AXIS_YTILT);
 }
 
 static void tablet_tool_handle_button(void *data, struct zwp_tablet_tool_v2 *tool, uint32_t serial, uint32_t button, uint32_t state)
@@ -3172,23 +3394,23 @@ static void tablet_tool_handle_button(void *data, struct zwp_tablet_tool_v2 *too
         return;  // don't care about this button, I guess.
     }
 
-    SDL_assert((sdlbutton >= 1) && (sdlbutton <= SDL_arraysize(sdltool->frame_buttons)));
-    sdltool->frame_buttons[sdlbutton-1] = (state == ZWP_TABLET_PAD_V2_BUTTON_STATE_PRESSED) ? 1 : 0;
+    SDL_assert((sdlbutton >= 1) && (sdlbutton <= SDL_arraysize(sdltool->frame.buttons)));
+    sdltool->frame.buttons[sdlbutton-1] = (state == ZWP_TABLET_PAD_V2_BUTTON_STATE_PRESSED) ? WAYLAND_TABLET_TOOL_BUTTON_DOWN : WAYLAND_TABLET_TOOL_BUTTON_UP;
 }
 
 static void tablet_tool_handle_rotation(void *data, struct zwp_tablet_tool_v2 *tool, wl_fixed_t degrees)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
     const float rotation = (float)(wl_fixed_to_double(degrees));
-    sdltool->frame_axes[SDL_PEN_AXIS_ROTATION] = (rotation > 180.0f) ? (rotation - 360.0f) : rotation;  // map to -180.0f ... 179.0f range
-    sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_ROTATION);
+    sdltool->frame.axes[SDL_PEN_AXIS_ROTATION] = (rotation > 180.0f) ? (rotation - 360.0f) : rotation;  // map to -180.0f ... 179.0f range
+    sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_ROTATION);
 }
 
 static void tablet_tool_handle_slider(void *data, struct zwp_tablet_tool_v2 *tool, int32_t position)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-    sdltool->frame_axes[SDL_PEN_AXIS_SLIDER] = position / 65535.f;
-    sdltool->frame_axes_set |= (1u << SDL_PEN_AXIS_SLIDER);
+    sdltool->frame.axes[SDL_PEN_AXIS_SLIDER] = position / 65535.f;
+    sdltool->frame.axes_set |= (1u << SDL_PEN_AXIS_SLIDER);
 }
 
 static void tablet_tool_handle_wheel(void *data, struct zwp_tablet_tool_v2 *tool, int32_t degrees, int32_t clicks)
@@ -3199,52 +3421,61 @@ static void tablet_tool_handle_wheel(void *data, struct zwp_tablet_tool_v2 *tool
 static void tablet_tool_handle_frame(void *data, struct zwp_tablet_tool_v2 *tool, uint32_t time)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) data;
-
-    if (!sdltool->instance_id) {
+    const SDL_PenID instance_id = sdltool->instance_id;
+    if (!instance_id) {
         return;  // Not a pen we report on.
     }
 
     const Uint64 timestamp = Wayland_AdjustEventTimestampBase(Wayland_EventTimestampMSToNS(time));
-    const SDL_PenID instance_id = sdltool->instance_id;
-    SDL_Window *window = sdltool->tool_focus;
+    SDL_Window *window = sdltool->focus ? sdltool->focus->sdlwindow : NULL;
+
+    if (sdltool->frame.have_proximity && sdltool->frame.in_proximity) {
+        SDL_SendPenProximity(timestamp, instance_id, window, true, true);
+        Wayland_TabletToolUpdateCursor(sdltool);
+    }
+
+    // !!! FIXME: Should hit testing be done if pens generate pointer motion?
 
     // I don't know if this is necessary (or makes sense), but send motion before pen downs, but after pen ups, so you don't get unexpected lines drawn.
-    if (sdltool->frame_motion_set && (sdltool->frame_pen_down != -1)) {
-        if (sdltool->frame_pen_down) {
-            SDL_SendPenMotion(timestamp, instance_id, window, sdltool->x, sdltool->y);
+    if (sdltool->frame.have_motion && sdltool->frame.tool_state) {
+        if (sdltool->frame.tool_state == WAYLAND_TABLET_TOOL_STATE_DOWN) {
+            SDL_SendPenMotion(timestamp, instance_id, window, sdltool->frame.x, sdltool->frame.y);
             SDL_SendPenTouch(timestamp, instance_id, window, false, true);  // !!! FIXME: how do we know what tip is in use?
         } else {
             SDL_SendPenTouch(timestamp, instance_id, window, false, false); // !!! FIXME: how do we know what tip is in use?
-            SDL_SendPenMotion(timestamp, instance_id, window, sdltool->x, sdltool->y);
+            SDL_SendPenMotion(timestamp, instance_id, window, sdltool->frame.x, sdltool->frame.y);
         }
     } else {
-        if (sdltool->frame_pen_down != -1) {
-            SDL_SendPenTouch(timestamp, instance_id, window, false, (sdltool->frame_pen_down != 0));  // !!! FIXME: how do we know what tip is in use?
+        if (sdltool->frame.tool_state) {
+            SDL_SendPenTouch(timestamp, instance_id, window, false, sdltool->frame.tool_state == WAYLAND_TABLET_TOOL_STATE_DOWN);  // !!! FIXME: how do we know what tip is in use?
         }
 
-        if (sdltool->frame_motion_set) {
-            SDL_SendPenMotion(timestamp, instance_id, window, sdltool->x, sdltool->y);
+        if (sdltool->frame.have_motion) {
+            SDL_SendPenMotion(timestamp, instance_id, window, sdltool->frame.x, sdltool->frame.y);
         }
     }
 
     for (SDL_PenAxis i = 0; i < SDL_PEN_AXIS_COUNT; i++) {
-        if (sdltool->frame_axes_set & (1u << i)) {
-            SDL_SendPenAxis(timestamp, instance_id, window, i, sdltool->frame_axes[i]);
+        if (sdltool->frame.axes_set & (1u << i)) {
+            SDL_SendPenAxis(timestamp, instance_id, window, i, sdltool->frame.axes[i]);
         }
     }
 
-    for (int i = 0; i < SDL_arraysize(sdltool->frame_buttons); i++) {
-        const int state = sdltool->frame_buttons[i];
-        if (state != -1) {
-            SDL_SendPenButton(timestamp, instance_id, window, (Uint8)(i + 1), (state != 0));
-            sdltool->frame_buttons[i] = -1;
+    for (int i = 0; i < SDL_arraysize(sdltool->frame.buttons); i++) {
+        const int state = sdltool->frame.buttons[i];
+        if (state) {
+            SDL_SendPenButton(timestamp, instance_id, window, (Uint8)(i + 1), state == WAYLAND_TABLET_TOOL_BUTTON_DOWN);
         }
     }
 
-    // reset for next frame.
-    sdltool->frame_pen_down = -1;
-    sdltool->frame_motion_set = false;
-    sdltool->frame_axes_set = 0;
+    if (sdltool->frame.have_proximity && !sdltool->frame.in_proximity) {
+        SDL_SendPenProximity(timestamp, instance_id, window, false, false);
+        sdltool->focus = NULL;
+        Wayland_TabletToolUpdateCursor(sdltool);
+    }
+
+    // Reset for the next frame.
+    SDL_zero(sdltool->frame);
 }
 
 static const struct zwp_tablet_tool_v2_listener tablet_tool_listener = {
@@ -3284,10 +3515,11 @@ static void tablet_seat_handle_tool_added(void *data, struct zwp_tablet_seat_v2 
         sdltool->wltool = tool;
         sdltool->info.max_tilt = -1.0f;
         sdltool->info.num_buttons = -1;
-        sdltool->frame_pen_down = -1;
-        for (int i = 0; i < SDL_arraysize(sdltool->frame_buttons); i++) {
-            sdltool->frame_buttons[i] = -1;
+
+        if (seat->display->cursor_shape_manager) {
+            sdltool->cursor_state.cursor_shape = wp_cursor_shape_manager_v1_get_tablet_tool_v2(seat->display->cursor_shape_manager, tool);
         }
+
         WAYLAND_wl_list_insert(&seat->tablet.tool_list, &sdltool->link);
 
         // this will send a bunch of zwp_tablet_tool_v2 events right up front to tell
@@ -3324,17 +3556,19 @@ void Wayland_DisplayInitTabletManager(SDL_VideoData *display)
 static void Wayland_remove_all_pens_callback(SDL_PenID instance_id, void *handle, void *userdata)
 {
     SDL_WaylandPenTool *sdltool = (SDL_WaylandPenTool *) handle;
+
+    Wayland_CursorStateRelease(&sdltool->cursor_state);
     zwp_tablet_tool_v2_destroy(sdltool->wltool);
     SDL_free(sdltool);
 }
 
-static void Wayland_SeatDestroyTablet(SDL_WaylandSeat *seat, bool send_events)
+static void Wayland_SeatDestroyTablet(SDL_WaylandSeat *seat, bool shutting_down)
 {
-    if (send_events) {
-        SDL_WaylandPenTool *pen, *temp;
-        wl_list_for_each_safe (pen, temp, &seat->tablet.tool_list, link) {
+    if (!shutting_down) {
+        SDL_WaylandPenTool *tool, *temp;
+        wl_list_for_each_safe (tool, temp, &seat->tablet.tool_list, link) {
             // Remove all tools for this seat, sending PROXIMITY_OUT events.
-            tablet_tool_handle_removed(pen, pen->wltool);
+            tablet_tool_handle_removed(tool, tool->wltool);
         }
     } else {
         // Shutting down, just delete everything.
@@ -3365,7 +3599,6 @@ void Wayland_DisplayCreateSeat(SDL_VideoData *display, struct wl_seat *wl_seat, 
     seat->wl_seat = wl_seat;
     seat->display = display;
     seat->registry_id = id;
-    seat->keyboard.xkb.current_layout = XKB_LAYOUT_INVALID;
 
     Wayland_SeatCreateDataDevice(seat);
     Wayland_SeatCreatePrimarySelectionDevice(seat);
@@ -3377,8 +3610,6 @@ void Wayland_DisplayCreateSeat(SDL_VideoData *display, struct wl_seat *wl_seat, 
     if (display->tablet_manager) {
         Wayland_SeatInitTabletSupport(seat);
     }
-
-    WAYLAND_wl_display_flush(display->display);
 }
 
 void Wayland_DisplayRemoveWindowReferencesFromSeats(SDL_VideoData *display, SDL_WindowData *window)
@@ -3404,14 +3635,19 @@ void Wayland_DisplayRemoveWindowReferencesFromSeats(SDL_VideoData *display, SDL_
 
         SDL_WaylandPenTool *tool;
         wl_list_for_each (tool, &seat->tablet.tool_list, link) {
-            if (tool->tool_focus == window->sdlwindow) {
-                tablet_tool_handle_proximity_out(tool, tool->wltool);
+            if (tool->focus == window) {
+                tool->focus = NULL;
+                Wayland_TabletToolUpdateCursor(tool);
+                if (tool->instance_id) {
+                    SDL_RemovePenDevice(0, window->sdlwindow, tool->instance_id);
+                    tool->instance_id = 0;
+                }
             }
         }
     }
 }
 
-void Wayland_SeatDestroy(SDL_WaylandSeat *seat, bool send_events)
+void Wayland_SeatDestroy(SDL_WaylandSeat *seat, bool shutting_down)
 {
     if (!seat) {
         return;
@@ -3455,10 +3691,10 @@ void Wayland_SeatDestroy(SDL_WaylandSeat *seat, bool send_events)
         zwp_text_input_v3_destroy(seat->text_input.zwp_text_input);
     }
 
-    Wayland_SeatDestroyKeyboard(seat, send_events);
-    Wayland_SeatDestroyPointer(seat, send_events);
+    Wayland_SeatDestroyKeyboard(seat);
+    Wayland_SeatDestroyPointer(seat);
     Wayland_SeatDestroyTouch(seat);
-    Wayland_SeatDestroyTablet(seat, send_events);
+    Wayland_SeatDestroyTablet(seat, shutting_down);
 
     if (wl_seat_get_version(seat->wl_seat) >= WL_SEAT_RELEASE_SINCE_VERSION) {
         wl_seat_release(seat->wl_seat);
@@ -3540,7 +3776,7 @@ void Wayland_SeatUpdatePointerGrab(SDL_WaylandSeat *seat)
             seat->pointer.locked_pointer = NULL;
 
             // Update the cursor after destroying a relative move lock.
-            Wayland_SeatUpdateCursor(seat);
+            Wayland_SeatUpdatePointerCursor(seat);
         }
 
         if (seat->pointer.wl_pointer) {
@@ -3560,7 +3796,7 @@ void Wayland_SeatUpdatePointerGrab(SDL_WaylandSeat *seat)
                     zwp_locked_pointer_v1_add_listener(seat->pointer.locked_pointer, &locked_pointer_listener, seat);
 
                     // Ensure that the relative pointer is hidden, if required.
-                    Wayland_SeatUpdateCursor(seat);
+                    Wayland_SeatUpdatePointerCursor(seat);
                 }
 
                 // Locked the cursor for relative mode, nothing more to do.
@@ -3593,17 +3829,18 @@ void Wayland_SeatUpdatePointerGrab(SDL_WaylandSeat *seat)
                 SDL_Rect scaled_mouse_rect;
                 Wayland_GetScaledMouseRect(window, &scaled_mouse_rect);
 
+                confine_rect = wl_compositor_create_region(display->compositor);
+                wl_region_add(confine_rect,
+                              scaled_mouse_rect.x,
+                              scaled_mouse_rect.y,
+                              scaled_mouse_rect.w,
+                              scaled_mouse_rect.h);
+
                 /* Some compositors will only confine the pointer to an arbitrary region if the pointer
-                 * is already within the confinement area when it is created.
+                 * is already within the confinement area when it is created. Warp the pointer to the
+                 * closest point within the confinement zone if outside.
                  */
-                if (SDL_PointInRect(&seat->pointer.last_motion, &scaled_mouse_rect)) {
-                    confine_rect = wl_compositor_create_region(display->compositor);
-                    wl_region_add(confine_rect,
-                                  scaled_mouse_rect.x,
-                                  scaled_mouse_rect.y,
-                                  scaled_mouse_rect.w,
-                                  scaled_mouse_rect.h);
-                } else {
+                if (!SDL_PointInRect(&seat->pointer.last_motion, &scaled_mouse_rect)) {
                     /* Warp the pointer to the closest point within the confinement zone if outside,
                      * The confinement region will be created when a true position event is received.
                      */
@@ -3627,22 +3864,35 @@ void Wayland_SeatUpdatePointerGrab(SDL_WaylandSeat *seat)
             }
 
             if (confine_rect || (window->flags & SDL_WINDOW_MOUSE_GRABBED)) {
-                seat->pointer.confined_pointer =
-                    zwp_pointer_constraints_v1_confine_pointer(display->pointer_constraints,
-                                                               w->surface,
-                                                               seat->pointer.wl_pointer,
-                                                               confine_rect,
-                                                               ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
-                zwp_confined_pointer_v1_add_listener(seat->pointer.confined_pointer,
-                                                     &confined_pointer_listener,
-                                                     window);
-
+                if (window->mouse_rect.w != 1 && window->mouse_rect.h != 1) {
+                    seat->pointer.confined_pointer =
+                        zwp_pointer_constraints_v1_confine_pointer(display->pointer_constraints,
+                                                                   w->surface,
+                                                                   seat->pointer.wl_pointer,
+                                                                   confine_rect,
+                                                                   ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
+                    zwp_confined_pointer_v1_add_listener(seat->pointer.confined_pointer,
+                                                         &confined_pointer_listener,
+                                                         seat);
+                } else {
+                    /* Use a lock for 1x1 confinement regions, as the pointer can exhibit subpixel motion otherwise.
+                     * A null region is used since the warp *should* have placed the pointer where we want it, but
+                     * better to lock it slightly off than let the pointer escape, as confining to a specific region
+                     * seems to be a racy operation on some compositors.
+                     */
+                    seat->pointer.locked_pointer =
+                        zwp_pointer_constraints_v1_lock_pointer(display->pointer_constraints,
+                                                                w->surface,
+                                                                seat->pointer.wl_pointer,
+                                                                NULL,
+                                                                ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
+                    zwp_locked_pointer_v1_add_listener(seat->pointer.locked_pointer,
+                                                       &locked_pointer_listener,
+                                                       seat);
+                }
                 if (confine_rect) {
                     wl_region_destroy(confine_rect);
                 }
-
-                // Commit the new confinement region immediately.
-                wl_surface_commit(w->surface);
             }
         }
     }

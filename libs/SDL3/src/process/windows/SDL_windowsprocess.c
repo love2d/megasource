@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -263,6 +263,7 @@ bool SDL_SYS_CreateProcessWithProperties(SDL_Process *process, SDL_PropertiesID 
     HANDLE stdin_pipe[2] = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
     HANDLE stdout_pipe[2] = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
     HANDLE stderr_pipe[2] = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
+    HANDLE handle;
     DWORD pipe_mode = PIPE_NOWAIT;
     bool result = false;
 
@@ -357,7 +358,10 @@ bool SDL_SYS_CreateProcessWithProperties(SDL_Process *process, SDL_PropertiesID 
         break;
     case SDL_PROCESS_STDIO_INHERITED:
     default:
-        if (!DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_INPUT_HANDLE),
+        handle = GetStdHandle(STD_INPUT_HANDLE);
+        if (!handle) {
+            startup_info.hStdInput = NULL;
+        } else if (!DuplicateHandle(GetCurrentProcess(), handle,
                              GetCurrentProcess(), &startup_info.hStdInput,
                              0, TRUE, DUPLICATE_SAME_ACCESS)) {
             startup_info.hStdInput = INVALID_HANDLE_VALUE;
@@ -394,7 +398,10 @@ bool SDL_SYS_CreateProcessWithProperties(SDL_Process *process, SDL_PropertiesID 
         break;
     case SDL_PROCESS_STDIO_INHERITED:
     default:
-        if (!DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_OUTPUT_HANDLE),
+        handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (!handle) {
+            startup_info.hStdOutput = NULL;
+        } else if (!DuplicateHandle(GetCurrentProcess(), handle,
                              GetCurrentProcess(), &startup_info.hStdOutput,
                              0, TRUE, DUPLICATE_SAME_ACCESS)) {
             startup_info.hStdOutput = INVALID_HANDLE_VALUE;
@@ -405,7 +412,10 @@ bool SDL_SYS_CreateProcessWithProperties(SDL_Process *process, SDL_PropertiesID 
     }
 
     if (redirect_stderr) {
-        if (!DuplicateHandle(GetCurrentProcess(), startup_info.hStdOutput,
+        handle = startup_info.hStdOutput;
+        if (!handle) {
+            startup_info.hStdError = NULL;
+        } else if (!DuplicateHandle(GetCurrentProcess(), handle,
                              GetCurrentProcess(), &startup_info.hStdError,
                              0, TRUE, DUPLICATE_SAME_ACCESS)) {
             startup_info.hStdError = INVALID_HANDLE_VALUE;
@@ -440,7 +450,10 @@ bool SDL_SYS_CreateProcessWithProperties(SDL_Process *process, SDL_PropertiesID 
             break;
         case SDL_PROCESS_STDIO_INHERITED:
         default:
-            if (!DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_ERROR_HANDLE),
+            handle = GetStdHandle(STD_ERROR_HANDLE);
+            if (!handle) {
+                startup_info.hStdError = NULL;
+            } else if (!DuplicateHandle(GetCurrentProcess(), handle,
                                  GetCurrentProcess(), &startup_info.hStdError,
                                  0, TRUE, DUPLICATE_SAME_ACCESS)) {
                 startup_info.hStdError = INVALID_HANDLE_VALUE;
@@ -520,8 +533,31 @@ done:
     return result;
 }
 
+static BOOL CALLBACK terminate_app(HWND hwnd, LPARAM lparam)
+{
+    DWORD current_proc_id = 0, *term_info = (DWORD *) lparam;
+    GetWindowThreadProcessId(hwnd, &current_proc_id);
+    if (current_proc_id == term_info[0] && PostMessage(hwnd, WM_CLOSE, 0, 0)) {
+        term_info[1]++;
+    }
+    return TRUE;
+}
+
 bool SDL_SYS_KillProcess(SDL_Process *process, bool force)
 {
+    if (!force) {
+        // term_info[0] is the process ID, term_info[1] is number of successful tries
+        DWORD term_info[2];
+        term_info[0] = process->internal->process_information.dwProcessId;
+        term_info[1] = 0;
+        EnumWindows(terminate_app, (LPARAM) &term_info);
+        if (term_info[1] || PostThreadMessage(process->internal->process_information.dwThreadId, WM_CLOSE, 0, 0)) {
+            return true;
+        }
+        if (GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, term_info[0])) {
+            return true;
+        }
+    }
     if (!TerminateProcess(process->internal->process_information.hProcess, 1)) {
         return WIN_SetError("TerminateProcess failed");
     }

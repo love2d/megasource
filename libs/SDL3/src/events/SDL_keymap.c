@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -183,10 +183,32 @@ SDL_Scancode SDL_GetKeymapScancode(SDL_Keymap *keymap, SDL_Keycode keycode, SDL_
     return scancode;
 }
 
+SDL_Scancode SDL_GetKeymapNextReservedScancode(SDL_Keymap *keymap)
+{
+    SDL_Scancode scancode;
+
+    if (!keymap) {
+        return SDL_SCANCODE_UNKNOWN;
+    }
+
+    if (keymap->next_reserved_scancode && keymap->next_reserved_scancode < SDL_SCANCODE_RESERVED + 100) {
+        scancode = keymap->next_reserved_scancode;
+    } else {
+        scancode = SDL_SCANCODE_RESERVED;
+    }
+    keymap->next_reserved_scancode = scancode + 1;
+
+    return scancode;
+}
+
 void SDL_DestroyKeymap(SDL_Keymap *keymap)
 {
     if (!keymap) {
         return;
+    }
+
+    if (!keymap->auto_release && keymap == SDL_GetCurrentKeymap(true)) {
+        SDL_SetKeymap(NULL, false);
     }
 
     SDL_DestroyHashTable(keymap->scancode_to_keycode);
@@ -268,7 +290,7 @@ static const struct
 
 static SDL_Keycode SDL_GetDefaultKeyFromScancode(SDL_Scancode scancode, SDL_Keymod modstate)
 {
-    if (((int)scancode) < SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT) {
+    CHECK_PARAM(((int)scancode) < SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT) {
         SDL_InvalidParamError("scancode");
         return SDLK_UNKNOWN;
     }
@@ -1031,7 +1053,7 @@ static const char *SDL_extended_key_names[] = {
 
 bool SDL_SetScancodeName(SDL_Scancode scancode, const char *name)
 {
-    if (((int)scancode) < SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT) {
+    CHECK_PARAM(((int)scancode) < SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT) {
         return SDL_InvalidParamError("scancode");
     }
 
@@ -1042,7 +1064,8 @@ bool SDL_SetScancodeName(SDL_Scancode scancode, const char *name)
 const char *SDL_GetScancodeName(SDL_Scancode scancode)
 {
     const char *name;
-    if (((int)scancode) < SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT) {
+
+    CHECK_PARAM(((int)scancode) < SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT) {
         SDL_InvalidParamError("scancode");
         return "";
     }
@@ -1059,7 +1082,7 @@ SDL_Scancode SDL_GetScancodeFromName(const char *name)
 {
     int i;
 
-    if (!name || !*name) {
+    CHECK_PARAM(!name || !*name) {
         SDL_InvalidParamError("name");
         return SDL_SCANCODE_UNKNOWN;
     }

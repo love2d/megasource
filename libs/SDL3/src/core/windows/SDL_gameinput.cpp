@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -38,15 +38,15 @@ bool SDL_InitGameInput(IGameInput **ppGameInput)
             return false;
         }
 
-        typedef HRESULT (WINAPI *GameInputCreate_t)(IGameInput **gameInput);
-        GameInputCreate_t GameInputCreateFunc = (GameInputCreate_t)SDL_LoadFunction(g_hGameInputDLL, "GameInputCreate");
-        if (!GameInputCreateFunc) {
+        typedef HRESULT (WINAPI *pfnGameInputCreate)(IGameInput **gameInput);
+        pfnGameInputCreate pGameInputCreate = (pfnGameInputCreate)SDL_LoadFunction(g_hGameInputDLL, "GameInputCreate");
+        if (!pGameInputCreate) {
             SDL_UnloadObject(g_hGameInputDLL);
             return false;
         }
 
         IGameInput *pGameInput = NULL;
-        HRESULT hr = GameInputCreateFunc(&pGameInput);
+        HRESULT hr = pGameInputCreate(&pGameInput);
         if (FAILED(hr)) {
             SDL_UnloadObject(g_hGameInputDLL);
             return WIN_SetErrorFromHRESULT("GameInputCreate failed", hr);

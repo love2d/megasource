@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -107,7 +107,6 @@
 #cmakedefine HAVE_STRTOK_R 1
 #cmakedefine HAVE_ITOA 1
 #cmakedefine HAVE__LTOA 1
-#cmakedefine HAVE__UITOA 1
 #cmakedefine HAVE__ULTOA 1
 #cmakedefine HAVE_STRTOL 1
 #cmakedefine HAVE_STRTOUL 1
@@ -180,6 +179,7 @@
 #cmakedefine HAVE_MEMFD_CREATE 1
 #cmakedefine HAVE_POSIX_FALLOCATE 1
 #cmakedefine HAVE_SIGACTION 1
+#cmakedefine HAVE_SIGTIMEDWAIT 1
 #cmakedefine HAVE_SA_SIGACTION 1
 #cmakedefine HAVE_ST_MTIM 1
 #cmakedefine HAVE_SETJMP 1
@@ -198,8 +198,10 @@
 #cmakedefine HAVE_SEM_TIMEDWAIT 1
 #cmakedefine HAVE_GETAUXVAL 1
 #cmakedefine HAVE_ELF_AUX_INFO 1
-#cmakedefine HAVE_POLL 1
+#cmakedefine HAVE_PPOLL 1
 #cmakedefine HAVE__EXIT 1
+#cmakedefine HAVE_GETRESUID 1
+#cmakedefine HAVE_GETRESGID 1
 
 #endif /* HAVE_LIBC */
 
@@ -215,6 +217,10 @@
 #cmakedefine HAVE_LIBUDEV_H 1
 #cmakedefine HAVE_LIBDECOR_H 1
 #cmakedefine HAVE_LIBURING_H 1
+#cmakedefine HAVE_FRIBIDI_H 1
+#cmakedefine SDL_FRIBIDI_DYNAMIC @SDL_FRIBIDI_DYNAMIC@
+#cmakedefine HAVE_LIBTHAI_H 1
+#cmakedefine SDL_LIBTHAI_DYNAMIC @SDL_LIBTHAI_DYNAMIC@
 
 #cmakedefine HAVE_DDRAW_H 1
 #cmakedefine HAVE_DSOUND_H 1
@@ -223,17 +229,19 @@
 #cmakedefine HAVE_WINDOWS_GAMING_INPUT_H 1
 #cmakedefine HAVE_GAMEINPUT_H 1
 #cmakedefine HAVE_DXGI_H 1
+#cmakedefine HAVE_DXGI1_5_H 1
 #cmakedefine HAVE_DXGI1_6_H 1
 
 #cmakedefine HAVE_MMDEVICEAPI_H 1
 #cmakedefine HAVE_TPCSHRD_H 1
 #cmakedefine HAVE_ROAPI_H 1
 #cmakedefine HAVE_SHELLSCALINGAPI_H 1
-#cmakedefine HAVE_SHOBJIDL_CORE_H 1
 
 #cmakedefine USE_POSIX_SPAWN 1
 #cmakedefine HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR 1
 #cmakedefine HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR_NP 1
+
+#cmakedefine SDL_DISABLE_DLOPEN_NOTES 1
 
 /* SDL internal assertion support */
 #cmakedefine SDL_DEFAULT_ASSERT_LEVEL_CONFIGURED 1
@@ -339,6 +347,7 @@
 #cmakedefine SDL_SENSOR_DUMMY 1
 #cmakedefine SDL_SENSOR_VITA 1
 #cmakedefine SDL_SENSOR_N3DS 1
+#cmakedefine SDL_SENSOR_EMSCRIPTEN 1
 
 #cmakedefine SDL_SENSOR_PRIVATE 1
 
@@ -423,13 +432,15 @@
 #cmakedefine SDL_VIDEO_DRIVER_X11_DYNAMIC_XRANDR @SDL_VIDEO_DRIVER_X11_DYNAMIC_XRANDR@
 #cmakedefine SDL_VIDEO_DRIVER_X11_DYNAMIC_XSS @SDL_VIDEO_DRIVER_X11_DYNAMIC_XSS@
 #cmakedefine SDL_VIDEO_DRIVER_X11_DYNAMIC_XTEST @SDL_VIDEO_DRIVER_X11_DYNAMIC_XTEST@
-#cmakedefine SDL_VIDEO_DRIVER_X11_HAS_XKBLOOKUPKEYSYM 1
+#cmakedefine SDL_VIDEO_DRIVER_X11_HAS_XKBLIB 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_SUPPORTS_GENERIC_EVENTS 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XCURSOR 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XDBE 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XFIXES 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XINPUT2 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_MULTITOUCH 1
+#cmakedefine SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_SCROLLINFO 1
+#cmakedefine SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_GESTURE @SDL_VIDEO_DRIVER_X11_XINPUT2_SUPPORTS_GESTURE@
 #cmakedefine SDL_VIDEO_DRIVER_X11_XRANDR 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XSCRNSAVER 1
 #cmakedefine SDL_VIDEO_DRIVER_X11_XSHAPE 1
@@ -539,6 +550,9 @@
 /* Enable dialog subsystem */
 #cmakedefine SDL_DIALOG_DUMMY 1
 
+/* Enable tray subsystem */
+#cmakedefine SDL_TRAY_DUMMY 1
+
 /* Enable assembly routines */
 #cmakedefine SDL_ALTIVEC_BLITTERS 1
 
@@ -557,6 +571,8 @@
 #cmakedefine SDL_VIDEO_VITA_PIB 1
 #cmakedefine SDL_VIDEO_VITA_PVR 1
 #cmakedefine SDL_VIDEO_VITA_PVR_OGL 1
+
+#cmakedefine SDL_EMSCRIPTEN_PERSISTENT_PATH_STRING "@SDL_EMSCRIPTEN_PERSISTENT_PATH_STRING@"
 
 /* xkbcommon version info */
 #define SDL_XKBCOMMON_VERSION_MAJOR @SDL_XKBCOMMON_VERSION_MAJOR@

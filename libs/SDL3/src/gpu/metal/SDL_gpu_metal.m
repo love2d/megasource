@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -31,7 +31,7 @@
 // Defines
 
 #define METAL_FIRST_VERTEX_BUFFER_SLOT 14
-#define WINDOW_PROPERTY_DATA           "SDL_GPUMetalWindowPropertyData"
+#define WINDOW_PROPERTY_DATA           "SDL.internal.gpu.metal.data"
 #define SDL_GPU_SHADERSTAGE_COMPUTE    2
 
 #define TRACK_RESOURCE(resource, type, array, count, capacity)   \
@@ -423,6 +423,8 @@ static MTLDepthClipMode SDLToMetal_DepthClipMode(
 
 // Structs
 
+typedef struct MetalRenderer MetalRenderer;
+
 typedef struct MetalTexture
 {
     id<MTLTexture> handle;
@@ -452,6 +454,8 @@ typedef struct MetalFence
 typedef struct MetalWindowData
 {
     SDL_Window *window;
+    MetalRenderer *renderer;
+    int refcount;
     SDL_MetalView view;
     CAMetalLayer *layer;
     SDL_GPUPresentMode presentMode;
@@ -522,8 +526,6 @@ typedef struct MetalUniformBuffer
     Uint32 writeOffset;
     Uint32 drawOffset;
 } MetalUniformBuffer;
-
-typedef struct MetalRenderer MetalRenderer;
 
 typedef struct MetalCommandBuffer
 {
@@ -914,6 +916,7 @@ static void METAL_INTERNAL_DestroyTextureContainer(
         container->textures[i]->handle = nil;
         SDL_free(container->textures[i]);
     }
+    SDL_DestroyProperties(container->header.info.props);
     if (container->debugName != NULL) {
         SDL_free(container->debugName);
     }
@@ -1115,6 +1118,13 @@ static SDL_GPUGraphicsPipeline *METAL_CreateGraphicsPipeline(
                 SDL_assert_release(!"CreateGraphicsPipeline was passed a vertex shader for the fragment stage");
             }
         }
+#ifdef SDL_PLATFORM_VISIONOS
+        // The default is depth clipping enabled and it can't be changed
+        if (!createinfo->rasterizer_state.enable_depth_clip) {
+            SDL_assert_release(!"Rasterizer state enable_depth_clip must be true on this platform");
+        }
+#endif
+
         pipelineDescriptor = [MTLRenderPipelineDescriptor new];
 
         // Blend
@@ -1804,7 +1814,8 @@ static void METAL_UploadToTexture(
                  copyFromBuffer:bufferContainer->activeBuffer->handle
                    sourceOffset:source->offset
               sourceBytesPerRow:BytesPerRow(destination->w, textureContainer->header.info.format)
-            sourceBytesPerImage:SDL_CalculateGPUTextureFormatSize(textureContainer->header.info.format, destination->w, destination->h, destination->d)
+            // sourceBytesPerImage expects the stride between 2D images (slices) of a 3D texture, not the size of the entire region
+            sourceBytesPerImage:SDL_CalculateGPUTextureFormatSize(textureContainer->header.info.format, destination->w, destination->h, 1)
                      sourceSize:MTLSizeMake(destination->w, destination->h, destination->d)
                       toTexture:metalTexture->handle
                destinationSlice:destination->layer
@@ -2318,6 +2329,8 @@ static void METAL_BeginRenderPass(
                 depthStencilTargetInfo->cycle);
 
             passDescriptor.depthAttachment.texture = texture->handle;
+            passDescriptor.depthAttachment.level = depthStencilTargetInfo->mip_level;
+            passDescriptor.depthAttachment.slice = depthStencilTargetInfo->layer;
             passDescriptor.depthAttachment.loadAction = SDLToMetal_LoadOp[depthStencilTargetInfo->load_op];
             passDescriptor.depthAttachment.storeAction = SDLToMetal_StoreOp[depthStencilTargetInfo->store_op];
             passDescriptor.depthAttachment.clearDepth = depthStencilTargetInfo->clear_depth;
@@ -2351,8 +2364,8 @@ static void METAL_BeginRenderPass(
 
         if (depthStencilTargetInfo != NULL) {
             MetalTextureContainer *container = (MetalTextureContainer *)depthStencilTargetInfo->texture;
-            Uint32 w = container->header.info.width;
-            Uint32 h = container->header.info.height;
+            Uint32 w = container->header.info.width >> depthStencilTargetInfo->mip_level;
+            Uint32 h = container->header.info.height >> depthStencilTargetInfo->mip_level;
 
             if (w < vpWidth) {
                 vpWidth = w;
@@ -2398,6 +2411,7 @@ static void METAL_BindGraphicsPipeline(
 {
     @autoreleasepool {
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+        MetalGraphicsPipeline *previousPipeline = metalCommandBuffer->graphics_pipeline;
         MetalGraphicsPipeline *pipeline = (MetalGraphicsPipeline *)graphicsPipeline;
         SDL_GPURasterizerState *rast = &pipeline->rasterizerState;
         Uint32 i;
@@ -2410,7 +2424,9 @@ static void METAL_BindGraphicsPipeline(
         [metalCommandBuffer->renderEncoder setTriangleFillMode:SDLToMetal_PolygonMode[pipeline->rasterizerState.fill_mode]];
         [metalCommandBuffer->renderEncoder setCullMode:SDLToMetal_CullMode[pipeline->rasterizerState.cull_mode]];
         [metalCommandBuffer->renderEncoder setFrontFacingWinding:SDLToMetal_FrontFace[pipeline->rasterizerState.front_face]];
+#ifndef SDL_PLATFORM_VISIONOS
         [metalCommandBuffer->renderEncoder setDepthClipMode:SDLToMetal_DepthClipMode(pipeline->rasterizerState.enable_depth_clip)];
+#endif
         [metalCommandBuffer->renderEncoder
             setDepthBias:((rast->enable_depth_bias) ? rast->depth_bias_constant_factor : 0)
               slopeScale:((rast->enable_depth_bias) ? rast->depth_bias_slope_factor : 0)
@@ -2438,6 +2454,17 @@ static void METAL_BindGraphicsPipeline(
             if (metalCommandBuffer->fragmentUniformBuffers[i] == NULL) {
                 metalCommandBuffer->fragmentUniformBuffers[i] = METAL_INTERNAL_AcquireUniformBufferFromPool(
                     metalCommandBuffer);
+            }
+        }
+
+        if (previousPipeline && previousPipeline != pipeline) {
+            // if the number of uniform buffers has changed, the storage buffers will move as well
+            // and need a rebind at their new locations
+            if (previousPipeline->header.num_vertex_uniform_buffers != pipeline->header.num_vertex_uniform_buffers) {
+                metalCommandBuffer->needVertexStorageBufferBind = true;
+            }
+            if (previousPipeline->header.num_fragment_uniform_buffers != pipeline->header.num_fragment_uniform_buffers) {
+                metalCommandBuffer->needFragmentStorageBufferBind = true;
             }
         }
     }
@@ -3518,6 +3545,8 @@ static void METAL_INTERNAL_PerformPendingDestroys(
     Sint32 i;
     Uint32 j;
 
+    SDL_LockMutex(renderer->disposeLock);
+
     for (i = renderer->bufferContainersToDestroyCount - 1; i >= 0; i -= 1) {
         referenceCount = 0;
         for (j = 0; j < renderer->bufferContainersToDestroy[i]->bufferCount; j += 1) {
@@ -3547,6 +3576,8 @@ static void METAL_INTERNAL_PerformPendingDestroys(
             renderer->textureContainersToDestroyCount -= 1;
         }
     }
+
+    SDL_UnlockMutex(renderer->disposeLock);
 }
 
 // Fences
@@ -3620,7 +3651,7 @@ static bool METAL_SupportsSwapchainComposition(
 }
 
 // This function assumes that it's called from within an autorelease pool
-static Uint8 METAL_INTERNAL_CreateSwapchain(
+static bool METAL_INTERNAL_CreateSwapchain(
     MetalRenderer *renderer,
     MetalWindowData *windowData,
     SDL_GPUSwapchainComposition swapchainComposition,
@@ -3692,7 +3723,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     windowData->textureContainer.header.info.width = (Uint32)drawableSize.width;
     windowData->textureContainer.header.info.height = (Uint32)drawableSize.height;
 
-    return 1;
+    return true;
 }
 
 static bool METAL_SupportsPresentMode(
@@ -3722,6 +3753,8 @@ static bool METAL_ClaimWindow(
         if (windowData == NULL) {
             windowData = (MetalWindowData *)SDL_calloc(1, sizeof(MetalWindowData));
             windowData->window = window;
+            windowData->renderer = renderer;
+            windowData->refcount = 1;
 
             if (METAL_INTERNAL_CreateSwapchain(renderer, windowData, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC)) {
                 SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
@@ -3742,10 +3775,13 @@ static bool METAL_ClaimWindow(
                 return true;
             } else {
                 SDL_free(windowData);
-                SET_STRING_ERROR_AND_RETURN("Could not create swapchain, failed to claim window", false);
+                return false;
             }
+        } else if (windowData->renderer == renderer) {
+            ++windowData->refcount;
+            return true;
         } else {
-            SET_ERROR_AND_RETURN("%s", "Window already claimed!", false);
+            SET_STRING_ERROR_AND_RETURN("Window already claimed", false);
         }
     }
 }
@@ -3759,7 +3795,15 @@ static void METAL_ReleaseWindow(
         MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(window);
 
         if (windowData == NULL) {
-            SET_STRING_ERROR_AND_RETURN("Window is not claimed by this SDL_GpuDevice", );
+            return;
+        }
+        if (windowData->renderer != renderer) {
+            SDL_SetError("Window not claimed by this device");
+            return;
+        }
+        if (windowData->refcount > 1) {
+            --windowData->refcount;
+            return;
         }
 
         METAL_Wait(driverData);
@@ -3838,7 +3882,7 @@ static bool METAL_INTERNAL_AcquireSwapchainTexture(
 
         windowData = METAL_INTERNAL_FetchWindowData(window);
         if (windowData == NULL) {
-            SET_STRING_ERROR_AND_RETURN("Window is not claimed by this SDL_GpuDevice", false);
+            SET_STRING_ERROR_AND_RETURN("Window is not claimed by this SDL_GPUDevice", false);
         }
 
         // Update the window size
@@ -4502,11 +4546,21 @@ static SDL_GPUDevice *METAL_CreateDevice(bool debugMode, bool preferLowPower, SD
 
 #ifdef SDL_PLATFORM_MACOS
         hasHardwareSupport = true;
+        bool allowMacFamily1 = SDL_GetBooleanProperty(
+            props,
+            SDL_PROP_GPU_DEVICE_CREATE_METAL_ALLOW_MACFAMILY1_BOOLEAN,
+            false);
         if (@available(macOS 10.15, *)) {
-            hasHardwareSupport = [device supportsFamily:MTLGPUFamilyMac2];
+            hasHardwareSupport = allowMacFamily1 ?
+                [device supportsFamily:MTLGPUFamilyMac1] :
+                [device supportsFamily:MTLGPUFamilyMac2];
         } else if (@available(macOS 10.14, *)) {
-            hasHardwareSupport = [device supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily2_v1];
+            hasHardwareSupport = allowMacFamily1 ?
+                [device supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily1_v4] :
+                [device supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily2_v1];
         }
+#elif defined(SDL_PLATFORM_VISIONOS)
+        hasHardwareSupport = true;
 #else
         if (@available(iOS 13.0, tvOS 13.0, *)) {
             hasHardwareSupport = [device supportsFamily:MTLGPUFamilyApple3];
