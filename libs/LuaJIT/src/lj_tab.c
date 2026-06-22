@@ -1,6 +1,6 @@
 /*
 ** Table handling.
-** Copyright (C) 2005-2025 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -145,9 +145,9 @@ GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits)
 }
 
 /* The API of this function conforms to lua_createtable(). */
-GCtab *lj_tab_new_ah(lua_State *L, int32_t a, int32_t h)
+GCtab *lj_tab_new_ah(lua_State *L, uint32_t a, uint32_t h)
 {
-  return lj_tab_new(L, (uint32_t)(a > 0 ? a+1 : 0), hsize2hbits(h));
+  return lj_tab_new(L, a ? a+1 : 0, hsize2hbits(h));
 }
 
 #if LJ_HASJIT
@@ -295,9 +295,9 @@ static uint32_t countint(cTValue *key, uint32_t *bins)
 {
   lj_assertX(!tvisint(key), "bad integer key");
   if (tvisnum(key)) {
-    lua_Number nk = numV(key);
-    int32_t k = lj_num2int(nk);
-    if ((uint32_t)k < LJ_MAX_ASIZE && nk == (lua_Number)k) {
+    int64_t i64;
+    int32_t k;
+    if (lj_num2int_cond(numV(key), i64, k, (uint32_t)i64 < LJ_MAX_ASIZE)) {
       bins[(k > 2 ? lj_fls((uint32_t)(k-1)) : 0)]++;
       return 1;
     }
@@ -409,9 +409,9 @@ cTValue *lj_tab_get(lua_State *L, GCtab *t, cTValue *key)
     if (tv)
       return tv;
   } else if (tvisnum(key)) {
-    lua_Number nk = numV(key);
-    int32_t k = lj_num2int(nk);
-    if (nk == (lua_Number)k) {
+    int64_t i64;
+    int32_t k;
+    if (lj_num2int_check(numV(key), i64, k)) {
       cTValue *tv = lj_tab_getint(t, k);
       if (tv)
 	return tv;
@@ -542,9 +542,9 @@ TValue *lj_tab_set(lua_State *L, GCtab *t, cTValue *key)
   } else if (tvisint(key)) {
     return lj_tab_setint(L, t, intV(key));
   } else if (tvisnum(key)) {
-    lua_Number nk = numV(key);
-    int32_t k = lj_num2int(nk);
-    if (nk == (lua_Number)k)
+    int64_t i64;
+    int32_t k;
+    if (lj_num2int_check(numV(key), i64, k))
       return lj_tab_setint(L, t, k);
     if (tvisnan(key))
       lj_err_msg(L, LJ_ERR_NANIDX);
@@ -580,9 +580,9 @@ uint32_t LJ_FASTCALL lj_tab_keyindex(GCtab *t, cTValue *key)
     setnumV(&tmp, (lua_Number)k);
     key = &tmp;
   } else if (tvisnum(key)) {
-    lua_Number nk = numV(key);
-    int32_t k = lj_num2int(nk);
-    if ((uint32_t)k < t->asize && nk == (lua_Number)k)
+    int64_t i64;
+    int32_t k;
+    if (lj_num2int_cond(numV(key), i64, k, (uint32_t)i64 < t->asize))
       return (uint32_t)k + 1;
   }
   if (!tvisnil(key)) {

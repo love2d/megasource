@@ -1,6 +1,6 @@
 /*
 ** State and stack handling.
-** Copyright (C) 2005-2025 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -37,8 +37,9 @@
 #define LJ_STACK_MAX	LUAI_MAXSTACK	/* Max. stack size. */
 #define LJ_STACK_START	(2*LJ_STACK_MIN)	/* Starting stack size. */
 #define LJ_STACK_MAXEX	(LJ_STACK_MAX + 1 + LJ_STACK_EXTRA)
+#define LJ_STACK_ERREX	(1 + 2*LJ_STACK_MIN)	/* Extra for error handling. */
 
-/* Explanation of LJ_STACK_EXTRA:
+/* Explanation for LJ_STACK_EXTRA:
 **
 ** Calls to metamethods store their arguments beyond the current top
 ** without checking for the stack limit. This avoids stack resizes which
@@ -51,6 +52,11 @@
 ** slots above top, but then mobj is always a function. So we can get by
 ** with 5 extra slots.
 ** LJ_FR2: We need 2 more slots for the frame PC and the continuation PC.
+**
+** Explanation for LJ_STACK_ERREX:
+**
+** The 1 is space for the error message, and 2 * LJ_STACK_MIN is for
+** the lj_state_checkstack() call in lj_err_run().
 */
 
 /* Resize stack slots and adjust pointers in state. */
@@ -72,7 +78,7 @@ static void resizestack(lua_State *L, MSize n)
   while (oldsize < realsize)  /* Clear new slots. */
     setnilV(st + oldsize++);
   L->stacksize = realsize;
-  if ((size_t)(mref(G(L)->jit_base, char) - (char *)oldst) < oldsize)
+  if ((size_t)(mref(G(L)->jit_base, char) - (char *)oldst) < (size_t)oldsize * sizeof(TValue))
     setmref(G(L)->jit_base, mref(G(L)->jit_base, char) + delta);
   L->base = (TValue *)((char *)L->base + delta);
   L->top = (TValue *)((char *)L->top + delta);
@@ -83,7 +89,8 @@ static void resizestack(lua_State *L, MSize n)
 /* Relimit stack after error, in case the limit was overdrawn. */
 void lj_state_relimitstack(lua_State *L)
 {
-  if (L->stacksize > LJ_STACK_MAXEX && L->top-tvref(L->stack) < LJ_STACK_MAX-1)
+  if (L->stacksize > LJ_STACK_MAXEX &&
+      L->top-tvref(L->stack) < LJ_STACK_MAX - 1 - LJ_STACK_ERREX)
     resizestack(L, LJ_STACK_MAX);
 }
 
@@ -129,11 +136,9 @@ void LJ_FASTCALL lj_state_growstack(lua_State *L, MSize need)
       /* An error handler might want to inspect the stack overflow error, but
       ** will need some stack space to run in. We give it a stack size beyond
       ** the normal limit in order to do so, then rely on lj_state_relimitstack
-      ** calls during unwinding to bring us back to a convential stack size.
-      ** The + 1 is space for the error message, and 2 * LUA_MINSTACK is for
-      ** the lj_state_checkstack() call in lj_err_run().
+      ** calls during unwinding to bring us back to a conventional stack size.
       */
-      resizestack(L, LJ_STACK_MAX + 1 + 2 * LUA_MINSTACK);
+      resizestack(L, LJ_STACK_MAX + LJ_STACK_ERREX);
       lj_err_stkov(L);  /* May invoke an error handler. */
     } else {
       /* If we're here, then the stack overflow error handler is requesting
@@ -202,6 +207,7 @@ static TValue *cpluaopen(lua_State *L, lua_CFunction dummy, void *ud)
 #endif
   lj_trace_initstate(g);
   lj_err_verify();
+  setgcref(g->vmthref, obj2gco(lj_state_new(L)));
   return NULL;
 }
 
@@ -336,7 +342,7 @@ LUA_API void lua_close(lua_State *L)
 #if LJ_HASJIT
   G2J(g)->flags &= ~JIT_F_ON;
   G2J(g)->state = LJ_TRACE_IDLE;
-  lj_dispatch_update(g);
+  lj_dispatch_update(g, 0);
 #endif
   for (i = 0;;) {
     hook_enter(g);
@@ -376,6 +382,10 @@ void LJ_FASTCALL lj_state_free(global_State *g, lua_State *L)
   lj_assertG(L != mainthread(g), "free of main thread");
   if (obj2gco(L) == gcref(g->cur_L))
     setgcrefnull(g->cur_L);
+#if LJ_HASFFI
+  if (ctype_ctsG(g) && ctype_ctsG(g)->L == L)  /* Avoid dangling cts->L. */
+    ctype_ctsG(g)->L = mainthread(g);
+#endif
   if (gcref(L->openupval) != NULL) {
     lj_func_closeuv(L, tvref(L->stack));
     lj_trace_abort(g);  /* For aa_uref soundness. */

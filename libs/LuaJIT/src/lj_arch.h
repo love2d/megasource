@@ -1,6 +1,6 @@
 /*
 ** Target architecture selection.
-** Copyright (C) 2005-2025 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_ARCH_H
@@ -303,6 +303,10 @@
 #define LJ_TARGET_GC64		1
 #define LJ_PAGESIZE		16384
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
+
+#if __ARM_FEATURE_UNALIGNED
+#define LJ_TARGET_UNALIGNED	1
+#endif
 
 #define LJ_ARCH_VERSION		80
 
